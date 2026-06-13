@@ -132,7 +132,14 @@ export function migratePhase3Save(s: GameSave | (Omit<GameSave, 'version' | 'dif
     factionChoices: base.factionChoices ?? defaults.factionChoices,
     heldUniques: base.heldUniques ?? defaults.heldUniques,
     neutralStash: base.neutralStash ?? defaults.neutralStash,
-    goldSinks: base.goldSinks ?? defaults.goldSinks
+    goldSinks: base.goldSinks ?? defaults.goldSinks,
+    settings: {
+      quickcast: base.settings?.quickcast ?? true,
+      resonance: base.settings?.resonance ?? false,
+      masterVolume: base.settings?.masterVolume ?? 0.8,
+      sfxVolume: base.settings?.sfxVolume ?? 0.8,
+      musicVolume: base.settings?.musicVolume ?? 0.6
+    }
   };
 }
 

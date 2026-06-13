@@ -2,7 +2,7 @@
 
 Read this first each session, then `DECISIONS.md`, then run `npm test`.
 
-## Current phase: 4 — Polish (IN PROGRESS)
+## Current phase: 5 — COMPLETE
 
 ### Phase 1 checklist (SPEC §9)
 
@@ -87,9 +87,9 @@ Read this first each session, then `DECISIONS.md`, then run `npm test`.
 | 5 | Boundary check: `/src/core/` does not read visual metadata | PASS |
 | 6 | Minimap canvas dots for region POIs and active hero | PASS |
 | 7 | Quest journal and codex panels | PASS |
-| 8 | Balance pass from Dota baselines via `tuning.ts` | TODO |
-| 9 | Tiny procedural WebAudio SFX | TODO |
-| 10 | Performance pass against budget | TODO |
+| 8 | Balance pass from Dota baselines via `tuning.ts` | PASS |
+| 9 | Tiny procedural WebAudio SFX | PASS |
+| 10 | Performance pass against budget | PASS |
 
 ### Phase 4 demo script
 
@@ -98,6 +98,30 @@ Read this first each session, then `DECISIONS.md`, then run `npm test`.
 3. Attack a nearby camp with two override items equipped, for example Battlefury + Maelstrom, and confirm the cleave sweep and lightning attack VFX compose on the same attack event.
 4. Use the minimap to orient around town, camps, gates, hero spawns, echoes, and the active hero marker.
 5. Open **Journal** or press `J` to view current regional recruitment leads; open **Codex** or press `K` to read known heroes, regions, and visible-power item lore.
+
+### Phase 5 checklist (SPEC §9)
+
+| # | Item | Status |
+|---|------|--------|
+| 1 | Optional Resonance mode setting, saved and disabled by default | PASS |
+| 2 | Hero/ability element tags cover the registered roster | PASS |
+| 3 | Generic reaction table resolves Vaporize, Melt, Overload, Superconduct, Electro-Charged, Freeze, Swirl, Crystallize, and Burning | PASS |
+| 4 | Headless sim tests apply elements and verify Vaporize, Freeze, and Superconduct deterministically | PASS |
+| 5 | Party elemental resonance buffs apply through the existing stat path; Harmony fallback exists | PASS |
+| 6 | Resonance quick-swap relaxes swap cooldown and cooldown-floor rules without changing base mode | PASS |
+| 7 | Attack-move (`A`-click), stop (`S`), and shift-queued move/attack/cast/item orders | PASS |
+| 8 | Floating combat text, hero-aware hit feedback, and richer event-driven procedural SFX | PASS |
+| 9 | Phase 5 starter-hero glTF manifest plus actual hero-specific procedural likeness overlays | PASS |
+| 10 | Performance budget constants, pixel-ratio clamp, and transient VFX cap | PASS |
+
+### Phase 5 demo script
+
+1. Run `npm run dev`, start or load a game, open `Esc` → **Menu**, and enable **Resonance mode**.
+2. Build or recruit an elemental party such as Lina + a Hydro hero, then fight a camp in the overworld.
+3. Apply Hydro then Pyro to trigger **Vaporize**, or Hydro then Cryo to trigger **Freeze**; reaction events produce floating numbers/SFX.
+4. Use `A` then click past a camp to attack-move into it; hold `Shift` while issuing a second move/cast/item order to queue it.
+5. Equip Maelstrom or Eye of Skadi to see item attacks supply Electro/Cryo reaction hooks alongside their Phase 4 attack visuals.
+6. Confirm the graphics path still renders procedural heroes when `/assets/heroes/*.glb` is absent; the Phase 5 manifest is ready for starter-hero GLBs.
 
 ## Session log
 
@@ -108,3 +132,5 @@ Read this first each session, then `DECISIONS.md`, then run `npm test`.
 - 2026-06-12: Phase 2 systems pass: roster 20, creeps 12, regions 3, echo spawns, Find→Trial→Bind recruitment, badge-gated travel, Lunar/Frost gyms, gambit presets, Captain Calls in macro gym rounds, and Phase 2 data lint/tests. `npm test` green (10 files, 289 tests).
 - 2026-06-12: Phase 3 content pass: roster 64, items 60+, creeps 36, regions 10, gyms 8, bosses/raids/draft/neutral-item registries, difficulty loot, reward scaling, gold sinks, day/night modifiers, and save v3. `npm test` green (12 files, 631 tests), `npm run build` green, Playwright smoke verified title → starter → HUD.
 - 2026-06-12: Phase 4 polish slice: item appearance/attackVisual metadata, renderer-only equipment overlays, composable attack VFX, minimap, quest journal, codex, and lint coverage for Phase 4 visuals. `npm test` green (12 files, 633 tests), `npm run build` green, and Playwright smoke verified title → starter → HUD/minimap → Journal/Codex buttons and J/K shortcuts.
+- 2026-06-12: Phase 4 closure + Phase 5 finish: balance/audio/performance hooks, optional Resonance mode, element/reaction table, resonance buffs, item element hooks, attack-move/stop/shift-queue controls, procedural SFX, performance budget/VFX cap, and starter-hero glTF asset pipeline. `npm test` green (13 files, 641 tests).
+- 2026-06-12: Phase 5 fidelity hardening: hero-specific procedural likeness overlays for Juggernaut, Crystal Maiden, Pudge, Earthshaker, Sniper, Lich, Luna, Sven, and Axe; richer item geometry for Crystalys/Scythe/Aghs plus existing visible items; hero/range-aware attack/cast animation branches; upgraded WebAudio envelopes; inline favicon; non-deprecated shadow maps. `npm test` green (13 files, 642 tests), `npm run build` green, Playwright QA on fresh Vite server verified title → starter → in-game HUD/menu/Resonance toggle/WebGL canvas and zero console errors/warnings.

@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "ANCIENTS — a Dota 2 x Pokemon open-world RPG in the browser. Procedural, data-driven, no external assets.",
+  "description": "ANCIENTS — a Dota 2 x Pokemon open-world RPG in the browser. Data-driven, procedural fallback, Phase 5 asset pipeline.",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

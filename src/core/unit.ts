@@ -149,6 +149,7 @@ export class Unit {
   abilities: AbilityState[] = [];
   items: (ItemState | null)[] = [null, null, null, null, null, null];
   statuses: StatusInstance[] = [];
+  elementAuras: Partial<Record<Exclude<import('./types').ElementId, 'neutral'>, { gauge: number; until: number; sourceUid: number }>> = {};
   permanentMods: Record<string, number> = {};  // Flesh Heap stacks etc.
   externalMods: Record<string, number> = {};   // talents + facets, applied at setup
   triggers: TriggerRuntime[] = [];

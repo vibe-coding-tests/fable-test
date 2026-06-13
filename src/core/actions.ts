@@ -21,6 +21,7 @@ export function abilityCtx(def: AbilityDef, level: number, defIdPrefix = ''): Ef
     values: def.values,
     level: Math.max(1, level),
     piercesImmunity: def.piercesImmunity,
+    element: def.element,
     vfx: def.vfx
   };
 }

@@ -77,6 +77,8 @@ export const TUNING = {
   // --- hero swap (SPEC §6) ---
   swapCooldownSec: 4,
   swapCdFloorPct: 0.5,        // swapped-in hero cooldowns floored at 50% of remaining
+  resonanceSwapCooldownSec: 1.2,
+  resonanceElementGaugeSec: 4,
 
   // --- capture (deterministic, SPEC §5) ---
   capture: {

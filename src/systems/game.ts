@@ -8,9 +8,11 @@ import { computeKillReward, overflowXpToGold } from '../core/progression';
 import { dayNightMods, defaultPhase3SaveFields, migratePhase3Save, scaledBounty } from '../core/phase3';
 import { mergeCreeps, newCreepInstanceId, validateEntourage } from '../core/capture';
 import { computeBuyPlan, executeBuy, itemSaveOf, itemStateFromSave, sellValue, sortInventory } from '../core/items';
+import { resonanceMods } from '../core/resonance';
 import { levelFromXp, xpForLevel } from '../core/stats';
 import { dist } from '../core/math2d';
-import type { CreepInstanceSave, EchoProgress, GambitRule, GameSave, ItemSave, QuestProgress, RegionDef, SimEvent, Vec2 } from '../core/types';
+import type { CreepInstanceSave, EchoProgress, GambitRule, GameSave, ItemSave, Order, QuestProgress, RegionDef, SimEvent, Vec2 } from '../core/types';
+import { ProceduralAudio } from '../engine/audio';
 import { GameScene } from '../engine/scene';
 import { runGymMatch } from './macro-session';
 
@@ -41,6 +43,7 @@ export interface RosterEntry {
   lastCombatAt: number;
   fleshStacks?: Record<string, number>;
   dayNightMods: Record<string, number>;
+  resonanceMods: Record<string, number>;
   unit: Unit | null;
 }
 
@@ -106,13 +109,14 @@ export function newGameSave(starterHeroId: string): GameSave {
     echoRespawn: {},
     campRespawn: {},
     ...phase3,
-    settings: { quickcast: true }
+    settings: { quickcast: true, resonance: false, masterVolume: 0.8, sfxVolume: 0.8, musicVolume: 0.6 }
   };
 }
 
 export class Game {
   sim: Sim;
   scene: GameScene;
+  audio: ProceduralAudio;
   region: RegionDef;
 
   gold = 0;
@@ -153,6 +157,7 @@ export class Game {
   private wasInTown = false;
   private faintTickAt = 0;
   private createdAt = 0;
+  private queuedOrders: Order[] = [];
 
   toasts: Toast[] = [];
   /** events the HUD wants this frame (damage floaters, gold, barks) */
@@ -162,6 +167,7 @@ export class Game {
   constructor(canvas: HTMLCanvasElement, save: GameSave) {
     this.region = REG.region(save.regionId);
     this.scene = new GameScene(canvas, this.region);
+    this.audio = new ProceduralAudio(this.settings);
     this.sim = new Sim({
       seed: save.worldSeed,
       bounds: { w: this.region.size, h: this.region.size },
@@ -208,6 +214,7 @@ export class Game {
         lastCombatAt: -999,
         fleshStacks: hs.fleshStacks ? { ...hs.fleshStacks } : undefined,
         dayNightMods: {},
+        resonanceMods: {},
         unit: null
       };
     });
@@ -231,10 +238,19 @@ export class Game {
       this.fieldCreep(instUid, true);
     }
 
-    this.settings = { ...save.settings };
+    this.settings = {
+      quickcast: save.settings.quickcast,
+      resonance: save.settings.resonance ?? false,
+      masterVolume: save.settings.masterVolume ?? 0.8,
+      sfxVolume: save.settings.sfxVolume ?? 0.8,
+      musicVolume: save.settings.musicVolume ?? 0.6
+    };
+    this.sim.resonanceEnabled = this.settings.resonance ?? false;
+    this.audio.setSettings(this.settings);
+    this.refreshResonanceMods(true);
   }
 
-  settings: { quickcast: boolean } = { quickcast: true };
+  settings: GameSave['settings'] = { quickcast: true, resonance: false, masterVolume: 0.8, sfxVolume: 0.8, musicVolume: 0.6 };
 
   // ---------- helpers ----------
 
@@ -265,6 +281,35 @@ export class Game {
       }
       rec.dayNightMods = dayNightMods(rec.heroId, isNight) as Record<string, number>;
       for (const [k, v] of Object.entries(rec.dayNightMods)) {
+        u.externalMods[k] = (u.externalMods[k] ?? 0) + v;
+      }
+      u.refresh(this.sim.time);
+    }
+  }
+
+  setResonanceEnabled(enabled: boolean): void {
+    this.settings.resonance = enabled;
+    this.sim.resonanceEnabled = enabled;
+    this.refreshResonanceMods(true);
+    this.msg(`Resonance ${enabled ? 'enabled' : 'disabled'}`, enabled ? 'good' : 'info');
+  }
+
+  private refreshResonanceMods(force = false): void {
+    const enabled = this.settings.resonance ?? false;
+    const res = enabled ? resonanceMods(this.party.map((p) => p.heroId), (id) => REG.hero(id)).mods : {};
+    for (const rec of this.party) {
+      const u = rec.unit;
+      if (!u) {
+        rec.resonanceMods = { ...res };
+        continue;
+      }
+      if (force || Object.keys(rec.resonanceMods).length > 0) {
+        for (const [k, v] of Object.entries(rec.resonanceMods)) {
+          u.externalMods[k] = (u.externalMods[k] ?? 0) - v;
+        }
+      }
+      rec.resonanceMods = { ...res };
+      for (const [k, v] of Object.entries(rec.resonanceMods)) {
         u.externalMods[k] = (u.externalMods[k] ?? 0) + v;
       }
       u.refresh(this.sim.time);
@@ -460,6 +505,9 @@ export class Game {
     for (const [k, v] of Object.entries(rec.dayNightMods)) {
       u.externalMods[k] = (u.externalMods[k] ?? 0) + v;
     }
+    for (const [k, v] of Object.entries(rec.resonanceMods)) {
+      u.externalMods[k] = (u.externalMods[k] ?? 0) + v;
+    }
     u.xp = Math.max(rec.xp, xpForLevel(rec.level));
     rec.items.forEach((s, i) => {
       u.items[i] = s ? itemStateFromSave(s, this.sim.time) : null;
@@ -475,7 +523,8 @@ export class Game {
     const benched = rec.benchedAt > 0 ? this.sim.time - rec.benchedAt : 1e9;
     rec.abilityCooldowns.forEach((cd, i) => {
       if (!u.abilities[i] || cd <= 0) return;
-      const remaining = Math.max(cd * TUNING.swapCdFloorPct, cd - benched);
+      const floorPct = this.settings.resonance ? 0 : TUNING.swapCdFloorPct;
+      const remaining = Math.max(cd * floorPct, cd - benched);
       u.abilities[i].cooldownUntil = this.sim.time + remaining;
     });
     return u;
@@ -535,7 +584,7 @@ export class Game {
     rec.unit = u;
     rec.respawnAt = 0;
     this.activeIdx = idx;
-    this.swapReadyAt = this.sim.time + TUNING.swapCooldownSec;
+    this.swapReadyAt = this.sim.time + (this.settings.resonance ? TUNING.resonanceSwapCooldownSec : TUNING.swapCooldownSec);
     this.sim.playerActiveUid = u.uid;
     this.scene.selectedUid = u.uid;
     this.retargetEntourage();
@@ -553,25 +602,45 @@ export class Game {
 
   // ---------- orders from input ----------
 
-  orderMove(point: Vec2): void {
+  private issueOrder(order: Order, queued = false): void {
     const u = this.activeUnit();
     if (!u || !u.alive) return;
-    this.sim.order(u.uid, { kind: 'move', point });
+    if (queued) {
+      this.queuedOrders.push(order);
+      this.msg(`Queued ${order.kind.replace('-', ' ')}`, 'info');
+      return;
+    }
+    this.queuedOrders = [];
+    this.sim.order(u.uid, order);
   }
 
-  orderAttack(uid: number): void {
+  private advanceQueuedOrder(): void {
     const u = this.activeUnit();
-    if (!u || !u.alive) return;
-    this.sim.order(u.uid, { kind: 'attack-unit', uid });
+    if (!u || !u.alive || this.queuedOrders.length === 0) return;
+    if (u.order.kind !== 'stop' && u.order.kind !== 'hold') return;
+    this.sim.order(u.uid, this.queuedOrders.shift()!);
+  }
+
+  orderMove(point: Vec2, queued = false): void {
+    this.issueOrder({ kind: 'move', point }, queued);
+  }
+
+  orderAttack(uid: number, queued = false): void {
+    this.issueOrder({ kind: 'attack-unit', uid }, queued);
+  }
+
+  orderAttackMove(point: Vec2, queued = false): void {
+    this.issueOrder({ kind: 'attack-move', point }, queued);
   }
 
   orderStop(): void {
     const u = this.activeUnit();
     if (!u) return;
+    this.queuedOrders = [];
     this.sim.order(u.uid, { kind: 'stop' });
   }
 
-  castAbility(slot: number, opts: { uid?: number; point?: Vec2 }): void {
+  castAbility(slot: number, opts: { uid?: number; point?: Vec2; queued?: boolean }): void {
     const u = this.activeUnit();
     if (!u || !u.alive) return;
     const a = u.abilities[slot];
@@ -584,13 +653,13 @@ export class Game {
       this.msg(ready.reason === 'mana' ? 'Not enough mana' : ready.reason === 'cooldown' ? 'On cooldown' : `Cannot cast (${ready.reason})`, 'bad');
       return;
     }
-    this.sim.order(u.uid, { kind: 'cast', slot, uid: opts.uid, point: opts.point });
+    this.issueOrder({ kind: 'cast', slot, uid: opts.uid, point: opts.point }, opts.queued);
   }
 
-  useItem(invSlot: number, opts: { uid?: number; point?: Vec2 }): void {
+  useItem(invSlot: number, opts: { uid?: number; point?: Vec2; queued?: boolean }): void {
     const u = this.activeUnit();
     if (!u || !u.alive) return;
-    this.sim.order(u.uid, { kind: 'item', invSlot, uid: opts.uid, point: opts.point });
+    this.issueOrder({ kind: 'item', invSlot, uid: opts.uid, point: opts.point }, opts.queued);
   }
 
   // ---------- capture ----------
@@ -694,8 +763,10 @@ export class Game {
       respawnAt: 0,
       lastCombatAt: -999,
       dayNightMods: {},
+      resonanceMods: {},
       unit: null
     });
+    this.refreshResonanceMods(true);
     this.msg(`${def.name} joins the party! (key ${this.party.length})`, 'good');
     if (def.barks.length > 0) this.msg(`${def.name}: "${def.barks[0]}"`, 'bark');
     if (def.recruitmentQuestId) {
@@ -1105,6 +1176,10 @@ export class Game {
     if (!v.goldSinks || typeof v.goldSinks.buybacks !== 'number' || typeof v.goldSinks.tomesUsed !== 'number' || typeof v.goldSinks.respecs !== 'number') return false;
     if (typeof v.activeIdx !== 'number' || v.activeIdx < 0 || v.activeIdx >= v.party.length) return false;
     if (!v.settings || typeof v.settings.quickcast !== 'boolean') return false;
+    if (v.settings.resonance !== undefined && typeof v.settings.resonance !== 'boolean') return false;
+    if (v.settings.masterVolume !== undefined && typeof v.settings.masterVolume !== 'number') return false;
+    if (v.settings.sfxVolume !== undefined && typeof v.settings.sfxVolume !== 'number') return false;
+    if (v.settings.musicVolume !== undefined && typeof v.settings.musicVolume !== 'number') return false;
     for (const heroId of v.party) {
       if (typeof heroId !== 'string' || !REG.heroes.has(heroId)) return false;
       if (!v.roster.some((r) => r.heroId === heroId)) return false;
@@ -1352,6 +1427,7 @@ export class Game {
     this.frameEvents = this.sim.events.drain();
     for (const ev of this.frameEvents) {
       this.scene.pushEvent(ev, this.sim);
+      this.audio.handleEvent(ev);
       switch (ev.t) {
         case 'kill-credit':
           this.handleKillCredit(ev);
@@ -1414,6 +1490,7 @@ export class Game {
     this.updateCamps();
     this.updateEchoes();
     this.updateShrine(dt);
+    this.advanceQueuedOrder();
 
     // town-entry autosave
     const inTownNow = this.inTown();

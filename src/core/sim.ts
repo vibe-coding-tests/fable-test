@@ -111,6 +111,7 @@ export class Sim {
   projectiles: Projectile[] = [];
   zones: Zone[] = [];
   repeaters: Repeater[] = [];
+  resonanceEnabled = false;
 
   /** uid of the unit the player is directly controlling (last-hit bonus) */
   playerActiveUid = -1;
@@ -714,6 +715,9 @@ export class Sim {
       if (!u.alive) continue;
       const expired = u.removeStatusWhere((s) => this.time >= s.until);
       for (const s of expired) this.events.emit({ t: 'status-expire', uid: u.uid, status: s.status });
+      for (const element of Object.keys(u.elementAuras) as (keyof typeof u.elementAuras)[]) {
+        if ((u.elementAuras[element]?.until ?? 0) <= this.time) delete u.elementAuras[element];
+      }
 
       for (const s of u.statuses) {
         // DoTs tick at 2 Hz to keep events readable
@@ -819,6 +823,7 @@ export class Sim {
     victim.removeAt = this.time + (victim.kind === 'hero' ? -1 : 3); // heroes linger for respawn logic upstream
     if (victim.kind === 'hero') victim.removeAt = -1;
     victim.statuses = [];
+    victim.elementAuras = {};
     victim.channel = null;
     victim.cast = null;
     victim.forced = [];

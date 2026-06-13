@@ -2,18 +2,18 @@
 
 Ancients is a browser-based 3D open-world RPG prototype built with Vite, Three.js, and vanilla TypeScript. It blends Dota-style heroes, spells, items, and teamfight decisions with a creature-capture overworld structure and a repeatable action-RPG loot loop.
 
-The project uses no external art assets. Units, terrain, icons, VFX, and UI are generated from code and data.
+The project keeps procedural models/icons/VFX as the always-available fallback, and Phase 5 adds a real async glTF hero asset pipeline for higher-fidelity models.
 
 ## Current State
 
-Phase 2 is playable and passing. The current build includes:
+Phases 1-5 are playable and passing. The current build includes:
 
 - A deterministic, renderer-independent combat core that runs at a fixed 30 Hz.
-- Three playable regions: Tranquil Vale, Nightsilver Woods, and Icewrack, with towns, shrines, shops, camps, gates, echoes, gyms, and map markers.
-- Twenty data-driven heroes with talents, facets, recruitment quests, and Phase 2 echo progression.
-- Dota-inspired abilities, statuses, items, cooldowns, projectiles, capture, creep merging, entourage fielding, XP, gold, save/load, badge-gated travel, gambits, and macro gyms.
-- A procedural Three.js overworld with gameplay and map camera modes.
-- Headless vitest coverage for data linting, combat determinism, capture/merge behavior, boundary checks, item identity, saves, and macro simulation.
+- Ten regions, 64 data-driven heroes, 60+ items, 36 creeps, 8 gyms, Elite Five draft data, bosses, raids, neutral items, and save v3 progression.
+- Dota-inspired abilities, statuses, items, cooldowns, projectiles, capture, creep merging, entourage fielding, XP, gold, save/load, badge-gated travel, gambits, macro gyms, and raids.
+- A polished Three.js overworld with gameplay/map camera modes, hero-specific likeness overlays, item appearance geometry, attack VFX, minimap, journal, codex, floating combat text, and richer procedural SFX.
+- Optional Phase 5 Resonance mode with elemental reactions, party resonance buffs, shorter quick-swap pacing, attack-move, stop, and shift-queued orders.
+- Headless vitest coverage for data linting, combat determinism, capture/merge behavior, boundary checks, item identity, saves, macro/raid simulation, Phase 3 systems, and Phase 5 resonance.
 
 See `SPEC.md` for the full design target, `PROGRESS.md` for the current acceptance status, and `DECISIONS.md` for implementation calls made along the way.
 
@@ -53,6 +53,9 @@ npm run typecheck # run TypeScript without emitting
 - `D/F`: extra active ability slots, when available
 - `Z/X/C/V`: item actives
 - `1-5`: swap active party hero
+- `A` then click: attack-move
+- `Shift` while ordering: queue the order
+- `S`: stop/hold
 - `T`: channel Binding Totem on a weakened creep
 - `G`: interact with nearby gates and gyms
 - `B`: shop while in town
@@ -90,6 +93,6 @@ Content is intended to be data-driven. Adding heroes, items, creeps, or regions 
 
 - Browser only, single-player only.
 - Vite + Three.js + TypeScript + Vitest, with no game engine.
-- Procedural visuals and generated icons only.
+- Procedural visuals and generated icons stay as fallback; Phase 5 glTF models may replace hero rigs when assets are present.
 - Dota-style mechanical identity matters: abilities and items should feel recognizable even when tuned for action-RPG pacing.
 - `npm test` should stay green after content and systems changes.

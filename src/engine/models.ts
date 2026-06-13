@@ -23,6 +23,24 @@ export interface UnitRig {
   materials: THREE.MeshLambertMaterial[];
 }
 
+export interface HeroLikenessProfile {
+  heroId: string;
+  readsAs: string;
+  features: string[];
+}
+
+export const HERO_LIKENESS_PROFILES: HeroLikenessProfile[] = [
+  { heroId: 'juggernaut', readsAs: 'masked orange swordsman', features: ['white mask', 'crest fins', 'katana silhouette', 'belt sash'] },
+  { heroId: 'crystal-maiden', readsAs: 'blue-white frost mage', features: ['fur hood', 'ice crown', 'frost staff', 'robe panels'] },
+  { heroId: 'pudge', readsAs: 'huge green butcher with hook', features: ['belly scar', 'meat hook', 'apron straps', 'cleaver charm'] },
+  { heroId: 'earthshaker', readsAs: 'horned blue-brown totem bruiser', features: ['horns', 'massive totem', 'stone shoulders', 'beard'] },
+  { heroId: 'sniper', readsAs: 'short bearded rifleman', features: ['wide helm', 'goggles', 'long rifle', 'dwarf beard'] },
+  { heroId: 'lich', readsAs: 'skeletal frost king', features: ['skull face', 'ice crown', 'ragged cape', 'frost staff'] },
+  { heroId: 'luna', readsAs: 'silver-blue glaive rider', features: ['crescent helm', 'moon glaive', 'silver shoulders'] },
+  { heroId: 'sven', readsAs: 'masked heavy knight', features: ['horned helm', 'greatsword', 'broad pauldrons'] },
+  { heroId: 'axe', readsAs: 'red axe berserker', features: ['bald head', 'red body', 'two-handed axe'] }
+];
+
 function lam(color: string | number, emissive = 0): THREE.MeshLambertMaterial {
   return new THREE.MeshLambertMaterial({ color, flatShading: false, emissive });
 }
@@ -299,6 +317,128 @@ export function buildUnitRig(sil: SilhouetteSpec, palette: [string, string, stri
   }
 }
 
+export function applyHeroLikeness(rig: UnitRig, heroId: string): void {
+  const s = rig.scale;
+  const body = rig.body;
+  const add = (...objs: THREE.Object3D[]) => body.add(...objs);
+
+  const box = (w: number, h: number, d: number, color: string | number, emissive = 0): THREE.Mesh =>
+    mesh(new THREE.BoxGeometry(w * s, h * s, d * s), lam(color, emissive));
+  const sphere = (r: number, color: string | number, emissive = 0): THREE.Mesh =>
+    mesh(new THREE.SphereGeometry(r * s, 14, 10), lam(color, emissive));
+  const cone = (r: number, h: number, color: string | number, emissive = 0): THREE.Mesh =>
+    mesh(new THREE.ConeGeometry(r * s, h * s, 10), lam(color, emissive));
+
+  switch (heroId) {
+    case 'juggernaut': {
+      const mask = box(0.08, 0.34, 0.28, '#f3e3c2');
+      mask.position.set(0.25 * s, 1.84 * s, 0);
+      const visor = box(0.09, 0.06, 0.22, '#7adfc4', 0x081817);
+      visor.position.set(0.3 * s, 1.88 * s, 0);
+      const crestA = cone(0.08, 0.36, '#c8742c');
+      crestA.rotation.z = -0.7;
+      crestA.position.set(-0.04 * s, 2.1 * s, 0.16 * s);
+      const crestB = crestA.clone();
+      crestB.position.z = -0.16 * s;
+      add(mask, visor, crestA, crestB);
+      break;
+    }
+    case 'crystal-maiden': {
+      const fur = new THREE.Mesh(
+        new THREE.TorusGeometry(0.26 * s, 0.055 * s, 8, 24),
+        lam('#f4fbff')
+      );
+      fur.position.set(0, 1.76 * s, 0);
+      fur.rotation.x = Math.PI / 2;
+      const crown = cone(0.12, 0.34, '#d8f4ff', 0x102438);
+      crown.position.set(0.02 * s, 2.1 * s, 0);
+      const robeL = box(0.05, 0.76, 0.18, '#d8f4ff');
+      robeL.position.set(0.34 * s, 0.82 * s, 0.18 * s);
+      const robeR = robeL.clone();
+      robeR.position.z = -0.18 * s;
+      add(fur, crown, robeL, robeR);
+      break;
+    }
+    case 'pudge': {
+      const belly = sphere(0.48, '#d8a39b');
+      belly.scale.set(1.1, 0.9, 0.8);
+      belly.position.set(0.12 * s, 1.0 * s, 0);
+      const scar = box(0.04, 0.54, 0.03, '#5b2118');
+      scar.position.set(0.55 * s, 1.0 * s, 0);
+      scar.rotation.z = 0.45;
+      const apron = box(0.08, 0.7, 0.42, '#5d2f21');
+      apron.position.set(0.52 * s, 0.86 * s, 0);
+      add(belly, scar, apron);
+      break;
+    }
+    case 'earthshaker': {
+      const beard = cone(0.2, 0.42, '#e8b15c');
+      beard.rotation.z = Math.PI;
+      beard.position.set(0.16 * s, 1.58 * s, 0);
+      const stoneL = sphere(0.25, '#5b8cc8');
+      stoneL.scale.set(1.15, 0.65, 0.9);
+      stoneL.position.set(0, 1.55 * s, 0.68 * s);
+      const stoneR = stoneL.clone();
+      stoneR.position.z = -0.68 * s;
+      add(beard, stoneL, stoneR);
+      break;
+    }
+    case 'sniper': {
+      const brim = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.34 * s, 0.34 * s, 0.05 * s, 18),
+        lam('#5c4a32')
+      );
+      brim.position.set(0, 1.96 * s, 0);
+      brim.rotation.x = Math.PI / 2;
+      const goggles = box(0.08, 0.08, 0.32, '#ffd27f', 0x201002);
+      goggles.position.set(0.24 * s, 1.86 * s, 0);
+      const beard = cone(0.16, 0.36, '#d7b07a');
+      beard.rotation.z = Math.PI;
+      beard.position.set(0.15 * s, 1.56 * s, 0);
+      add(brim, goggles, beard);
+      break;
+    }
+    case 'lich': {
+      const jaw = box(0.16, 0.18, 0.18, '#e8e8d8');
+      jaw.position.set(0.12 * s, 1.6 * s, 0);
+      const crown = new THREE.Group();
+      for (let i = 0; i < 5; i++) {
+        const spike = cone(0.045, 0.34 + i % 2 * 0.12, '#d8f4ff', 0x0d2838);
+        spike.position.set(0, (2.05 + (i % 2) * 0.04) * s, (i - 2) * 0.11 * s);
+        crown.add(spike);
+      }
+      const cape = box(0.05, 1.16, 0.64, '#2c4a78');
+      cape.position.set(-0.34 * s, 1.05 * s, 0);
+      add(jaw, crown, cape);
+      break;
+    }
+    case 'luna': {
+      const crescent = new THREE.Mesh(new THREE.TorusGeometry(0.26 * s, 0.035 * s, 8, 24, Math.PI * 1.25), lam('#dce8ff'));
+      crescent.rotation.z = Math.PI / 2;
+      crescent.position.set(0.03 * s, 2.05 * s, 0);
+      add(crescent);
+      break;
+    }
+    case 'sven': {
+      const visor = box(0.1, 0.16, 0.34, '#d8dde8');
+      visor.position.set(0.24 * s, 1.88 * s, 0);
+      const plume = cone(0.09, 0.5, '#3a5bd8');
+      plume.position.set(-0.08 * s, 2.16 * s, 0);
+      add(visor, plume);
+      break;
+    }
+    case 'axe': {
+      const mohawk = box(0.08, 0.42, 0.12, '#b51f1f');
+      mohawk.position.set(0, 2.02 * s, 0);
+      const beard = cone(0.18, 0.34, '#5a160f');
+      beard.rotation.z = Math.PI;
+      beard.position.set(0.14 * s, 1.55 * s, 0);
+      add(mohawk, beard);
+      break;
+    }
+  }
+}
+
 export function buildWeapon(
   kind: SilhouetteSpec['weapon'] | ItemWeaponVisualKind,
   s: number,
@@ -483,6 +623,34 @@ function addPart(rig: UnitRig, part: NonNullable<ItemAppearanceSpec['parts']>[nu
         wing.rotation.z = side * 0.32;
         rig.itemLayer.add(wing);
       }
+      break;
+    }
+    case 'crystal-edge': {
+      const mat = lam('#ffb8c8', 0x2a080f);
+      for (const side of [1, -1] as const) {
+        const shard = mesh(new THREE.ConeGeometry(0.08 * s, 0.44 * s, 6), mat);
+        shard.position.set(0.18 * s, 1.42 * s, side * 0.5 * s);
+        shard.rotation.z = side * 0.55;
+        rig.itemLayer.add(shard);
+      }
+      break;
+    }
+    case 'mana-orb': {
+      const orb = mesh(
+        new THREE.SphereGeometry(0.18 * s, 14, 10),
+        new THREE.MeshBasicMaterial({ color: '#73d9ff', transparent: true, opacity: 0.76, depthWrite: false })
+      );
+      orb.position.set(-0.36 * s, 1.34 * s, -0.34 * s);
+      rig.itemLayer.add(orb);
+      break;
+    }
+    case 'hex-sigil': {
+      const sigil = mesh(
+        new THREE.TorusKnotGeometry(0.16 * s, 0.025 * s, 32, 6),
+        new THREE.MeshBasicMaterial({ color: '#c8a0ff', transparent: true, opacity: 0.86, depthWrite: false })
+      );
+      sigil.position.set(0.0, 1.66 * s, 0.48 * s);
+      rig.itemLayer.add(sigil);
       break;
     }
   }

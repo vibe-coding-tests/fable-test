@@ -126,7 +126,7 @@ export class Hud {
       <span class="gold">${Math.floor(g.gold)} g</span>
       <button class="top-btn" data-open="journal">Journal</button>
       <button class="top-btn" data-open="codex">Codex</button>
-      <span class="keys-hint">RMB move/attack · QWER cast · ZXCV items · 1-5 swap · T capture · G interact · B shop · Tab party · M map · J journal · K codex · Esc menu</span>
+      <span class="keys-hint">RMB move/attack · A-click attack-move · Shift queues · S stop · QWER cast · ZXCV items · 1-5 swap · T capture · G interact · B shop · Tab party · M map</span>
     `;
   }
 
@@ -827,6 +827,10 @@ export class Hud {
         <section>
           <h3>Options</h3>
           <label class="opt-row"><input type="checkbox" id="opt-quickcast" ${g.settings.quickcast ? 'checked' : ''}> Quick-cast at cursor</label>
+          <label class="opt-row"><input type="checkbox" id="opt-resonance" ${g.settings.resonance ? 'checked' : ''}> Resonance mode (micro/raids)</label>
+          <label class="opt-row">Master volume <input type="range" id="opt-master-volume" min="0" max="1" step="0.05" value="${g.settings.masterVolume ?? 0.8}"></label>
+          <label class="opt-row">SFX volume <input type="range" id="opt-sfx-volume" min="0" max="1" step="0.05" value="${g.settings.sfxVolume ?? 0.8}"></label>
+          <label class="opt-row">Music volume <input type="range" id="opt-music-volume" min="0" max="1" step="0.05" value="${g.settings.musicVolume ?? 0.6}"></label>
           <button class="btn" id="open-journal">Quest Journal</button>
           <button class="btn" id="open-codex">Codex</button>
           <button class="btn" id="export-save">Export save (JSON)</button>
@@ -854,6 +858,18 @@ export class Hud {
     });
     this.modal.querySelector('#opt-quickcast')?.addEventListener('change', (e) => {
       g.settings.quickcast = (e.target as HTMLInputElement).checked;
+    });
+    this.modal.querySelector('#opt-resonance')?.addEventListener('change', (e) => {
+      g.setResonanceEnabled((e.target as HTMLInputElement).checked);
+    });
+    this.modal.querySelector('#opt-master-volume')?.addEventListener('input', (e) => {
+      g.settings.masterVolume = Number((e.target as HTMLInputElement).value);
+    });
+    this.modal.querySelector('#opt-sfx-volume')?.addEventListener('input', (e) => {
+      g.settings.sfxVolume = Number((e.target as HTMLInputElement).value);
+    });
+    this.modal.querySelector('#opt-music-volume')?.addEventListener('input', (e) => {
+      g.settings.musicVolume = Number((e.target as HTMLInputElement).value);
     });
     this.modal.querySelector('#export-save')?.addEventListener('click', () => g.exportSave());
     this.modal.querySelector('#open-journal')?.addEventListener('click', () => this.toggleModal('journal'));

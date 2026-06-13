@@ -34,6 +34,8 @@ export class InputController {
 
   private rmbHeld = false;
   private lastMoveOrderAt = 0;
+  private attackMovePending = false;
+  private clickQueued = false;
   private disposers: (() => void)[] = [];
 
   constructor(
@@ -93,9 +95,11 @@ export class InputController {
     if (this.uiModalOpen) return;
     this.mouseX = e.clientX;
     this.mouseY = e.clientY;
+    this.clickQueued = e.shiftKey;
     this.refreshPick();
     if (e.button === 2) {
       this.targeting = { kind: 'none' };
+      this.attackMovePending = false;
       this.rightClick();
       this.rmbHeld = true;
       this.lastMoveOrderAt = performance.now();
@@ -115,15 +119,25 @@ export class InputController {
         return;
       }
       if (target.team !== 0 && target.alive) {
-        g.orderAttack(this.hoverUid);
+        g.orderAttack(this.hoverUid, this.clickQueued);
         return;
       }
     }
-    if (this.hoverGround) g.orderMove(this.hoverGround);
+    if (this.hoverGround) g.orderMove(this.hoverGround, this.clickQueued);
   }
 
   private leftClick(): void {
     const g = this.game;
+    if (this.attackMovePending) {
+      this.attackMovePending = false;
+      if (this.hoverUid >= 0) {
+        const target = g.sim.unit(this.hoverUid);
+        if (target && target.team !== 0 && target.alive) g.orderAttack(this.hoverUid, this.clickQueued);
+      } else if (this.hoverGround) {
+        g.orderAttackMove(this.hoverGround, this.clickQueued);
+      }
+      return;
+    }
     // confirm pending targeted cast (non-quickcast mode)
     if (this.targeting.kind !== 'none') {
       this.fire(this.targeting);
@@ -147,8 +161,8 @@ export class InputController {
       uid: this.hoverUid >= 0 ? this.hoverUid : undefined,
       point: this.hoverGround ?? { ...u.pos }
     };
-    if (t.kind === 'ability') g.castAbility(t.slot, opts);
-    else g.useItem(t.slot, opts);
+    if (t.kind === 'ability') g.castAbility(t.slot, { ...opts, queued: this.clickQueued });
+    else g.useItem(t.slot, { ...opts, queued: this.clickQueued });
   }
 
   private onKeyDown(e: KeyboardEvent): void {
@@ -172,6 +186,7 @@ export class InputController {
 
     const g = this.game;
     const u = g.activeUnit();
+    const queued = e.shiftKey;
 
     // hero swap
     if (key >= '1' && key <= '5') {
@@ -186,9 +201,9 @@ export class InputController {
       if (!a) return;
       const targeting = a.def.targeting;
       if (targeting === 'no-target' || targeting === 'toggle') {
-        g.castAbility(abilityIdx, {});
+        g.castAbility(abilityIdx, { queued });
       } else if (g.settings.quickcast) {
-        this.fireAbilityQuick(abilityIdx);
+        this.fireAbilityQuick(abilityIdx, queued);
       } else {
         this.targeting = { kind: 'ability', slot: abilityIdx };
       }
@@ -210,7 +225,8 @@ export class InputController {
       if (g.settings.quickcast) {
         g.useItem(itemIdx, {
           uid: this.hoverUid >= 0 ? this.hoverUid : undefined,
-          point: this.hoverGround ?? { ...u.pos }
+          point: this.hoverGround ?? { ...u.pos },
+          queued
         });
       } else {
         this.targeting = { kind: 'item', slot: itemIdx };
@@ -225,6 +241,10 @@ export class InputController {
         if (uid >= 0) g.tryCapture(uid);
         return;
       }
+      case 'a':
+        this.attackMovePending = true;
+        g.msg('Attack-move: click a point or enemy', 'info');
+        return;
       case 'g':
         g.tryInteract();
         return;
@@ -248,7 +268,7 @@ export class InputController {
     }
   }
 
-  private fireAbilityQuick(slot: number): void {
+  private fireAbilityQuick(slot: number, queued = false): void {
     const g = this.game;
     const u = g.activeUnit();
     if (!u) return;
@@ -259,7 +279,7 @@ export class InputController {
         g.msg('No target under cursor', 'bad');
         return;
       }
-      g.castAbility(slot, { uid: this.hoverUid });
+      g.castAbility(slot, { uid: this.hoverUid, queued });
     } else {
       // point-target / skillshot / ground-aoe: cast at cursor ground
       if (!this.hoverGround && this.hoverUid < 0) {
@@ -268,7 +288,7 @@ export class InputController {
       }
       const target = this.hoverUid >= 0 ? g.sim.unit(this.hoverUid) : null;
       const point = target ? { ...target.pos } : this.hoverGround!;
-      g.castAbility(slot, { point, uid: this.hoverUid >= 0 ? this.hoverUid : undefined });
+      g.castAbility(slot, { point, uid: this.hoverUid >= 0 ? this.hoverUid : undefined, queued });
     }
   }
 }

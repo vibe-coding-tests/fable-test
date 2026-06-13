@@ -65,14 +65,37 @@ export function animateRig(rig: UnitRig, unit: Unit, st: AnimState, dt: number, 
   let armSwingL = moving ? -swing * 0.6 : 0.05;
   let armSwingR = moving ? swing * 0.6 : -0.05;
 
-  // attack windup/strike
+  // attack windup/strike. The timing is still driven by attackPoint/BAT;
+  // these branches just give iconic heroes different silhouettes in motion.
   if (unit.windupUntil > 0) {
     const total = Math.max(0.05, unit.stats.attackPoint);
     const t = 1 - Math.max(0, unit.windupUntil - simTime) / total;
-    armSwingR = -1.6 + t * 2.4; // raise then strike
+    const ranged = unit.stats.attackRange > 260;
+    if (unit.heroId === 'earthshaker') {
+      armSwingL = -2.3 + t * 2.9;
+      armSwingR = -2.3 + t * 2.9;
+      body.rotation.z = Math.sin(t * Math.PI) * 0.18;
+    } else if (unit.heroId === 'pudge') {
+      armSwingR = -1.9 + t * 2.8;
+      body.rotation.z = Math.sin(t * Math.PI) * 0.14;
+    } else if (unit.heroId === 'sniper' || ranged) {
+      armSwingL = -1.05;
+      armSwingR = -1.05 + t * 0.32;
+      body.position.x -= Math.sin(t * Math.PI) * 0.08;
+    } else if (unit.heroId === 'juggernaut') {
+      armSwingR = -1.8 + t * 3.2;
+      body.rotation.y = Math.sin(t * Math.PI) * 0.42;
+    } else {
+      armSwingR = -1.6 + t * 2.4; // raise then strike
+    }
     st.attackFlash = 1;
   } else if (st.attackFlash > 0) {
-    armSwingR = 0.8 * st.attackFlash;
+    if (unit.heroId === 'sniper' || unit.stats.attackRange > 260) {
+      armSwingL = -0.85;
+      armSwingR = -0.85;
+    } else {
+      armSwingR = 0.8 * st.attackFlash;
+    }
     st.attackFlash = Math.max(0, st.attackFlash - dt * 5);
   }
   if (st.lungeFlash > 0) {
@@ -82,8 +105,18 @@ export function animateRig(rig: UnitRig, unit: Unit, st: AnimState, dt: number, 
 
   // casting: both arms up
   if (unit.castingUntil > simTime) {
-    armSwingL = -2.2;
-    armSwingR = -2.2;
+    if (unit.heroId === 'crystal-maiden' || unit.heroId === 'lich') {
+      armSwingL = -2.55 + Math.sin(time * 12) * 0.08;
+      armSwingR = -1.35 + Math.sin(time * 10) * 0.05;
+      body.rotation.z = Math.sin(time * 5) * 0.07;
+    } else if (unit.heroId === 'earthshaker') {
+      armSwingL = -1.9;
+      armSwingR = -1.9;
+      body.position.y += Math.sin(time * 18) * 0.025;
+    } else {
+      armSwingL = -2.2;
+      armSwingR = -2.2;
+    }
     st.castFlash = 1;
   } else if (st.castFlash > 0) {
     st.castFlash = Math.max(0, st.castFlash - dt * 4);

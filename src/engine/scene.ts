@@ -4,11 +4,12 @@ import type { Sim } from '../core/sim';
 import type { Unit } from '../core/unit';
 import { REG } from '../core/registry';
 import { buildTerrain, type TerrainInfo } from './terrain';
-import { applyItemAppearances, buildUnitRig, buildSelectionRing, type UnitRig } from './models';
+import { applyHeroLikeness, applyItemAppearances, buildUnitRig, buildSelectionRing, type UnitRig } from './models';
 import { animateRig, newAnimState, type AnimState } from './animator';
 import { VfxManager } from './vfx';
 import { WORLD_SCALE } from './scale';
 import { TUNING } from '../data/tuning';
+import { PERFORMANCE_BUDGET, clampedPixelRatio } from './performance';
 
 // ------------------------------------------------------------------
 // GameScene: owns the three.js world. Reads sim state every frame,
@@ -85,9 +86,9 @@ export class GameScene {
 
   constructor(canvas: HTMLCanvasElement, region: RegionDef) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-    this.renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
+    this.renderer.setPixelRatio(clampedPixelRatio(window.devicePixelRatio));
     this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap;
 
     this.camera = new THREE.PerspectiveCamera(46, 1, 0.5, 700);
     this.scene.fog = new THREE.Fog(DAY.fog.getHex(), 60, 300);
@@ -97,7 +98,7 @@ export class GameScene {
 
     this.sun = new THREE.DirectionalLight(DAY.sun, DAY.sunI);
     this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(2048, 2048);
+    this.sun.shadow.mapSize.set(PERFORMANCE_BUDGET.shadowMapSize, PERFORMANCE_BUDGET.shadowMapSize);
     const sc = this.sun.shadow.camera;
     sc.left = -60; sc.right = 60; sc.top = 60; sc.bottom = -60;
     sc.near = 1; sc.far = 400;
@@ -183,6 +184,14 @@ export class GameScene {
   /** Game layer forwards sim events here (it also consumes them for UI). */
   pushEvent(ev: Parameters<VfxManager['handleEvent']>[0], sim: Sim): void {
     if (ev.t === 'attack-impact') this.playAttackVisuals(ev.uid, ev.target, sim);
+    if (ev.t === 'damage') {
+      const view = this.views.get(ev.uid);
+      if (view) view.anim.hitFlash = Math.max(view.anim.hitFlash, ev.crit ? 1.4 : 1);
+    }
+    if (ev.t === 'attack-launch') {
+      const view = this.views.get(ev.uid);
+      if (view) view.anim.lungeFlash = Math.max(view.anim.lungeFlash, 0.35);
+    }
     this.vfx.handleEvent(ev, (uid) => {
       const u = sim.unit(uid);
       return u ? { x: u.pos.x, y: u.pos.y, h: 0 } : null;
@@ -231,6 +240,7 @@ export class GameScene {
     if (!palette) palette = ['#888899', '#666677', '#aaaabb'];
 
     const rig = buildUnitRig(sil, palette);
+    if (u.kind === 'hero' && u.heroId) applyHeroLikeness(rig, u.heroId);
     applyItemAppearances(rig, this.itemAppearancesFor(u));
     this.scene.add(rig.root);
 

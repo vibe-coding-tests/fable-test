@@ -1,5 +1,7 @@
 import { TUNING } from '../data/tuning';
 import { dist } from './math2d';
+import { REG } from './registry';
+import { elementForItemHit, isActiveElement, reactionFor, type ActiveElement } from './resonance';
 import { armorMultiplier } from './stats';
 import type { Unit } from './unit';
 import type { DamageType } from './types';
@@ -10,6 +12,7 @@ export interface DamageOpts {
   fromAttack?: boolean;
   ignoreArmor?: boolean;
   noTriggers?: boolean;
+  element?: import('./types').ElementId;
 }
 
 /** Central damage pipeline. Returns post-mitigation damage dealt. */
@@ -31,6 +34,10 @@ export function applyDamage(
   let amount = rawAmount;
   if (source && !opts.fromAttack && dtype !== 'physical') {
     amount *= 1 + source.stats.spellAmpPct / 100;
+  }
+  if (source && source.team !== victim.team && sim.resonanceEnabled && isActiveElement(opts.element)) {
+    const reaction = applyElement(sim, source, victim, opts.element, amount);
+    amount *= reaction.damageMultiplier;
   }
   if (dtype === 'physical' && !opts.ignoreArmor) amount *= armorMultiplier(victim.stats.armor);
   if (dtype === 'magical') amount *= 1 - victim.stats.magicResistPct / 100;
@@ -75,6 +82,62 @@ export function applyDamage(
     sim.killUnit(victim, source);
   }
   return amount;
+}
+
+function applyReactionStatus(sim: Sim, source: Unit, target: Unit, reactionId: string, mods: Record<string, number> | undefined, duration: number): void {
+  const applied = target.addStatus({
+    status: 'buff',
+    tag: `reaction:${reactionId}`,
+    sourceUid: source.uid,
+    sourceTeam: source.team,
+    until: sim.time + duration,
+    isDebuff: source.team !== target.team,
+    mods
+  }, true);
+  if (applied) sim.events.emit({ t: 'status-apply', uid: target.uid, status: 'buff', duration });
+}
+
+function applyElement(sim: Sim, source: Unit, target: Unit, element: ActiveElement, baseAmount: number): { damageMultiplier: number } {
+  const now = sim.time;
+  for (const key of Object.keys(target.elementAuras) as ActiveElement[]) {
+    if ((target.elementAuras[key]?.until ?? 0) <= now) delete target.elementAuras[key];
+  }
+
+  const existing = (Object.keys(target.elementAuras) as ActiveElement[]).find((e) => e !== element);
+  const reaction = existing ? reactionFor(existing, element) : null;
+  let damageMultiplier = 1;
+  if (reaction) {
+    damageMultiplier = reaction.damageMultiplier ?? 1;
+    const scale = 1 + source.stats.spellAmpPct / 100;
+    sim.events.emit({ t: 'reaction', uid: target.uid, from: source.uid, reaction: reaction.id, elements: [existing!, element] });
+    if (reaction.extraDamagePct) {
+      applyDamage(sim, source, target, Math.max(1, baseAmount * reaction.extraDamagePct * scale), 'magical', { noTriggers: true });
+    }
+    if (reaction.status === 'frozen') {
+      const duration = reaction.statDuration ?? 1.5;
+      const applied = target.addStatus({
+        status: 'frozen',
+        tag: 'reaction:freeze',
+        sourceUid: source.uid,
+        sourceTeam: source.team,
+        until: sim.time + duration,
+        isDebuff: true
+      }, true);
+      if (applied) sim.events.emit({ t: 'status-apply', uid: target.uid, status: 'frozen', duration });
+    }
+    if (reaction.statMods) {
+      applyReactionStatus(sim, source, target, reaction.id, reaction.statMods as Record<string, number>, reaction.statDuration ?? 4);
+    }
+    if (reaction.consume === 'both' || reaction.consume === 'existing') delete target.elementAuras[existing!];
+  }
+
+  target.elementAuras[element] = {
+    gauge: Math.min(2, (target.elementAuras[element]?.gauge ?? 0) + 1),
+    until: now + 4,
+    sourceUid: source.uid
+  };
+  sim.events.emit({ t: 'element-apply', uid: target.uid, from: source.uid, element, gauge: target.elementAuras[element]!.gauge });
+  return { damageMultiplier };
 }
 
 export function healUnit(sim: Sim, target: Unit, amount: number): number {
@@ -167,6 +230,14 @@ export function attackImpact(sim: Sim, attacker: Unit, victim: Unit): void {
   }
 
   if (lifestealPct > 0 && dealt > 0) healUnit(sim, attacker, dealt * (lifestealPct / 100));
+
+  if (sim.resonanceEnabled && victim.alive) {
+    for (const it of attacker.items) {
+      if (!it) continue;
+      const element = elementForItemHit(REG.item(it.defId));
+      if (element) applyElement(sim, attacker, victim, element, Math.max(1, dealt || total));
+    }
+  }
 
   // cleave rewards stacking enemies (Battlefury / Sven identity, SPEC §5/§6)
   if (cleavePct > 0 && cleaveRadius > 0) {

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { AttackVisualSpec, SimEvent, Vec2, VfxSpec } from '../core/types';
 import { WORLD_SCALE } from './scale';
+import { PERFORMANCE_BUDGET } from './performance';
 
 // ------------------------------------------------------------------
 // Procedural VFX (SPEC §3): ~12 archetypes parameterized by color,
@@ -162,6 +163,10 @@ export class VfxManager {
     this.group.add(obj);
     const tr: Transient & { dur: number } = { obj, until: this.time + durSec, update, dur: durSec };
     this.transients.push(tr);
+    while (this.transients.length > PERFORMANCE_BUDGET.transientVfxCap) {
+      const old = this.transients.shift();
+      if (old) this.group.remove(old.obj);
+    }
   }
 
   // ---------- archetype builders ----------

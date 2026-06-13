@@ -11,6 +11,7 @@ export type Team = number; // 0 = player, 1 = wild/enemy, arbitrary in arenas
 
 export type Attribute = 'str' | 'agi' | 'int' | 'uni';
 export type DamageType = 'physical' | 'magical' | 'pure';
+export type ElementId = 'pyro' | 'hydro' | 'electro' | 'cryo' | 'geo' | 'dendro' | 'anemo' | 'neutral';
 
 export type UnitKind = 'hero' | 'creep' | 'summon' | 'ward' | 'npc';
 
@@ -320,6 +321,7 @@ export interface AbilityDef {
   aura?: AuraSpec;
   triggers?: TriggerSpec[];
   piercesImmunity?: boolean;
+  element?: ElementId;
   vfx: VfxSpec;
   anim?: AnimGesture;
   sound?: SoundArchetype;
@@ -373,7 +375,15 @@ export type ItemWeaponVisualKind =
   | 'long-pole'
   | 'storm-haft';
 
-export type ItemAppearancePart = 'pauldrons' | 'heart-core' | 'frost-shards' | 'boot-trail' | 'wing-blades';
+export type ItemAppearancePart =
+  | 'pauldrons'
+  | 'heart-core'
+  | 'frost-shards'
+  | 'boot-trail'
+  | 'wing-blades'
+  | 'crystal-edge'
+  | 'mana-orb'
+  | 'hex-sigil';
 
 export interface ItemAppearanceSpec {
   weapon?: { kind: ItemWeaponVisualKind; color?: string; emissive?: string };
@@ -433,6 +443,7 @@ export interface HeroDef {
   starter?: boolean;
   recruitmentQuestId?: string;
   animProfile?: AnimProfile;
+  element?: ElementId;
 }
 
 // ---------- Creeps ----------
@@ -476,6 +487,7 @@ export interface ItemDef {
   glyph?: string;              // icon generator hint
   appearance?: ItemAppearanceSpec;
   attackVisual?: AttackVisualSpec[];
+  elementOnHit?: Exclude<ElementId, 'neutral'>;
 }
 
 // ---------- Phase 3 bosses / raids / draft / economy ----------
@@ -706,6 +718,8 @@ export type SimEvent =
   | { t: 'aoe-burst'; pos: Vec2; radius: number; vfx: VfxSpec }
   | { t: 'status-apply'; uid: number; status: StatusId; duration: number }
   | { t: 'status-expire'; uid: number; status: StatusId }
+  | { t: 'element-apply'; uid: number; from: number; element: Exclude<ElementId, 'neutral'>; gauge: number }
+  | { t: 'reaction'; uid: number; from: number; reaction: string; elements: [Exclude<ElementId, 'neutral'>, Exclude<ElementId, 'neutral'>] }
   | { t: 'immune-block'; uid: number }   // BKB visible spell rejection
   | { t: 'miss'; uid: number; target: number }
   | { t: 'blink'; uid: number; from: Vec2; to: Vec2 }
@@ -775,7 +789,7 @@ export interface GameSave {
   heldUniques: string[];
   neutralStash: { id: string; count: number }[];
   goldSinks: { buybacks: number; tomesUsed: number; respecs: number };
-  settings: { quickcast: boolean };
+  settings: { quickcast: boolean; resonance?: boolean; masterVolume?: number; sfxVolume?: number; musicVolume?: number };
 }
 
 // ---------- Sim interface available to effect interpreters ----------

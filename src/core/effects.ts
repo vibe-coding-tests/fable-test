@@ -3,7 +3,7 @@ import { applyDamage, healUnit } from './combat';
 import { REG } from './registry';
 import { STATUS_META, statusTagAuto, type StatusInstance } from './status';
 import type { Unit } from './unit';
-import type { EffectNode, StatusId, StatusParams, TargetSel, ValueRef, Vec2, VfxSpec } from './types';
+import type { EffectNode, ElementId, StatusId, StatusParams, TargetSel, ValueRef, Vec2, VfxSpec } from './types';
 import { resolveVal } from './values';
 import type { Sim } from './sim';
 
@@ -12,6 +12,7 @@ export interface EffectCtx {
   values?: Record<string, number[]>;
   level: number;
   piercesImmunity?: boolean;
+  element?: ElementId;
   vfx: VfxSpec;
   /** charges consumed by this activation (Magic Wand) */
   chargeCount?: number;
@@ -97,7 +98,7 @@ function execNode(sim: Sim, caster: Unit, ctx: EffectCtx, node: EffectNode, prim
       if ((node.target === 'enemies-in-radius' || node.target === 'units-in-radius') && node.radius) {
         sim.events.emit({ t: 'aoe-burst', pos: centerOf(caster, effPrimary), radius: V(ctx, node.radius, 0), vfx: ctx.vfx });
       }
-      for (const u of units) applyDamage(sim, caster, u, amount, node.dtype);
+      for (const u of units) applyDamage(sim, caster, u, amount, node.dtype, { element: ctx.element });
       break;
     }
     case 'heal': {

@@ -9,6 +9,10 @@ import { ALL_BOSSES } from '../data/bosses';
 import { ALL_RAIDS } from '../data/raids';
 import { ALL_DRAFTS } from '../data/drafts';
 import { REG } from '../core/registry';
+import { ACTIVE_ELEMENTS, elementForAbility, elementForHero, elementForItemHit } from '../core/resonance';
+import { PHASE5_STARTER_ASSETS } from '../engine/assets';
+import { HERO_LIKENESS_PROFILES } from '../engine/models';
+import { PERFORMANCE_BUDGET } from '../engine/performance';
 import type { AbilityDef, AnimGesture, AttackVisualKind, EffectNode, ItemAppearancePart, ItemWeaponVisualKind, SoundArchetype, ValueRef, VfxArchetype } from '../core/types';
 import { abilityMaxLevel } from '../core/values';
 
@@ -33,7 +37,7 @@ const ANIM_GESTURES: AnimGesture[] = ['melee-swing', 'ranged-shot', 'staff-cast'
 const SOUND_ARCHETYPES: SoundArchetype[] = ['blade', 'bow', 'impact', 'frost', 'fire', 'storm', 'void', 'heal', 'summon', 'item', 'roar'];
 const GATED_TOP_TIER = ['divine-rapier', 'butterfly', 'scythe-of-vyse', 'heart-of-tarrasque', 'eye-of-skadi', 'refresher-orb', 'aghanims-scepter', 'aegis-of-the-immortal', 'refresher-shard', 'cheese'];
 const ITEM_WEAPON_VISUALS: ItemWeaponVisualKind[] = ['none', 'sword', 'staff', 'hook', 'totem', 'rifle', 'cleaver', 'broad-cleaver', 'glowing-blade', 'long-pole', 'storm-haft'];
-const ITEM_APPEARANCE_PARTS: ItemAppearancePart[] = ['pauldrons', 'heart-core', 'frost-shards', 'boot-trail', 'wing-blades'];
+const ITEM_APPEARANCE_PARTS: ItemAppearancePart[] = ['pauldrons', 'heart-core', 'frost-shards', 'boot-trail', 'wing-blades', 'crystal-edge', 'mana-orb', 'hex-sigil'];
 const ATTACK_VISUALS: AttackVisualKind[] = ['cleave-sweep', 'ranged-conversion', 'lightning-bounce', 'tinted-impact', 'crit-lunge'];
 
 function expectHex(color: string, where: string): void {
@@ -156,6 +160,7 @@ describe('data lint: heroes', () => {
           expect(hero.animProfile.castStyle).toBeTruthy();
           expect(hero.animProfile.voiceTimbre).toBeTruthy();
         }
+        expect([...ACTIVE_ELEMENTS, 'neutral']).toContain(elementForHero(hero));
         if (hero.recruitmentQuestId) expect(REG.quests.has(hero.recruitmentQuestId), `${hero.id}: quest ${hero.recruitmentQuestId}`).toBe(true);
         if (!hero.starter) expect(ALL_QUESTS.some((q) => q.heroId === hero.id), `${hero.id}: missing recruitment chain`).toBe(true);
         const ults = hero.abilities.filter((a) => a.ult);
@@ -167,7 +172,10 @@ describe('data lint: heroes', () => {
       });
 
       it('abilities lint clean', () => {
-        for (const a of hero.abilities) lintAbility(a, hero.id, exoticIds);
+        for (const a of hero.abilities) {
+          lintAbility(a, hero.id, exoticIds);
+          expect([...ACTIVE_ELEMENTS, 'neutral'], `${hero.id}/${a.id}: bad element`).toContain(elementForAbility(hero, a.id));
+        }
       });
 
       it('talent ability-overrides reference real ability value keys', () => {
@@ -247,6 +255,7 @@ describe('data lint: items', () => {
         if (visual.color2) expectHex(visual.color2, `${item.id}: attack visual color2`);
         if (visual.scale !== undefined) expect(visual.scale, `${item.id}: attack visual scale`).toBeGreaterThan(0);
       }
+      if (item.elementOnHit) expect(ACTIVE_ELEMENTS, `${item.id}: bad on-hit element`).toContain(item.elementOnHit);
       if (item.charges !== undefined) expect(item.charges).toBeGreaterThanOrEqual(0);
     });
   }
@@ -269,6 +278,44 @@ describe('data lint: items', () => {
     expect(REG.item('battlefury').appearance?.weapon?.kind).toBe('broad-cleaver');
     expect(REG.item('divine-rapier').appearance?.weapon?.kind).toBe('glowing-blade');
     expect(REG.item('assault-cuirass').appearance?.parts).toContain('pauldrons');
+    expect(REG.item('crystalys').appearance?.parts).toContain('crystal-edge');
+    expect(REG.item('scythe-of-vyse').appearance?.parts).toContain('hex-sigil');
+    expect(REG.item('aghanims-scepter').appearance?.parts).toContain('mana-orb');
+  });
+
+  it('has Phase 5 item element hooks for attack-visual enablers', () => {
+    expect(elementForItemHit(REG.item('maelstrom'))).toBe('electro');
+    expect(elementForItemHit(REG.item('eye-of-skadi'))).toBe('cryo');
+  });
+});
+
+describe('data lint: Phase 4/5 polish infrastructure', () => {
+  it('declares the renderer performance budget', () => {
+    expect(PERFORMANCE_BUDGET.targetFps).toBe(60);
+    expect(PERFORMANCE_BUDGET.activeUnits).toBeGreaterThanOrEqual(30);
+    expect(PERFORMANCE_BUDGET.liveProjectilesOrParticles).toBeGreaterThanOrEqual(200);
+    expect(PERFORMANCE_BUDGET.maxPixelRatio).toBeLessThanOrEqual(2);
+  });
+
+  it('has a Phase 5 starter hero glTF manifest with procedural fallback', () => {
+    expect(PHASE5_STARTER_ASSETS.map((a) => a.heroId).sort()).toEqual(['crystal-maiden', 'earthshaker', 'juggernaut', 'lich', 'pudge', 'sniper'].sort());
+    for (const asset of PHASE5_STARTER_ASSETS) {
+      expect(asset.modelUrl).toMatch(/\.glb$/);
+      expect(asset.clips.attack).toBeTruthy();
+      expect(asset.clips.death).toBeTruthy();
+      expect(asset.sockets).toContain('weapon');
+      expect(asset.fallback).toBe('procedural');
+    }
+  });
+
+  it('has recognizable procedural likeness profiles for the shipped starter roster', () => {
+    const byHero = new Map(HERO_LIKENESS_PROFILES.map((p) => [p.heroId, p]));
+    for (const heroId of ['juggernaut', 'crystal-maiden', 'pudge', 'earthshaker', 'sniper', 'lich']) {
+      const profile = byHero.get(heroId);
+      expect(profile, `${heroId} likeness profile`).toBeDefined();
+      expect(profile!.features.length, `${heroId} features`).toBeGreaterThanOrEqual(4);
+      expect(profile!.readsAs).toBeTruthy();
+    }
   });
 });
 

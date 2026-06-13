@@ -22,9 +22,22 @@ import { ALL_NEUTRAL_ITEMS } from './neutral-items';
 import { ALL_BOSSES } from './bosses';
 import { ALL_RAIDS } from './raids';
 import { ALL_DRAFTS } from './drafts';
+import { elementForAbility, elementForHero } from '../core/resonance';
 import type { HeroDef } from '../core/types';
 
-export const ALL_HEROES: HeroDef[] = [JUGGERNAUT, CRYSTAL_MAIDEN, PUDGE, EARTHSHAKER, SNIPER, LICH, LUNA, SVEN, AXE, ...PHASE2_HEROES, ...PHASE3_HEROES];
+function withElementTags(hero: HeroDef): HeroDef {
+  const element = elementForHero(hero);
+  const tagged = { ...hero, element };
+  return {
+    ...tagged,
+    abilities: hero.abilities.map((ability) => ({
+      ...ability,
+      element: ability.element ?? elementForAbility(tagged, ability.id)
+    }))
+  };
+}
+
+export const ALL_HEROES: HeroDef[] = [JUGGERNAUT, CRYSTAL_MAIDEN, PUDGE, EARTHSHAKER, SNIPER, LICH, LUNA, SVEN, AXE, ...PHASE2_HEROES, ...PHASE3_HEROES].map(withElementTags);
 export const ALL_REGIONS = [TRANQUIL_VALE, NIGHTSILVER_WOODS, ICEWRACK, ...PHASE3_REGIONS];
 
 let registered = false;

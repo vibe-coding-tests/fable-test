@@ -467,6 +467,7 @@ export const ASSEMBLED: ItemDef[] = [
     attackMod: { critChance: 20, critMult: 160 },
     lore: 'A blade of living crystal that sings on the lucky swings.',
     glyph: 'blade',
+    appearance: { parts: ['crystal-edge'], tint: '#ffccd8' },
     attackVisual: [{ kind: 'crit-lunge', color: '#ff5f5f', color2: '#ffffff', scale: 0.85 }]
   },
   {
@@ -499,7 +500,8 @@ export const ASSEMBLED: ItemDef[] = [
     lore: 'A hammer with a storm trapped in the head. It leaks.',
     glyph: 'hammer',
     appearance: { weapon: { kind: 'storm-haft', color: '#7ddcff', emissive: '#244b7a' }, aura: { archetype: 'storm', color: '#7ddcff', color2: '#ffffff' } },
-    attackVisual: [{ kind: 'lightning-bounce', color: '#7ddcff', color2: '#ffffff', scale: 1.1 }]
+    attackVisual: [{ kind: 'lightning-bounce', color: '#7ddcff', color2: '#ffffff', scale: 1.1 }],
+    elementOnHit: 'electro'
   },
   {
     id: 'drum-of-endurance', name: 'Drum of Endurance', tier: 'basic', cost: 1650,
@@ -562,6 +564,7 @@ export const ASSEMBLED: ItemDef[] = [
     passiveMods: { int: 30, str: 15, agi: 15, manaRegen: 5 },
     lore: 'Scholarship, sharpened into livestock.',
     glyph: 'scythe',
+    appearance: { weapon: { kind: 'staff', color: '#c8a0ff', emissive: '#3d145e' }, parts: ['hex-sigil'], aura: { archetype: 'beam', color: '#c8a0ff', color2: '#ffffff' } },
     active: {
       id: 'hex-active',
       name: 'Hex',
@@ -593,7 +596,8 @@ export const ASSEMBLED: ItemDef[] = [
     lore: 'A cold eye that teaches every strike to linger.',
     glyph: 'orb',
     appearance: { parts: ['frost-shards'], tint: '#a8e8ff', aura: { archetype: 'storm', color: '#a8e8ff', color2: '#ffffff' } },
-    attackVisual: [{ kind: 'tinted-impact', color: '#a8e8ff', color2: '#ffffff', scale: 1.05 }]
+    attackVisual: [{ kind: 'tinted-impact', color: '#a8e8ff', color2: '#ffffff', scale: 1.05 }],
+    elementOnHit: 'cryo'
   },
   {
     id: 'refresher-orb', name: 'Refresher Orb', tier: 'core', cost: 6275,
@@ -619,7 +623,8 @@ export const ASSEMBLED: ItemDef[] = [
     components: ['point-booster', 'ogre-axe', 'staff-of-wizardry', 'blade-of-alacrity'], recipeCost: 1600,
     passiveMods: { str: 10, agi: 10, int: 10, maxHp: 175, maxMana: 175 },
     lore: 'A blue invitation for a hero to become more themselves.',
-    glyph: 'staff'
+    glyph: 'staff',
+    appearance: { parts: ['mana-orb'], tint: '#73d9ff', aura: { archetype: 'global-mark', color: '#73d9ff', color2: '#ffffff' } }
   },
   {
     id: 'aegis-of-the-immortal', name: 'Aegis of the Immortal', tier: 'core', cost: 0,
