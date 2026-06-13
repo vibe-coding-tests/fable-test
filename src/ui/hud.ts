@@ -18,13 +18,27 @@ import * as THREE from 'three';
 
 const ABILITY_KEYS = ['Q', 'W', 'E', 'R', 'D', 'F'];
 const ITEM_KEYS = ['Z', 'X', 'C', 'V', '·', '·'];
+const GOLD_STREAK_WINDOW_MS = 1500;
 
 interface Floater {
   el: HTMLElement;
   simX: number;
   simY: number;
   born: number;
-  rise: number;
+  life: number;
+  scale: number;
+  driftX: number;
+}
+
+interface CoinFx {
+  el: HTMLElement;
+  born: number;
+  dur: number;
+  startX: number;
+  startY: number;
+  endX: number;
+  endY: number;
+  arc: number;
 }
 
 export class Hud {
@@ -41,11 +55,21 @@ export class Hud {
   private hint: HTMLElement;
 
   private floaters: Floater[] = [];
+  private coinFx: CoinFx[] = [];
   private shownToasts = 0;
   private modalKind: 'none' | 'party' | 'shop' | 'menu' | 'talents' | 'journal' | 'codex' = 'none';
   private captureUntil = 0;
   private captureDur = 1;
   private vec = new THREE.Vector3();
+  private displayGold = 0;
+  private goldTweenFrom = 0;
+  private goldTweenTo = 0;
+  private goldTweenStart = 0;
+  private goldTweenEnd = 0;
+  private goldPopUntil = 0;
+  private goldStreak = 0;
+  private goldStreakUntil = 0;
+  private lastGoldEventAt = 0;
 
   constructor(
     private game: Game,
@@ -74,6 +98,9 @@ export class Hud {
     this.minimapCtx = this.minimap.getContext('2d')!;
     this.modal = this.root.querySelector('#modal-root')!;
     this.hint = this.root.querySelector('#hud-hint')!;
+    this.displayGold = this.game.gold;
+    this.goldTweenFrom = this.game.gold;
+    this.goldTweenTo = this.game.gold;
 
     input.onToggleParty = () => this.toggleModal('party');
     input.onToggleShop = () => {
@@ -96,6 +123,7 @@ export class Hud {
   // ---------- per frame ----------
 
   update(): void {
+    this.updateGoldTween();
     this.renderTopBar();
     this.renderParty();
     this.renderHeroPanel();
@@ -103,6 +131,7 @@ export class Hud {
     this.renderToasts();
     this.handleEvents(this.game.frameEvents);
     this.updateFloaters();
+    this.updateCoinFx();
     this.updateCaptureBar();
     this.renderHint();
     if (this.modalKind === 'shop' || this.modalKind === 'party') this.refreshModalDynamic();
@@ -120,10 +149,17 @@ export class Hud {
     const t = g.dayTime;
     const isNight = t >= 0.5;
     const clockPct = Math.round(((t % 0.5) / 0.5) * 100);
+    const now = performance.now();
+    const goldPop = now < this.goldPopUntil;
+    const streakActive = now < this.goldStreakUntil && this.goldStreak > 1;
     this.topBar.innerHTML = `
       <span class="region">${g.region.name}</span>
       <span class="clock ${isNight ? 'night' : 'day'}">${isNight ? 'Night' : 'Day'} ${clockPct}%</span>
-      <span class="gold">${Math.floor(g.gold)} g</span>
+      <span class="gold-counter ${goldPop ? 'pop' : ''}" data-gold-counter>
+        <span class="coin-icon">◆</span>
+        <span class="gold-amount">${Math.floor(this.displayGold)}</span><span class="gold-unit">g</span>
+        ${streakActive ? `<span class="gold-streak">×${this.goldStreak}</span>` : ''}
+      </span>
       <button class="top-btn" data-open="journal">Journal</button>
       <button class="top-btn" data-open="codex">Codex</button>
       <span class="keys-hint">RMB move/attack · A-click attack-move · Shift queues · S stop · QWER cast · ZXCV items · 1-5 swap · T capture · G interact · B shop · Tab party · M map</span>
@@ -322,7 +358,15 @@ export class Hud {
           const u = g.sim.unit(ev.uid);
           if (!u) break;
           const cls = ev.dtype === 'physical' ? 'phys' : ev.dtype === 'magical' ? 'mag' : 'pure';
-          this.addFloater(u.pos.x, u.pos.y, `${Math.round(ev.amount)}${ev.crit ? '!' : ''}`, `dmg ${cls} ${ev.crit ? 'crit' : ''}`);
+          const amountScale = Math.min(2.2, 0.82 + Math.log10(ev.amount + 1) * 0.42);
+          const scale = ev.crit ? Math.max(1.45, amountScale + 0.65) : amountScale;
+          this.addFloater(
+            u.pos.x,
+            u.pos.y,
+            `${Math.round(ev.amount)}${ev.crit ? '!' : ''}`,
+            `dmg ${cls} ${ev.crit ? 'crit' : ''}`,
+            { scale, life: ev.crit ? 1.35 : 1.1, driftX: ev.crit ? 0 : (Math.random() - 0.5) * 18 }
+          );
           break;
         }
         case 'heal': {
@@ -331,11 +375,8 @@ export class Hud {
           if (u) this.addFloater(u.pos.x, u.pos.y, `+${Math.round(ev.amount)}`, 'healf');
           break;
         }
-        case 'kill-credit': {
-          if (ev.bounty.gold > 0) {
-            const v = g.sim.unit(ev.victimUid);
-            if (v) this.addFloater(v.pos.x, v.pos.y, `+${Math.round(ev.bounty.gold * (ev.lastHitByPlayer ? 1.15 : 1))}g`, 'goldf');
-          }
+        case 'gold': {
+          this.handleGold(ev);
           break;
         }
         case 'capture-start': {
@@ -372,13 +413,43 @@ export class Hud {
     }
   }
 
-  private addFloater(simX: number, simY: number, text: string, cls: string): void {
+  private handleGold(ev: Extract<SimEvent, { t: 'gold' }>): void {
+    const pos = ev.pos ?? this.game.activeUnit()?.pos;
+    const reasonClass = ev.reason.replace(/[^a-z0-9-]/gi, '').toLowerCase();
+    const isLastHit = ev.reason === 'lasthit';
+    const text = isLastHit ? `+${Math.round(ev.amount)}g LAST HIT +15%` : `+${Math.round(ev.amount)}g`;
+    if (pos) {
+      this.addFloater(pos.x, pos.y, text, `goldf ${reasonClass}`, {
+        scale: Math.min(1.85, 1 + Math.log10(ev.amount + 1) * 0.28 + (isLastHit ? 0.22 : 0)),
+        life: isLastHit ? 1.45 : 1.25,
+        driftX: 0
+      });
+      this.spawnCoinBurst(ev, pos);
+    }
+    this.startGoldTween(ev);
+  }
+
+  private addFloater(
+    simX: number,
+    simY: number,
+    text: string,
+    cls: string,
+    opts: { scale?: number; life?: number; driftX?: number } = {}
+  ): void {
     if (this.floaters.length > 50) return;
     const el = document.createElement('span');
     el.className = `floater ${cls}`;
     el.textContent = text;
     this.floaterLayer.appendChild(el);
-    this.floaters.push({ el, simX, simY, born: performance.now(), rise: 0 });
+    this.floaters.push({
+      el,
+      simX,
+      simY,
+      born: performance.now(),
+      life: opts.life ?? 1.1,
+      scale: opts.scale ?? 1,
+      driftX: opts.driftX ?? 0
+    });
   }
 
   private updateFloaters(): void {
@@ -386,7 +457,7 @@ export class Hud {
     const cam = this.game.scene.camera;
     this.floaters = this.floaters.filter((f) => {
       const age = (now - f.born) / 1000;
-      if (age > 1.1) {
+      if (age > f.life) {
         f.el.remove();
         return false;
       }
@@ -402,11 +473,104 @@ export class Hud {
       }
       const sx = (this.vec.x * 0.5 + 0.5) * window.innerWidth;
       const sy = (-this.vec.y * 0.5 + 0.5) * window.innerHeight;
+      const punch = f.el.classList.contains('crit') ? 1 + Math.max(0, 1 - age / 0.2) * 0.36 : 1;
+      const scale = f.scale * punch;
       f.el.style.display = '';
-      f.el.style.transform = `translate(${sx.toFixed(0)}px, ${sy.toFixed(0)}px)`;
-      f.el.style.opacity = String(Math.max(0, 1 - age / 1.1));
+      f.el.style.transform = `translate(${(sx + f.driftX * age).toFixed(0)}px, ${sy.toFixed(0)}px) translate(-50%, -50%) scale(${scale.toFixed(2)})`;
+      f.el.style.opacity = String(Math.max(0, 1 - age / f.life));
       return true;
     });
+  }
+
+  private updateGoldTween(): void {
+    const now = performance.now();
+    if (this.goldTweenEnd > this.goldTweenStart && now < this.goldTweenEnd) {
+      const t = (now - this.goldTweenStart) / (this.goldTweenEnd - this.goldTweenStart);
+      const eased = 1 - (1 - t) ** 3;
+      this.displayGold = this.goldTweenFrom + (this.goldTweenTo - this.goldTweenFrom) * eased;
+      return;
+    }
+    this.displayGold = this.goldTweenTo || this.game.gold;
+    if (Math.abs(this.displayGold - this.game.gold) > 0.5) this.displayGold = this.game.gold;
+  }
+
+  private startGoldTween(ev: Extract<SimEvent, { t: 'gold' }>): void {
+    const now = performance.now();
+    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    const streakEligible = ev.reason === 'kill' || ev.reason === 'lasthit' || ev.reason === 'echo';
+    if (streakEligible) {
+      this.goldStreak = now - this.lastGoldEventAt <= GOLD_STREAK_WINDOW_MS ? Math.min(9, this.goldStreak + 1) : 1;
+      this.goldStreakUntil = now + GOLD_STREAK_WINDOW_MS;
+      this.lastGoldEventAt = now;
+    }
+
+    this.goldTweenFrom = this.displayGold;
+    this.goldTweenTo = this.game.gold;
+    this.goldTweenStart = now;
+    this.goldTweenEnd = now + (reducedMotion ? 90 : Math.min(650, 260 + Math.log2(ev.amount + 1) * 42));
+    this.goldPopUntil = now + (reducedMotion ? 120 : 360);
+  }
+
+  private spawnCoinBurst(ev: Extract<SimEvent, { t: 'gold' }>, pos: { x: number; y: number }): void {
+    const target = this.root.querySelector('[data-gold-counter]') as HTMLElement | null;
+    const rect = target?.getBoundingClientRect();
+    const start = this.screenFromWorld(pos.x, pos.y, 2.4);
+    if (!rect || !start) return;
+
+    const reducedMotion = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+    const baseCount = Math.max(3, Math.ceil(Math.log2(ev.amount + 1)));
+    const count = reducedMotion ? 1 : Math.min(14, baseCount + (ev.reason === 'lasthit' ? 2 : 0) + (ev.reason === 'echo' ? 3 : 0));
+    const endX = rect.left + rect.width * 0.5;
+    const endY = rect.top + rect.height * 0.5;
+    for (let i = 0; i < count; i++) {
+      const el = document.createElement('span');
+      el.className = `coin-fx ${ev.reason === 'lasthit' ? 'last-hit' : ''}`;
+      el.textContent = '◆';
+      this.floaterLayer.appendChild(el);
+      this.coinFx.push({
+        el,
+        born: performance.now() + i * 28,
+        dur: reducedMotion ? 260 : 520 + Math.random() * 180,
+        startX: start.x + (Math.random() - 0.5) * 32,
+        startY: start.y + (Math.random() - 0.5) * 22,
+        endX: endX + (Math.random() - 0.5) * 18,
+        endY: endY + (Math.random() - 0.5) * 10,
+        arc: reducedMotion ? 0 : 70 + Math.random() * 70
+      });
+    }
+    while (this.coinFx.length > 60) this.coinFx.shift()?.el.remove();
+  }
+
+  private updateCoinFx(): void {
+    const now = performance.now();
+    this.coinFx = this.coinFx.filter((c) => {
+      const t = Math.max(0, Math.min(1, (now - c.born) / c.dur));
+      if (t >= 1) {
+        c.el.remove();
+        return false;
+      }
+      const eased = 1 - (1 - t) ** 3;
+      const x = c.startX + (c.endX - c.startX) * eased;
+      const y = c.startY + (c.endY - c.startY) * eased - Math.sin(t * Math.PI) * c.arc;
+      const scale = 0.8 + Math.sin(t * Math.PI) * 0.45;
+      c.el.style.opacity = String(Math.max(0, 1 - t * 0.15));
+      c.el.style.transform = `translate(${x.toFixed(0)}px, ${y.toFixed(0)}px) translate(-50%, -50%) scale(${scale.toFixed(2)}) rotate(${(t * 360).toFixed(0)}deg)`;
+      return true;
+    });
+  }
+
+  private screenFromWorld(simX: number, simY: number, height = 2.2): { x: number; y: number } | null {
+    this.vec.set(
+      simX / WORLD_SCALE,
+      this.game.scene.terrain.heightAt(simX, simY) + height,
+      simY / WORLD_SCALE
+    );
+    this.vec.project(this.game.scene.camera);
+    if (this.vec.z > 1) return null;
+    return {
+      x: (this.vec.x * 0.5 + 0.5) * window.innerWidth,
+      y: (-this.vec.y * 0.5 + 0.5) * window.innerHeight
+    };
   }
 
   private updateCaptureBar(): void {

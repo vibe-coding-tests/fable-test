@@ -187,10 +187,12 @@ export class ProceduralAudio {
     ];
     for (const [mul, mix] of partials) {
       const osc = ctx.createOscillator();
+      const partialGain = ctx.createGain();
       osc.type = 'triangle';
       osc.frequency.setValueAtTime(freq * mul, start);
       osc.frequency.exponentialRampToValueAtTime(freq * mul * 0.985, start + dur);
-      osc.connect(gain);
+      partialGain.gain.value = mix;
+      osc.connect(partialGain).connect(gain);
       osc.start(start);
       osc.stop(start + dur + 0.02);
     }

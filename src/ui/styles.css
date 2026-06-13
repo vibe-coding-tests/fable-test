@@ -74,6 +74,40 @@ button:disabled { opacity: 0.45; cursor: default; }
 #top-bar .clock.day { color: #ffe9a8; }
 #top-bar .clock.night { color: #9db8e8; }
 #top-bar .gold { color: var(--gold); font-weight: 700; }
+.gold-counter {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--gold);
+  font-weight: 800;
+  padding: 2px 8px;
+  border: 1px solid rgba(255, 216, 106, 0.2);
+  border-radius: 999px;
+  background: rgba(255, 216, 106, 0.08);
+  box-shadow: 0 0 0 rgba(255, 216, 106, 0);
+  transform-origin: center;
+  transition: transform 0.16s ease-out, box-shadow 0.16s ease-out, color 0.16s ease-out;
+}
+.gold-counter.pop {
+  color: #fff3aa;
+  transform: scale(1.12);
+  box-shadow: 0 0 18px rgba(255, 216, 106, 0.36);
+}
+.coin-icon {
+  color: #ffe58a;
+  font-size: 11px;
+  filter: drop-shadow(0 0 4px rgba(255, 216, 106, 0.55));
+}
+.gold-unit { margin-left: 1px; opacity: 0.86; }
+.gold-streak {
+  margin-left: 5px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: rgba(255, 216, 106, 0.2);
+  color: #fff5b5;
+  font-size: 11px;
+  letter-spacing: 0.02em;
+}
 #top-bar .keys-hint { margin-left: auto; color: var(--dim); font-size: 11px; }
 .top-btn {
   padding: 3px 8px;
@@ -284,15 +318,51 @@ button:disabled { opacity: 0.45; cursor: default; }
   font-size: 14px;
   font-weight: 700;
   text-shadow: 0 1px 3px #000;
+  transform-origin: center;
   will-change: transform, opacity;
 }
 .floater.phys { color: #ff9a6a; }
 .floater.mag { color: #7ab8ff; }
 .floater.pure { color: #ffffff; }
-.floater.crit { font-size: 19px; color: #ff5a3a; }
+.floater.crit {
+  font-size: 22px;
+  color: #ffef7a;
+  letter-spacing: 0.02em;
+  text-shadow:
+    0 0 9px rgba(255, 216, 106, 0.85),
+    0 2px 0 #5a120a,
+    0 3px 8px #000;
+  -webkit-text-stroke: 1px #5a120a;
+}
 .floater.healf { color: var(--good); }
-.floater.goldf { color: var(--gold); }
+.floater.goldf {
+  color: var(--gold);
+  text-shadow:
+    0 0 8px rgba(255, 216, 106, 0.7),
+    0 2px 4px #000;
+}
+.floater.goldf.lasthit {
+  color: #fff4a8;
+  font-size: 16px;
+  letter-spacing: 0.04em;
+}
 .floater.immunef, .floater.missf { color: #c8c8d8; font-size: 12px; }
+.coin-fx {
+  position: absolute;
+  top: 0; left: 0;
+  color: #ffd86a;
+  font-size: 13px;
+  font-weight: 900;
+  pointer-events: none;
+  text-shadow:
+    0 0 8px rgba(255, 216, 106, 0.85),
+    0 1px 3px #000;
+  will-change: transform, opacity;
+}
+.coin-fx.last-hit {
+  color: #fff2a0;
+  filter: drop-shadow(0 0 6px rgba(255, 244, 168, 0.8));
+}
 
 /* ---------- capture bar ---------- */
 
