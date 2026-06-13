@@ -6,7 +6,9 @@ import { generateDungeon, rollRoomSpawns } from '../core/dungeon';
 import { Rng } from '../core/rng';
 import { freshEchoProgress } from '../core/echo';
 import { xpForLevel } from '../core/stats';
+import { dungeonAffixes } from '../data/dungeon-affixes';
 import { Game, newGameSave } from '../systems/game';
+import { DungeonSession } from '../systems/dungeon-session';
 import type { AffixDef, DungeonDef, GameSave, ItemDropTable, PlannedPack, RoomType, SpawnCard } from '../core/types';
 
 beforeAll(() => registerAllContent());
@@ -169,6 +171,40 @@ describe('dungeon generation D0', () => {
     }
     expect(sawHellOnlyAffix).toBe(true);
   });
+
+  it('applies selected dungeon modifiers deterministically without changing no-modifier runs', () => {
+    const def = REG.dungeon('frost-hollow');
+    const plain = generateDungeon(def, 'nightmare', 2026);
+    expect(generateDungeon(def, 'nightmare', 2026, { modifiers: [] })).toEqual(plain);
+
+    const deepA = generateDungeon(def, 'nightmare', 2026, { modifiers: ['deep-map'] });
+    const deepB = generateDungeon(def, 'nightmare', 2026, { modifiers: ['deep-map'] });
+    expect(deepA).toEqual(deepB);
+    expect(deepA.modifiers).toEqual(['deep-map']);
+    expect(deepA.depth).toBe(plain.depth + 2);
+
+    const packed = generateDungeon(def, 'nightmare', 2026, { modifiers: ['packed-halls', 'champion-sigil'] });
+    const plainBodies = plain.rooms.reduce((sum, room) => sum + populationScore(room.packs).bodies, 0);
+    const packedBodies = packed.rooms.reduce((sum, room) => sum + populationScore(room.packs).bodies, 0);
+    expect(packedBodies).toBeGreaterThan(plainBodies);
+  });
+
+  it('forces modifier affixes when legal', () => {
+    const modded: DungeonDef = {
+      ...BASE_DUNGEON,
+      id: 'forced-affix-test',
+      roomCount: { min: 4, max: 4 },
+      spawnPool: [{ creepId: 'kobold', weight: 1, cost: 1, rarity: 'rare' }],
+      affixPool: ['frozen', 'jailer'],
+      affixes: dungeonAffixes(['frozen', 'jailer']),
+      modifiers: [{ id: 'force-frozen', name: 'Force Frozen', description: 'test', forcedAffix: 'frozen' }],
+      budget: { base: 20, perDepth: 0 }
+    };
+    const layout = generateDungeon(modded, 'normal', 11, { modifiers: ['force-frozen'] });
+    const affixedPacks = layout.rooms.flatMap((room) => room.packs).filter((pack) => pack.rarity !== 'normal');
+    expect(affixedPacks.length).toBeGreaterThan(0);
+    expect(affixedPacks.every((pack) => pack.affixes.includes('frozen'))).toBe(true);
+  });
 });
 
 function dungeonSave(): GameSave {
@@ -205,16 +241,27 @@ function dungeonSave(): GameSave {
 
 describe('dungeon session D1/D2', () => {
   function clearCurrentRoom(g: Game): void {
-    const session = g.liveDungeon!;
-    const hero = session.drivenUnit()!;
-    for (const uid of [...session.enemyUids]) {
-      const enemy = session.sim.unit(uid);
-      if (enemy?.alive) applyDamage(session.sim, hero, enemy, 1e9, 'physical');
-      g.update(0.05);
+    for (let guard = 0; guard < 500; guard++) {
+      const session = g.liveDungeon;
+      if (!session || session.exitsUnlocked()) return;
+      const hero = session.drivenUnit()!;
+      for (const uid of [...session.enemyUids]) {
+        const enemy = session.sim.unit(uid);
+        if (enemy?.alive) applyDamage(session.sim, hero, enemy, 1e9, 'physical');
+      }
+      g.update(0.1);
     }
+    throw new Error('room did not clear');
   }
 
-  it('locks exits until a room is clear, then advances the descent to the guardian', () => {
+  function chooseFirstExit(g: Game): void {
+    const session = g.liveDungeon!;
+    const next = session.availableExits()[0];
+    expect(next).toBeDefined();
+    expect(g.chooseDungeonExit(next.index)).toBe(true);
+  }
+
+  it('locks exits until a room is clear, then waits for an explicit route choice', () => {
     const g = Game.headless(dungeonSave());
     expect(g.startDungeon('frost-hollow', 'normal', { seed: 1001 })).toBe(true);
     const session = g.liveDungeon!;
@@ -226,10 +273,14 @@ describe('dungeon session D1/D2', () => {
 
     clearCurrentRoom(g);
     expect(g.liveDungeon).toBeTruthy();
+    expect(g.liveDungeon!.room.index).toBe(firstRoom);
+    expect(g.liveDungeon!.exitsUnlocked()).toBe(true);
+
+    chooseFirstExit(g);
     expect(g.liveDungeon!.room.index).toBeGreaterThan(firstRoom);
   });
 
-  it('enters from a portal, clears a multi-room run, grants rewards, and exits', () => {
+  it('enters from a portal, grants room rewards on clear, clears a multi-room run, and exits', () => {
     const g = Game.headless(dungeonSave());
     const before = g.inventoryStash.length;
 
@@ -238,17 +289,57 @@ describe('dungeon session D1/D2', () => {
     expect(g.liveDungeon!.def.id).toBe('frost-hollow');
     const depth = g.liveDungeon!.layout.depth;
     const visited = new Set<number>();
+    let sawMidRunReward = false;
 
     while (g.liveDungeon) {
       visited.add(g.liveDungeon.room.index);
+      if (g.liveDungeon.exitsUnlocked()) {
+        chooseFirstExit(g);
+        continue;
+      }
       clearCurrentRoom(g);
+      if (g.liveDungeon && g.inventoryStash.length > before) sawMidRunReward = true;
     }
 
     expect(g.liveDungeon).toBeNull();
     expect(visited.size).toBeGreaterThan(1);
+    expect(sawMidRunReward).toBe(true);
     expect(g.inventoryStash.length).toBeGreaterThan(before);
     expect(g.toasts.some((t) => t.text.includes('Frost Hollow cleared'))).toBe(true);
     expect(g.toasts.some((t) => t.text.includes(`${depth}/${depth} rooms`))).toBe(true);
+  });
+
+  it('opens the dungeon entry hook from a portal before starting in UI mode', () => {
+    const g = Game.headless(dungeonSave());
+    let opened: string | null = null;
+    g.onOpenDungeonEntry = (id) => {
+      opened = id;
+    };
+
+    expect(g.tryInteract()).toBe(true);
+    expect(opened).toBe('frost-hollow');
+    expect(g.liveDungeon).toBeNull();
+  });
+
+  it('starts a modified tiered dungeon and records progress on clear', () => {
+    const g = Game.headless(dungeonSave());
+    const before = g.inventoryStash.length;
+    expect(g.startDungeon('frost-hollow', 'nightmare', { seed: 2027, modifiers: ['deep-map', 'frozen-oath'] })).toBe(true);
+    expect(g.liveDungeon!.tier).toBe('nightmare');
+    expect(g.liveDungeon!.selectedModifiers()).toEqual(['deep-map', 'frozen-oath']);
+    const depth = g.liveDungeon!.layout.depth;
+
+    while (g.liveDungeon) {
+      if (g.liveDungeon.exitsUnlocked()) chooseFirstExit(g);
+      else clearCurrentRoom(g);
+    }
+
+    const progress = g.buildSave().dungeonProgress['frost-hollow'];
+    expect(progress.clears).toBe(1);
+    expect(progress.bestDepth).toBe(depth);
+    expect(progress.bestTier).toBe('nightmare');
+    expect(progress.lastModifiers).toEqual(['deep-map', 'frozen-oath']);
+    expect(g.inventoryStash.length).toBeGreaterThan(before);
   });
 
   it('ejects cleanly on a one-room wipe without saving mid-run state', () => {
@@ -268,5 +359,83 @@ describe('dungeon session D1/D2', () => {
     expect(save.regionId).toBe('icewrack');
     expect(save.playerPos).toEqual(REG.region('icewrack').dungeons![0].pos);
     expect(g.toasts.some((t) => t.text.includes('ejects the party at the portal'))).toBe(true);
+  });
+
+  it('applies authored affixes to spawned dungeon packs', () => {
+    const fastDungeon: DungeonDef = {
+      ...BASE_DUNGEON,
+      id: 'fast-affix-test',
+      roomCount: { min: 3, max: 3 },
+      spawnPool: [{ creepId: 'kobold', weight: 1, cost: 1, rarity: 'rare' }],
+      affixPool: ['fast'],
+      affixes: dungeonAffixes(['fast']),
+      budget: { base: 20, perDepth: 0 }
+    };
+    const session = new DungeonSession(fastDungeon, [{ heroId: 'juggernaut', level: 30, items: ['battlefury'] }], 'normal', 77);
+    const enemy = session.enemyUids.map((uid) => session.sim.unit(uid)).find((u) => !!u);
+
+    expect(enemy).toBeDefined();
+    expect(enemy!.hasStatus('buff')).toBe(true);
+  });
+
+  it('paces planned packs without changing their content', () => {
+    const pacedDungeon: DungeonDef = {
+      ...BASE_DUNGEON,
+      id: 'paced-pack-test',
+      roomCount: { min: 3, max: 3 },
+      spawnPool: [{ creepId: 'kobold', weight: 1, cost: 1 }],
+      affixPool: [],
+      affixes: [],
+      budget: { base: 25, perDepth: 0 }
+    };
+    const session = new DungeonSession(pacedDungeon, [{ heroId: 'juggernaut', level: 30, items: ['battlefury'] }], 'normal', 99);
+    const planned = session.room.packs.length;
+    expect(planned).toBeGreaterThan(1);
+    expect(session.pacingInfo().spawnedPacks).toBe(1);
+
+    const hero = session.drivenUnit()!;
+    for (let guard = 0; guard < 500 && !session.exitsUnlocked(); guard++) {
+      for (const uid of [...session.enemyUids]) {
+        const enemy = session.sim.unit(uid);
+        if (enemy?.alive) applyDamage(session.sim, hero, enemy, 1e9, 'physical');
+      }
+      session.step(0.1);
+    }
+
+    expect(session.exitsUnlocked()).toBe(true);
+    expect(session.pacingInfo().spawnedPacks).toBe(planned);
+    expect(session.pacingInfo().remainingPacks).toBe(0);
+  });
+
+  it('fires guardian boss phases inside the dungeon session', () => {
+    const phaseDungeon: DungeonDef = {
+      ...BASE_DUNGEON,
+      id: 'guardian-phase-test',
+      roomCount: { min: 3, max: 3 },
+      spawnPool: [{ creepId: 'kobold', weight: 1, cost: 1 }],
+      affixPool: [],
+      affixes: [],
+      guardian: 'boss-phantom-assassin',
+      budget: { base: 10, perDepth: 0 }
+    };
+    const session = new DungeonSession(phaseDungeon, [{ heroId: 'juggernaut', level: 30, items: ['battlefury'] }], 'normal', 88);
+    const hero = session.drivenUnit()!;
+    for (let guard = 0; guard < 500 && !session.exitsUnlocked(); guard++) {
+      for (const uid of [...session.enemyUids]) {
+        const enemy = session.sim.unit(uid);
+        if (enemy?.alive) applyDamage(session.sim, hero, enemy, 1e9, 'physical');
+      }
+      session.step(0.05);
+    }
+    expect(session.exitsUnlocked()).toBe(true);
+    expect(session.chooseExit(session.availableExits()[0].index)).toBe(true);
+    expect(session.room.type).toBe('boss');
+
+    const boss = session.sim.unit(session.enemyUids[0])!;
+    boss.hp = boss.stats.maxHp * 0.6;
+    session.step(0.05);
+
+    expect(session.guardianMechanicsFired).toContain('phase-0');
+    expect(boss.hasStatus('buff')).toBe(true);
   });
 });

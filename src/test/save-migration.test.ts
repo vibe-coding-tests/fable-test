@@ -6,7 +6,7 @@ import { migratePhase5Save } from '../core/phase5';
 import { migratePhase6Save } from '../core/phase6';
 import type { GameSave } from '../core/types';
 
-// Save migration coverage. v6 adds Armory loadouts while preserving the v4
+// Save migration coverage. v6 adds Armory loadouts and dungeon progress while preserving the v4
 // audio/karma/codex and v5 exploration/stamina migration paths.
 
 beforeAll(() => registerAllContent());
@@ -17,6 +17,7 @@ describe('save v6 round-trip and migration', () => {
     expect(save.version).toBe(6);
     expect(SAVE_VERSION).toBe(6);
     expect(save.loadouts).toEqual({});
+    expect(save.dungeonProgress).toEqual({});
     expect(save.reputation).toBe(0);
     expect(save.codexUnlocks).toEqual([]);
     expect(save.journalSeen).toEqual([]);
@@ -48,6 +49,17 @@ describe('save v6 round-trip and migration', () => {
   it('round-trips a v6 save carrying karma, codex/journal, exploration, audio, and loadouts identically', () => {
     const save = newGameSave('crystal-maiden');
     save.loadouts = { 'crystal-maiden': { Default: ['blink-dagger', null, null, null, null, null] } };
+    save.dungeonProgress = {
+      'frost-hollow': {
+        clears: 2,
+        wipes: 1,
+        bestDepth: 8,
+        bestTier: 'nightmare',
+        lastTier: 'nightmare',
+        lastModifiers: ['deep-map'],
+        lastClearedAt: 1234
+      }
+    };
     save.reputation = 7;
     save.codexUnlocks = ['hero:lich', 'region:icewrack', 'raid:roshan-pit'];
     save.journalSeen = ['quest-lich', 'badge:frost-badge'];
@@ -67,6 +79,7 @@ describe('save v6 round-trip and migration', () => {
     expect(reloaded).not.toBeNull();
     expect(reloaded!.version).toBe(6);
     expect(reloaded!.loadouts).toEqual(save.loadouts);
+    expect(reloaded!.dungeonProgress).toEqual(save.dungeonProgress);
     expect(reloaded!.reputation).toBe(7);
     expect(reloaded!.codexUnlocks).toEqual(save.codexUnlocks);
     expect(reloaded!.journalSeen).toEqual(save.journalSeen);
@@ -106,6 +119,7 @@ describe('save v6 round-trip and migration', () => {
     expect(migrated).not.toBeNull();
     expect(migrated!.version).toBe(6);
     expect(migrated!.loadouts).toEqual({});
+    expect(migrated!.dungeonProgress).toEqual({});
     expect(migrated!.reputation).toBe(0);
     expect(migrated!.codexUnlocks).toEqual([]);
     expect(migrated!.journalSeen).toEqual([]);
@@ -137,6 +151,7 @@ describe('save v6 round-trip and migration', () => {
     expect(migrated).not.toBeNull();
     expect(migrated!.version).toBe(6);
     expect(migrated!.loadouts).toEqual({});
+    expect(migrated!.dungeonProgress).toEqual({});
     expect(migrated!.difficulty).toEqual({});
     expect(migrated!.raidProgress).toEqual({});
     expect(migrated!.reputation).toBe(0);
@@ -156,9 +171,10 @@ describe('save v6 round-trip and migration', () => {
     expect(twice).toEqual(once);
   });
 
-  it('migratePhase6Save is idempotent and normalizes loadout slots', () => {
+  it('migratePhase6Save is idempotent and normalizes loadout slots and dungeon progress', () => {
     const save = newGameSave('juggernaut') as GameSave;
     save.loadouts = { juggernaut: { Default: ['butterfly', null, null, null, null, null] } };
+    save.dungeonProgress = { 'frost-hollow': { clears: 1, wipes: 0, bestDepth: 7, bestTier: 'hell', lastTier: 'hell', lastModifiers: ['packed-halls'] } };
     const once = migratePhase6Save(save);
     const twice = migratePhase6Save(once);
     expect(twice).toEqual(once);
@@ -166,8 +182,10 @@ describe('save v6 round-trip and migration', () => {
     const legacy = JSON.parse(JSON.stringify(save)) as Record<string, unknown>;
     legacy.version = 5;
     legacy.loadouts = { juggernaut: { Default: ['butterfly'] } };
+    legacy.dungeonProgress = { 'frost-hollow': { clears: 2, wipes: 1, bestDepth: 8, bestTier: 'nightmare', lastModifiers: ['deep-map', 12] } };
     const migrated = Game.migrateSave(legacy);
     expect(migrated?.loadouts.juggernaut.Default).toEqual(['butterfly', null, null, null, null, null]);
+    expect(migrated?.dungeonProgress['frost-hollow']).toMatchObject({ clears: 2, wipes: 1, bestDepth: 8, bestTier: 'nightmare', lastModifiers: ['deep-map'] });
   });
 
   it('migratePhase4Save is idempotent on a v4 save', () => {

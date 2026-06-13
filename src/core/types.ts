@@ -609,6 +609,25 @@ export interface AffixDef {
   excludes?: string[];
 }
 
+export interface DungeonModifierDef {
+  id: string;
+  name: string;
+  description: string;
+  budgetMult?: number;
+  packSizeBonus?: number;
+  championChanceBonus?: number;
+  rareChanceBonus?: number;
+  forcedAffix?: string;
+  lootChanceMult?: number;
+  lootRollBonus?: number;
+  roomCountBonus?: number;
+  highStakes?: boolean;
+}
+
+export interface DungeonGenerationOptions {
+  modifiers?: string[];
+}
+
 export interface DungeonDef {
   id: string;
   name: string;
@@ -618,6 +637,8 @@ export interface DungeonDef {
   roomCount: { min: number; max: number };
   spawnPool: SpawnCard[];
   affixPool: string[];
+  affixes?: AffixDef[];
+  modifiers?: DungeonModifierDef[];
   guardian: string;
   loot: Record<RoomType, ItemDropTable>;
   budget: { base: number; perDepth: number };
@@ -653,6 +674,7 @@ export interface DungeonLayout {
   seed: number;
   def: string;
   tier: DifficultyTier;
+  modifiers: string[];
   depth: number;
   rooms: DungeonRoom[];
 }
@@ -1001,6 +1023,15 @@ export type SimEvent =
 export interface ItemSave { id: string; charges?: number; cooldownLeft?: number; quality?: ItemQuality; bound?: boolean }
 export type HeroLoadoutSlots = (string | null)[];
 export type ArmoryLoadouts = Record<string, Record<string, HeroLoadoutSlots>>;
+export interface DungeonProgressSave {
+  clears: number;
+  wipes: number;
+  bestDepth: number;
+  bestTier: DifficultyTier;
+  lastTier?: DifficultyTier;
+  lastModifiers?: string[];
+  lastClearedAt?: number;
+}
 export interface HeroSave {
   heroId: string;
   level: number;
@@ -1048,6 +1079,7 @@ export interface GameSave {
   campRespawn: Record<string, number>; // camp id -> seconds remaining
   difficulty: Record<string, { tier: DifficultyTier; dryClears: number }>;
   raidProgress: Record<string, { clears: number; dryStreak: number; aegisHeld?: boolean; roshanRespawnAt?: number }>;
+  dungeonProgress: Record<string, DungeonProgressSave>;
   eliteFive: { defeated: number; championDown: boolean };
   factionChoices: Record<string, string>;
   heldUniques: string[];

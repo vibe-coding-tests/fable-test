@@ -1,4 +1,5 @@
 import type { DungeonDef, ItemDropTable, RoomType } from '../core/types';
+import { dungeonAffixes } from './dungeon-affixes';
 
 const COMMON_ROOM_DROP: ItemDropTable = {
   guaranteed: ['clarity'],
@@ -94,6 +95,45 @@ export const FROST_HOLLOW: DungeonDef = {
     { creepId: 'granite-golem', weight: 1, cost: 42, minDepth: 4, rarity: 'rare' }
   ],
   affixPool: ['jailer', 'frozen', 'vortex'],
+  affixes: dungeonAffixes(['jailer', 'frozen', 'vortex']),
+  modifiers: [
+    {
+      id: 'packed-halls',
+      name: 'Packed Halls',
+      description: '+25% spawn budget and +1 body in eligible packs.',
+      budgetMult: 1.25,
+      packSizeBonus: 1
+    },
+    {
+      id: 'champion-sigil',
+      name: 'Champion Sigil',
+      description: 'More champion packs, +20% room loot odds.',
+      championChanceBonus: 0.16,
+      lootChanceMult: 1.2
+    },
+    {
+      id: 'frozen-oath',
+      name: 'Frozen Oath',
+      description: 'Elite packs force Frozen when legal, +1 room reward roll.',
+      forcedAffix: 'frozen',
+      lootRollBonus: 1
+    },
+    {
+      id: 'deep-map',
+      name: 'Deep Map',
+      description: '+2 rooms and richer rare-pack odds.',
+      roomCountBonus: 2,
+      rareChanceBonus: 0.08
+    },
+    {
+      id: 'single-life',
+      name: 'Single Life',
+      description: 'High-stakes run marker: no mid-run persistence and wipe is recorded.',
+      highStakes: true,
+      budgetMult: 1.12,
+      lootChanceMult: 1.15
+    }
+  ],
   guardian: 'boss-medusa',
   loot: roomLoot(),
   budget: { base: 42, perDepth: 14 },

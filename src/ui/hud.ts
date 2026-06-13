@@ -9,7 +9,7 @@ import { abilityIcon, itemIcon, heroPortrait } from '../engine/icons';
 import { WORLD_SCALE } from '../engine/scale';
 import { Game } from '../systems/game';
 import type { InputController } from '../systems/input';
-import type { GambitAction, GambitCondition, GambitRule, GambitTargetMode, GraphicsSettings, ItemDef, ItemSave, SimEvent } from '../core/types';
+import type { DifficultyTier, GambitAction, GambitCondition, GambitRule, GambitTargetMode, GraphicsSettings, ItemDef, ItemSave, SimEvent } from '../core/types';
 import * as THREE from 'three';
 
 // ------------------------------------------------------------------
@@ -64,11 +64,12 @@ export class Hud {
   private gambitEditRec = -1;
   private gambitReturnTo: 'party' | 'prefight' | 'none' = 'none';
   private prefightGymId: string | null = null;
+  private dungeonEntryId: string | null = null;
 
   private floaters: Floater[] = [];
   private coinFx: CoinFx[] = [];
   private shownToasts = 0;
-  private modalKind: 'none' | 'party' | 'shop' | 'menu' | 'talents' | 'journal' | 'codex' | 'gambit' | 'prefight' | 'services' = 'none';
+  private modalKind: 'none' | 'party' | 'shop' | 'menu' | 'talents' | 'journal' | 'codex' | 'gambit' | 'prefight' | 'dungeon-entry' | 'services' = 'none';
   private captureUntil = 0;
   private captureDur = 1;
   private vec = new THREE.Vector3();
@@ -122,6 +123,7 @@ export class Hud {
       if (btn?.dataset.livegym === 'call') this.game.liveGymPlayerCall();
     });
     this.game.onOpenGymPrefight = (gymId) => this.openGymPrefight(gymId);
+    this.game.onOpenDungeonEntry = (dungeonId) => this.openDungeonEntry(dungeonId);
     this.displayGold = this.game.gold;
     this.goldTweenFrom = this.game.gold;
     this.goldTweenTo = this.game.gold;
@@ -1107,6 +1109,54 @@ export class Hud {
 
   // --- gym pre-fight screen (§3.5) ---
 
+  openDungeonEntry(dungeonId: string): void {
+    this.dungeonEntryId = dungeonId;
+    this.modalKind = 'dungeon-entry';
+    this.input.uiModalOpen = true;
+    this.modal.classList.remove('hidden');
+    this.game.paused = true;
+    this.renderDungeonEntryModal();
+  }
+
+  private renderDungeonEntryModal(): void {
+    const dungeonId = this.dungeonEntryId!;
+    const { def, tiers, modifiers, progress } = this.game.dungeonEntryOptions(dungeonId);
+    const tierButtons = (['normal', 'nightmare', 'hell'] as const)
+      .map((tier) => `<label class="svc-row"><span class="svc-main"><b>${tier[0].toUpperCase()}${tier.slice(1)}</b></span><span class="svc-actions"><input type="radio" name="dungeon-tier" value="${tier}" ${tier === 'normal' ? 'checked' : ''} ${tiers.includes(tier) ? '' : 'disabled'}></span></label>`)
+      .join('');
+    const modRows = modifiers.length === 0
+      ? '<p class="dim">No modifiers are available for this dungeon yet.</p>'
+      : modifiers.map((mod) => `<label class="svc-row">
+          <span class="svc-main"><b>${mod.name}</b><div class="rr-sub">${mod.description}</div></span>
+          <span class="svc-actions"><input type="checkbox" data-dungeon-mod="${mod.id}"></span>
+        </label>`).join('');
+    const progressText = progress
+      ? `Clears ${progress.clears} · wipes ${progress.wipes} · best depth ${progress.bestDepth} · best tier ${progress.bestTier}`
+      : 'No clears recorded yet.';
+
+    this.modalShell(
+      `${def.name} — Entry`,
+      `<div class="services">
+        <section><h3>Tier</h3>${tierButtons}</section>
+        <section><h3>Map Modifiers</h3>${modRows}</section>
+        <section><h3>Progress</h3><p class="rr-sub">${progressText}</p></section>
+        <div class="pf-foot">
+          <button class="btn accent big" data-dungeon-start="1">Open Descent</button>
+          <button class="btn" data-dungeon-cancel="1">Back</button>
+        </div>
+      </div>`
+    );
+    this.modal.querySelector<HTMLElement>('[data-dungeon-cancel]')?.addEventListener('click', () => this.closeModal());
+    this.modal.querySelector<HTMLElement>('[data-dungeon-start]')?.addEventListener('click', () => {
+      const tier = (this.modal.querySelector<HTMLInputElement>('input[name="dungeon-tier"]:checked')?.value ?? 'normal') as DifficultyTier;
+      const selected = [...this.modal.querySelectorAll<HTMLInputElement>('[data-dungeon-mod]:checked')]
+        .map((el) => el.dataset.dungeonMod!)
+        .filter(Boolean);
+      this.closeModal();
+      this.game.startDungeon(dungeonId, tier, { modifiers: selected });
+    });
+  }
+
   openGymPrefight(gymId: string): void {
     this.prefightGymId = gymId;
     this.modalKind = 'prefight';
@@ -1390,6 +1440,51 @@ export class Hud {
 
   private renderLiveGym(): void {
     const fight = this.game.liveGym;
+    const dungeon = this.game.liveDungeon;
+    if (!fight && dungeon) {
+      const room = dungeon.room;
+      const selected = dungeon.sim.unit(this.game.scene.selectedUid);
+      const selectedName = selected && selected.team === 0 ? selected.name : 'select 1–5';
+      const exitRooms = dungeon.availableExits();
+      const exitKey = exitRooms.map((r) => `${r.index}:${r.type}:${r.reward.kind}:${r.reward.rarity ?? ''}`).join(',');
+      const pacing = dungeon.pacingInfo();
+      const mods = dungeon.selectedModifiers();
+      const key = `dungeon|${dungeon.def.id}|${room.index}|${room.type}|${dungeon.enemyUids.length}|${dungeon.exitsUnlocked()}|${pacing.phase}:${pacing.spawnedPacks}:${pacing.remainingPacks}:${Math.ceil(pacing.nextPackIn)}|${exitKey}|${this.game.scene.selectedUid}`;
+      if (key === this.lastLiveGymKey) return;
+      this.lastLiveGymKey = key;
+      const enemies = dungeon.enemyUids.filter((uid) => dungeon.sim.unit(uid)?.alive).length;
+      const roomType = room.type[0].toUpperCase() + room.type.slice(1);
+      const rewardText = (kind: string, rarity?: string) => {
+        if (kind === 'guardian') return 'guardian anchor';
+        if (kind === 'chest') return 'chest';
+        if (kind === 'shrine') return 'shrine';
+        if (kind === 'rest') return 'rest';
+        if (kind === 'loot') return rarity ? `${rarity} loot` : 'loot';
+        return 'no reward';
+      };
+      const exitHtml = exitRooms.map((next) => {
+        const nextType = next.type[0].toUpperCase() + next.type.slice(1);
+        return `<button class="btn small" data-dungeon-exit="${next.index}">${next.index + 1}: ${nextType} · ${rewardText(next.reward.kind, next.reward.rarity)}</button>`;
+      }).join('');
+      const exitLine = enemies > 0
+        ? `${enemies} foes seal the exits`
+        : dungeon.exitsUnlocked()
+          ? (exitHtml || 'Exit opens back to the portal')
+          : pacing.remainingPacks > 0
+            ? `Director ${pacing.phase}; next pack in ${pacing.nextPackIn.toFixed(1)}s`
+            : 'The room settles...';
+      const modNames = mods.map((id) => dungeon.def.modifiers?.find((m) => m.id === id)?.name ?? id);
+      this.liveGymBar.innerHTML = `
+        <div class="lg-score"><b>${dungeon.def.name}</b> · ${dungeon.tier} · Room ${room.index + 1}/${dungeon.layout.depth} · ${roomType}</div>
+        <div class="lg-calls">Selected <b>${selectedName}</b></div>
+        <div class="lg-calls">Packs ${pacing.spawnedPacks}/${pacing.plannedPacks}${modNames.length > 0 ? ` · ${modNames.join(', ')}` : ''}</div>
+        <div class="lg-calls">${exitLine}</div>`;
+      this.liveGymBar.querySelectorAll<HTMLElement>('[data-dungeon-exit]').forEach((el) => {
+        el.addEventListener('click', () => this.game.chooseDungeonExit(Number(el.dataset.dungeonExit)));
+      });
+      this.liveGymBar.classList.remove('hidden');
+      return;
+    }
     if (!fight) {
       if (!this.liveGymBar.classList.contains('hidden')) {
         this.liveGymBar.classList.add('hidden');

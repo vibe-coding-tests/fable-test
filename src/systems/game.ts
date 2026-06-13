@@ -33,7 +33,7 @@ import {
 import { Rng } from '../core/rng';
 import { defaultAudioSettings, defaultGraphicsSettings, defaultPhase4SaveFields } from '../core/phase4';
 import { defaultPhase5SaveFields } from '../core/phase5';
-import { migratePhase6Save } from '../core/phase6';
+import { higherDungeonTier, migratePhase6Save } from '../core/phase6';
 import { type QualityTier } from '../engine/performance';
 import { mergeCreeps, newCreepInstanceId, validateEntourage } from '../core/capture';
 import { computeBuyPlan, executeBuy, itemSaveOf, itemStateFromSave, sellValue, sortInventory } from '../core/items';
@@ -42,7 +42,7 @@ import { ELITE_DRAFT } from '../data/drafts';
 import { resonanceMods } from '../core/resonance';
 import { levelFromXp, xpForLevel } from '../core/stats';
 import { dist, fromAngle, norm, sub } from '../core/math2d';
-import type { ActiveElement, ArmoryLoadouts, BossDef, CreepTier, CreepInstanceSave, DifficultyTier, DraftDef, DropSource, EchoProgress, GambitRule, GameSave, GraphicsSettings, HeroLoadoutSlots, HeroSave, ItemDropTable, ItemRarity, ItemSave, MacroHeroSetup, NeutralItemDef, Order, QuestProgress, RaidDef, RegionDef, RoomType, SimEvent, StingerId, Vec2 } from '../core/types';
+import type { ActiveElement, ArmoryLoadouts, BossDef, CreepTier, CreepInstanceSave, DifficultyTier, DraftDef, DropSource, DungeonDef, DungeonModifierDef, DungeonProgressSave, DungeonRoom, EchoProgress, GambitRule, GameSave, GraphicsSettings, HeroLoadoutSlots, HeroSave, ItemDropTable, ItemRarity, ItemSave, MacroHeroSetup, NeutralItemDef, Order, QuestProgress, RaidDef, RegionDef, RoomType, SimEvent, StingerId, Vec2 } from '../core/types';
 import { ProceduralAudio } from '../engine/audio';
 import { GameScene } from '../engine/scene';
 import { LiveGymFight, runGymMatch, type GymMatchHero, type GymMatchResult } from './macro-session';
@@ -256,6 +256,7 @@ export function newGameSave(starterHeroId: string): GameSave {
     echoRespawn: {},
     campRespawn: {},
     loadouts: {},
+    dungeonProgress: {},
     ...phase3,
     ...defaultPhase4SaveFields(),
     ...phase5,
@@ -355,6 +356,7 @@ export class Game {
   difficulty: GameSave['difficulty'] = {};
   inventoryStash: ItemSave[] = [];
   raidProgress: GameSave['raidProgress'] = {};
+  dungeonProgress: GameSave['dungeonProgress'] = {};
   eliteFive: GameSave['eliteFive'] = { defeated: 0, championDown: false };
   factionChoices: Record<string, string> = {};
   heldUniques: string[] = [];
@@ -408,8 +410,10 @@ export class Game {
   liveDungeon: DungeonSession | null = null;
   private liveDungeonId: string | null = null;
   private liveDungeonTier: DifficultyTier = 'normal';
+  private liveDungeonModifiers: string[] = [];
   /** HUD hook: open the gym pre-fight screen (§3.5). Null in headless. */
   onOpenGymPrefight: ((gymId: string) => void) | null = null;
+  onOpenDungeonEntry: ((dungeonId: string) => void) | null = null;
 
   toasts: Toast[] = [];
   /** events the HUD wants this frame (damage floaters, gold, barks) */
@@ -446,6 +450,7 @@ export class Game {
     this.difficulty = structuredClone(save.difficulty);
     this.inventoryStash = save.inventoryStash.map((i) => ({ ...i }));
     this.raidProgress = structuredClone(save.raidProgress);
+    this.dungeonProgress = structuredClone(save.dungeonProgress ?? {});
     this.eliteFive = { ...save.eliteFive };
     this.factionChoices = { ...save.factionChoices };
     this.heldUniques = [...save.heldUniques];
@@ -965,7 +970,13 @@ export class Game {
     if (this.openNearbyChest()) return true;
     if (this.offerShardsAtShrine()) return true;
     const portal = this.nearbyDungeonPortal();
-    if (portal) return this.startDungeon(portal.dungeonId, 'normal');
+    if (portal) {
+      if (this.onOpenDungeonEntry) {
+        this.onOpenDungeonEntry(portal.dungeonId);
+        return true;
+      }
+      return this.startDungeon(portal.dungeonId, 'normal');
+    }
     const gym = this.nearbyGym();
     if (gym) {
       if (!this.gymStartGuard(gym.gymId)) return false;
@@ -1352,7 +1363,27 @@ export class Game {
     this.autosave('raid');
   }
 
-  startDungeon(dungeonId: string, tier: DifficultyTier = 'normal', opts: { seed?: number; maxSec?: number } = {}): boolean {
+  dungeonEntryOptions(dungeonId: string): { def: DungeonDef; tiers: DifficultyTier[]; modifiers: DungeonModifierDef[]; progress?: DungeonProgressSave } {
+    const def = REG.dungeon(dungeonId);
+    return {
+      def,
+      tiers: [...def.tiers],
+      modifiers: [...(def.modifiers ?? [])],
+      progress: this.dungeonProgress[dungeonId]
+    };
+  }
+
+  private selectedDungeonModifiers(def: DungeonDef, ids: string[] | undefined): string[] {
+    if (!ids || ids.length === 0) return [];
+    const legal = new Set((def.modifiers ?? []).map((m) => m.id));
+    const selected: string[] = [];
+    for (const id of ids) {
+      if (legal.has(id) && !selected.includes(id)) selected.push(id);
+    }
+    return selected;
+  }
+
+  startDungeon(dungeonId: string, tier: DifficultyTier = 'normal', opts: { seed?: number; maxSec?: number; modifiers?: string[] } = {}): boolean {
     if (this.liveGym || this.liveRaid || this.liveDungeon) return false;
     const def = REG.dungeon(dungeonId);
     if (def.regionId !== this.region.id) {
@@ -1367,15 +1398,19 @@ export class Game {
       this.msg('A dungeon needs at least one hero', 'bad');
       return false;
     }
-    const seed = opts.seed ?? stableContentSeed(`${dungeonId}:${tier}`, Math.round(this.playtime));
+    const modifiers = this.selectedDungeonModifiers(def, opts.modifiers);
+    const modSalt = modifiers.length > 0 ? `:${modifiers.join('+')}` : '';
+    const seed = opts.seed ?? stableContentSeed(`${dungeonId}:${tier}${modSalt}`, Math.round(this.playtime));
     this.liveDungeonId = dungeonId;
     this.liveDungeonTier = tier;
-    this.liveDungeon = new DungeonSession(def, this.gymPlayerTeam(), tier, seed, { maxSec: opts.maxSec });
+    this.liveDungeonModifiers = modifiers;
+    this.liveDungeon = new DungeonSession(def, this.gymPlayerTeam(), tier, seed, { maxSec: opts.maxSec, modifiers });
     this.queuedOrders = [];
     this.scene.resetUnitViews();
     const u = this.liveDungeon.drivenUnit();
     if (u) this.scene.selectedUid = u.uid;
-    this.msg(`${def.name}: descent opened (${this.liveDungeon.layout.depth} rooms). Exits unlock on clear.`, 'info');
+    const modText = modifiers.length > 0 ? ` · ${modifiers.map((id) => def.modifiers?.find((m) => m.id === id)?.name ?? id).join(', ')}` : '';
+    this.msg(`${def.name}: ${tier} descent opened (${this.liveDungeon.layout.depth} rooms${modText}). Exits unlock on clear.`, 'info');
     return true;
   }
 
@@ -1393,6 +1428,9 @@ export class Game {
         if (victim?.kind === 'creep' && victim.tier) this.rollItemDropsForCreep(victim.creepId, victim.tier, ev.victimUid);
       }
     }
+    for (const room of dungeon.drainCompletedRooms()) {
+      this.grantDungeonRoomReward(dungeon.def, dungeon.tier, room, dungeon.selectedModifiers());
+    }
     this.scene.update(dungeon.sim, dungeon.cameraFollow(), dt, 0.5);
     if (dungeon.done && dungeon.result) {
       const id = this.liveDungeonId!;
@@ -1400,42 +1438,95 @@ export class Game {
       const result = dungeon.result;
       const clearedRooms = result.clearedRooms.map((index) => ({ index, type: dungeon.layout.rooms[index]?.type })).filter((r): r is { index: number; type: RoomType } => !!r.type);
       const depth = dungeon.layout.depth;
+      const modifiers = dungeon.selectedModifiers();
       this.endLiveDungeon();
-      this.applyDungeonResult(id, tier, result.cleared, clearedRooms, depth);
+      this.applyDungeonResult(id, tier, result.cleared, clearedRooms, depth, modifiers);
     }
+  }
+
+  chooseDungeonExit(index: number): boolean {
+    const dungeon = this.liveDungeon;
+    if (!dungeon) return false;
+    const ok = dungeon.chooseExit(index);
+    if (!ok) {
+      this.msg('That dungeon exit is sealed', 'bad');
+      return false;
+    }
+    const room = dungeon.room;
+    this.msg(`${dungeon.def.name}: entered room ${room.index + 1}/${dungeon.layout.depth} (${room.type})`, 'info');
+    for (const completed of dungeon.drainCompletedRooms()) {
+      this.grantDungeonRoomReward(dungeon.def, dungeon.tier, completed, dungeon.selectedModifiers());
+    }
+    return true;
   }
 
   private endLiveDungeon(): void {
     this.liveDungeon = null;
     this.liveDungeonId = null;
+    this.liveDungeonModifiers = [];
     this.queuedOrders = [];
     this.scene.resetUnitViews();
     const u = this.activeUnit();
     if (u) this.scene.selectedUid = u.uid;
   }
 
-  private applyDungeonResult(dungeonId: string, tier: DifficultyTier, cleared: boolean, clearedRooms: { index: number; type: RoomType }[], depth: number): void {
+  private modifiedDungeonLootTable(def: DungeonDef, table: ItemDropTable, modifiers: string[]): ItemDropTable {
+    if (modifiers.length === 0) return table;
+    const mods = (def.modifiers ?? []).filter((m) => modifiers.includes(m.id));
+    const chanceMult = mods.reduce((mult, m) => mult * (m.lootChanceMult ?? 1), 1);
+    const rollBonus = mods.reduce((sum, m) => sum + (m.lootRollBonus ?? 0), 0);
+    if (chanceMult === 1 && rollBonus === 0) return table;
+    return {
+      guaranteed: [...table.guaranteed],
+      slots: table.slots.map((slot) => ({
+        ...slot,
+        rolls: Math.max(0, slot.rolls + rollBonus),
+        chance: {
+          normal: Math.min(1, slot.chance.normal * chanceMult),
+          nightmare: Math.min(1, slot.chance.nightmare * chanceMult),
+          hell: Math.min(1, slot.chance.hell * chanceMult)
+        },
+        pool: slot.pool.map((entry) => ({ ...entry })),
+        qualityOdds: slot.qualityOdds ? { ...slot.qualityOdds } : undefined
+      }))
+    };
+  }
+
+  private grantDungeonRoomReward(def: DungeonDef, tier: DifficultyTier, room: DungeonRoom, modifiers: string[] = []): void {
+    const reward = room.reward;
+    if (reward.kind === 'none' || reward.kind === 'rest' || !reward.table) return;
+    const table = this.modifiedDungeonLootTable(def, reward.table, modifiers);
+    const modSalt = modifiers.length > 0 ? `:${modifiers.join('+')}` : '';
+    const roll = rollItemDrops(table, tier, {}, new Rng(stableContentSeed(`${def.id}:room-reward:${tier}:${room.index}${modSalt}`, Math.round(this.playtime))));
+    if (roll.items.length === 0) return;
+    const drops = this.addDroppedItems(roll.items);
+    const names = drops.map((it) => REG.item(it.id).name).join(', ');
+    const label = reward.kind === 'guardian' ? 'Guardian drop' : reward.kind === 'chest' ? 'Chest reward' : 'Dungeon reward';
+    this.msg(`${label}: ${names} (→ Armory)`, reward.kind === 'guardian' ? 'good' : 'info');
+  }
+
+  private recordDungeonProgress(dungeonId: string, tier: DifficultyTier, cleared: boolean, clearedRooms: number, depth: number, modifiers: string[]): void {
+    const prev = this.dungeonProgress[dungeonId] ?? { clears: 0, wipes: 0, bestDepth: 0, bestTier: 'normal' as DifficultyTier };
+    this.dungeonProgress[dungeonId] = {
+      clears: prev.clears + (cleared ? 1 : 0),
+      wipes: prev.wipes + (cleared ? 0 : 1),
+      bestDepth: Math.max(prev.bestDepth, cleared ? depth : clearedRooms),
+      bestTier: cleared ? higherDungeonTier(tier, prev.bestTier) : prev.bestTier,
+      lastTier: tier,
+      lastModifiers: [...modifiers],
+      lastClearedAt: cleared ? Math.round(this.playtime) : prev.lastClearedAt
+    };
+  }
+
+  private applyDungeonResult(dungeonId: string, tier: DifficultyTier, cleared: boolean, clearedRooms: { index: number; type: RoomType }[], depth: number, modifiers: string[] = []): void {
     const def = REG.dungeon(dungeonId);
+    this.recordDungeonProgress(dungeonId, tier, cleared, clearedRooms.length, depth, modifiers);
     if (!cleared) {
       this.msg(`${def.name} ejects the party at the portal. Regroup and return.`, 'bad');
       this.autosave('dungeon');
       return;
     }
-    let rewardCount = 0;
-    for (const room of clearedRooms) {
-      const table = def.loot[room.type];
-      if (!table) continue;
-      const roll = rollItemDrops(table, tier, {}, new Rng(stableContentSeed(`${dungeonId}:room-reward:${tier}:${room.index}`, Math.round(this.playtime))));
-      for (const it of roll.items) {
-        const drop = bindIfNeeded(it);
-        this.inventoryStash.push(drop);
-        this.codexUnlock('item:' + drop.id);
-      }
-      if (roll.items.length > 0) {
-        rewardCount += roll.items.length;
-      }
-    }
-    this.msg(`${def.name} cleared: ${clearedRooms.length}/${depth} rooms, ${rewardCount} rewards. You return to the portal.`, 'good');
+    this.msg(`${def.name} cleared: ${clearedRooms.length}/${depth} rooms. You return to the portal.`, 'good');
     this.audio.playStinger('raid-clear');
     this.autosave('dungeon');
   }
@@ -3053,6 +3144,7 @@ export class Game {
       campRespawn: this.campRespawnMap(),
       difficulty: structuredClone(this.difficulty),
       raidProgress: structuredClone(this.raidProgress),
+      dungeonProgress: structuredClone(this.dungeonProgress),
       eliteFive: { ...this.eliteFive },
       factionChoices: { ...this.factionChoices },
       heldUniques: [...this.heldUniques],
@@ -3181,6 +3273,15 @@ export class Game {
     for (const [raidId, r] of Object.entries(v.raidProgress)) {
       if (!REG.raids.has(raidId)) return false;
       if (typeof r.clears !== 'number' || typeof r.dryStreak !== 'number') return false;
+    }
+    if (!v.dungeonProgress || typeof v.dungeonProgress !== 'object') return false;
+    for (const [dungeonId, r] of Object.entries(v.dungeonProgress)) {
+      if (!REG.dungeons.has(dungeonId)) return false;
+      if (typeof r.clears !== 'number' || typeof r.wipes !== 'number' || typeof r.bestDepth !== 'number') return false;
+      if (!['normal', 'nightmare', 'hell'].includes(r.bestTier)) return false;
+      if (r.lastTier !== undefined && !['normal', 'nightmare', 'hell'].includes(r.lastTier)) return false;
+      if (!Array.isArray(r.lastModifiers) || !r.lastModifiers.every((id) => typeof id === 'string')) return false;
+      if (r.lastClearedAt !== undefined && typeof r.lastClearedAt !== 'number') return false;
     }
     if (!v.eliteFive || typeof v.eliteFive.defeated !== 'number' || typeof v.eliteFive.championDown !== 'boolean') return false;
     if (!v.factionChoices || typeof v.factionChoices !== 'object') return false;
