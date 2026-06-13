@@ -42,7 +42,7 @@ describe('Phase 6 gym-winnable (test 6)', () => {
       expect(a.rounds.length).toBeGreaterThanOrEqual(2);
       expect(a.rounds.length).toBeLessThanOrEqual(3);
     }
-  });
+  }, 30000); // 8 gyms × 2 runs × best-of-3 = up to 48 full macro sims; well past the 5s default
 
   it('grants the enemy its enemyBonusCaptainCalls in the live fight', () => {
     for (const gym of ALL_GYMS) {
@@ -53,7 +53,7 @@ describe('Phase 6 gym-winnable (test 6)', () => {
       // the enemy should actually spend at least one call over a full match
       fight.runHeadless();
     }
-  });
+  }, 20000); // 8 full headless matches
 });
 
 // A durable, even matchup so a round lasts well past the call window and the

@@ -148,9 +148,9 @@ Phase 4 also leaves the **animation gesture player** (drives every ability/item 
 | 3b | Live kill rewards scale by region depth, tier, creep tier/star; post-cap XP→gold | PASS — M4 |
 | 3c | Neutral items drop into the dedicated slot, can't be sold, reroll/enchant/reclaim at Tinker's Bench | PASS — M4 |
 | 3d | Buyback, Tome, respec, restock/heal work for gold; none vends gated top-tier power | PASS — M4 |
-| 3e | All four raids run phase transitions, add waves, taunt redirect, enrage, loot; Roshan Aegis + respawn; Rapier-on-death | OPEN → M5 |
-| 3f | Elite Five winnable via draft, then Champion; a loss restarts from that member | OPEN → M5 |
-| 3g | Faction exclusivity (Kunkka xor Tidehunter) enforces through the live recruitment path | OPEN → M5 |
+| 3e | All four raids run phase transitions, add waves, taunt redirect, enrage, loot; Roshan Aegis + respawn; Rapier-on-death | PASS — M5 |
+| 3f | Elite Five winnable via draft, then Champion; a loss restarts from that member | PASS — M5 |
+| 3g | Faction exclusivity (Kunkka xor Tidehunter) enforces through the live recruitment path | PASS — M5 |
 
 **Phase 4 finished for real**
 
@@ -168,7 +168,7 @@ Phase 4 also leaves the **animation gesture player** (drives every ability/item 
 | # | Item | Status |
 |---|------|--------|
 | G1 | Save **v4** round-trips; v3→v4 and v2→v4 migrate cleanly | PASS — M1 |
-| G2 | All §6 tests pass; `npm test` + `npm run build` green | IN PROGRESS (M1–M4 green; 718 tests) |
+| G2 | All §6 tests pass; `npm test` + `npm run build` green | IN PROGRESS (M1–M5 green; 730 tests) |
 | G3 | Full playthrough: new game → all 8 badges → four raids → Elite Five → Champion, no blockers | OPEN → M10 |
 | G4 | `PROGRESS.md` reconciled to the standalone bar; demo (§8) + perf numbers recorded | IN PROGRESS |
 
@@ -188,12 +188,12 @@ Phase 4 also leaves the **animation gesture player** (drives every ability/item 
 | 10 | reward-scaling-live — deeper region / higher tier / higher creep star yields more; post-cap XP→gold | PASS — M4 |
 | 11 | neutral-items-live — tiered drop into dedicated slot; unsellable; reroll in-tier; enchant raises tier | PASS — M4 |
 | 12 | gold-sinks-faithful — buyback/Tome/respec work; no sink vends a gated top-tier item | PASS — M4 |
-| 13 | raid-mechanics — phase transitions, add waves, taunt redirect, enrage fire in the sim | OPEN → M5 |
-| 14 | raid-loot — each of four raids clears 5v1 and rolls its loot table (pity honored) | OPEN → M5 |
-| 15 | roshan-aegis — Aegis one-use auto-revive consumed on death; respawn timer; repeat-kill cheese/Refresher | OPEN → M5 |
-| 16 | rapier-on-death — Rapier drops on macro death, claimable by the enemy | OPEN → M5 |
-| 17 | elite-gauntlet-winnable — draft clears all five + Champion; a mid-gauntlet loss restarts from that member | OPEN → M5 |
-| 18 | faction-exclusivity-live — choosing Kunkka locks Tidehunter through the live recruit path | OPEN → M5 |
+| 13 | raid-mechanics — phase transitions, add waves, taunt redirect, enrage fire in the sim | PASS — M5 |
+| 14 | raid-loot — each of four raids clears 5v1 and rolls its loot table (pity honored) | PASS — M5 |
+| 15 | roshan-aegis — Aegis one-use auto-revive consumed on death; respawn timer; repeat-kill cheese/Refresher | PASS — M5 |
+| 16 | rapier-on-death — Rapier drops on macro death, claimable by the enemy | PASS — M5 |
+| 17 | elite-gauntlet-winnable — draft clears all five + Champion; a mid-gauntlet loss restarts from that member | PASS — M5 |
+| 18 | faction-exclusivity-live — choosing Kunkka locks Tidehunter through the live recruit path | PASS — M5 |
 | 19 | anim-coverage — every ability/item active has a valid `anim`; every hero/creep an `animProfile`; gesture resolves | OPEN → M6 |
 | 20 | audio-coverage + safety — every ability/item maps to a valid `sound`; mute bypasses synthesis; voice pool capped | OPEN → M7 |
 | 21 | no-asset guard — no audio/image/model imports anywhere; glTF path keeps procedural fallback | OPEN → M7 |
@@ -235,4 +235,5 @@ _Pending M9 — the visual 30-unit/200-projectile harness records steady-state f
 - 2026-06-13: Phase 6 kickoff + M1 (save v4): reconciled `PROGRESS.md` to the standalone Phase 2–4 bar (helper-only rows annotated `→ P6 Mn`), added the Phase 6 acceptance/test-matrix/demo sections. Bumped `SAVE_VERSION` 3→4; added `reputation`, `codexUnlocks`, `journalSeen`, and the `settings.audio` channel object; v2→v3→v4 migration chain folds the loose volume fields and preserves an existing audio object. New tuning fields for recruit ceiling, relocation floor, find shards, reputation gates, echo tax/leash, trial time, roster-legend, voice cap. `src/test/save-v4.test.ts` covers fresh/round-trip/v3→v4/v2→v4.
 - 2026-06-13: Phase 6 M2 (recruitment + reputation, Phase 2 core): rewrote `tryRecruit`/`advanceAttunement` into a shard-gated Find → `TrialRunner` → Bind chain; added `core/trials.ts` (nine mechanics across all trial kinds incl. new `souls-pact`/`stealth-hunt`, plus `trialGateOpen` for reputation/roster/raid gates), `core/echo-unit.ts` (gambit-driven, ×0.6 HP, no slots, `isEcho` flag + translucent render, overworld leash), reputation karma with both-way gates, fail→relocation to alternate in-region spots with shards reset to the floor, recruit level ceiling `[15,22,30]` by badges with XP banking, and the `requiresRecruits:1` TV→Nightsilver gate. Added a headless `Game` seam (`Game.headless`, `SceneLike`/`AudioLike`) and a trial-choice HUD panel. `src/test/recruitment.test.ts` covers tests 1–5 + 8 + the TV gate. `npm run build` + `npm test` green.
 - 2026-06-13: Phase 6 M3 (gambit editor + live Captain Calls + 8-gym proof): replaced the headless-only gym round runner with `LiveGymFight` (`systems/macro-session.ts`) — a stepped best-of-3 carrying a player Captain Call controller (3) and an enemy one (3 + `enemyBonusCaptainCalls`) with an auto-call AI; `runGymMatch` runs it headlessly so both paths share one engine. Wired a live, rendered gym fight into `Game` (`startLiveGym`/`updateLiveGym`/`liveGymPlayerCall`, scene sim-swap with `scene.resetUnitViews()`), a Space/HUD-button player call, and a live overlay (round score + both teams' charges). Built the gambit dropdown rule builder (ordered, reorderable ≤8 rules, condition+action selects, presets populate it) and a gym pre-fight screen (Fight Live / Auto-Resolve, per-hero Edit rules). `src/test/gyms.test.ts` covers tests 6 (all 8 gyms winnable with authored gambits, enemy bonus calls) + 7 (captain-call-live attach/revert/decrement). Build + 707 tests green; browser smoke (port 5174) verified the editor opens in-game with zero console errors.
+- 2026-06-13: Phase 6 M5 (raids executed + Roshan/Aegis + Rapier-on-death + Elite Five/Champion + faction): added `core/macro.ts#runRaidEncounter`, a 5v1 that steps the sim and fires each scripted beat — phase-transition zones at HP thresholds (telegraphed dodge zones on the party centroid), `addWaves[].summon × count` summoned on the boss's team, a composed signature beat at 50%, and a hard boss ramp when the `enrageSec` timer expires; threat/taunt come free from the boss controller. Baked Rapier-on-death + Aegis into the shared `runBattleToResult` (so Elite 5v5 drops Rapier too): a dying holder's Divine Rapier transfers to the nearest living enemy hero, and a held Aegis stands the first fallen hero back up once via the new `Sim.reviveUnit` primitive (+`revive` event). Wired `Game.runRaid` (loot + pity, Roshan grants the Aegis flag, sets `roshanRespawnAt`, and re-drops Refresher Shard + Cheese from clear #2), `Game.runEliteMatch`/`runChampion` (per-member `draftTeams`, advance on win, restart-from-member on loss, Champion gated behind 5), and faction exclusivity (`chooseFaction` recorded at the faction-choice trial; `tryRecruit` refuses the locked rival captain). Surfaced Raids + Conquest in the Town Services modal. `src/test/raids.test.ts` covers tests 13–18 (12 cases). Raised the global vitest `testTimeout` to 30s (the gym/raid/gauntlet sims are compute-bound, not latency tests). Build + 730 tests green.
 - 2026-06-13: Phase 6 M4 (economy wired): live boss reruns (`Game.runBossFight`) run a scaled 5v1 on the raid sim per `tierScale`, deliver `rollLoot` guaranteed components + assembled drops into inventory/`heldUniques`, advance the pity dry streak, and gate Normal→Nightmare→Nightmare-clear→Hell via `bossTierUnlocked`. Routed neutral drops into the kill path (`rollNeutralDrop` on wild-creep death → `neutralStash`), a dedicated neutral slot whose passive mods apply to the live unit (equip/reclaim, never sellable), and a Tinker's Bench (`tinkerReroll` in-tier, `tinkerEnchant` 3-dupes-up-a-tier). Added the four gold sinks (`buyback`, `buyTome` with diminishing returns, `respec` out-of-combat, `healParty`) incrementing `goldSinks`, and a `buyItem`/`shopSells` guard so no shop or sink vends the gated top-tier set (`GATED_TOP_TIER`). Confirmed live kill rewards route through `scaledBounty` (region/tier/creep-tier/star) with post-cap XP→gold via `overflowXpToGold`. New Town Services modal (Y key) surfaces boss reruns, the bench, and the sinks; reserved the `n` neutral-active key. `src/test/economy.test.ts` covers tests 9–12 (11 cases). Build + 718 tests green; browser smoke (port 5212) verified Town Services renders all three sections, Heal works, and the console stayed clean.

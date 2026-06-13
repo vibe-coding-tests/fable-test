@@ -1161,6 +1161,39 @@ export class Hud {
       </div>`;
     }).join('');
 
+    // Raids, executed (§3.9): scripted 5v1 with mechanics firing in the sim
+    const aegisTag = g.aegisReady() ? ` <span class="gold">Aegis held</span>` : '';
+    let raidHtml = '';
+    for (const { def, ready, reason } of g.availableRaids()) {
+      const tiers = (['normal', 'nightmare', 'hell'] as const).map((t) =>
+        `<button class="btn small tier-${t}" data-raid="${def.id}:${t}" ${ready ? '' : 'disabled'}>${cap(t)}</button>`
+      ).join('');
+      const clears = g.raidProgress[def.id]?.clears ?? 0;
+      raidHtml += `<div class="svc-row">
+        <div class="svc-main"><b>${def.name}</b> <em>${def.location}</em>
+          <div class="rr-sub">${ready ? `cleared ×${clears}` : reason}</div>
+        </div>
+        <div class="svc-actions">${tiers}</div>
+      </div>`;
+    }
+
+    // Conquest: the Elite Five gauntlet + the Champion (§3.10)
+    const members = g.eliteMembers();
+    const nextIdx = g.eliteNextIndex();
+    const fiveCleared = nextIdx >= members.length;
+    const champDown = g.eliteFive.championDown;
+    const eliteHtml = `
+      <div class="svc-row">
+        <div class="svc-main"><b>Elite Five</b> <em>${Math.min(nextIdx, members.length)}/5</em>
+          <div class="rr-sub">${fiveCleared ? 'All five beaten — face the Champion.' : `Next: ${members[nextIdx].name}`}</div>
+        </div>
+        <div class="svc-actions"><button class="btn small accent" data-elite="1" ${fiveCleared ? 'disabled' : ''}>Challenge</button></div>
+      </div>
+      <div class="svc-row">
+        <div class="svc-main"><b>The Champion</b><div class="rr-sub">${champDown ? 'Dethroned.' : fiveCleared ? 'Awaits you.' : 'Locked until the five fall.'}</div></div>
+        <div class="svc-actions"><button class="btn small accent" data-champion="1" ${fiveCleared && !champDown ? '' : 'disabled'}>Challenge</button></div>
+      </div>`;
+
     // Gold sinks (§3.8)
     const downIdx = g.party.findIndex((r) => !r.unit || !r.unit.alive || r.respawnAt > g.sim.time);
     const buyLabel = downIdx >= 0
@@ -1179,6 +1212,8 @@ export class Hud {
     this.modalShell('Town Services', `
       <div class="services">
         <section><h3>Boss Reruns</h3>${bossHtml}</section>
+        <section><h3>Raids${aegisTag}</h3>${raidHtml}</section>
+        <section><h3>Conquest — Tower of the Ancients</h3>${eliteHtml}</section>
         <section><h3>Tinker's Bench <span class="gold">${Math.floor(g.gold)} g</span></h3>
           ${stashHtml}
           <div class="svc-sub">Neutral slots</div>${slotHtml}
@@ -1200,6 +1235,13 @@ export class Hud {
       g.runBossFight(id, tier as 'normal' | 'nightmare' | 'hell');
       rerender();
     }));
+    this.modal.querySelectorAll<HTMLElement>('[data-raid]').forEach((el) => el.addEventListener('click', () => {
+      const [id, tier] = el.dataset.raid!.split(':');
+      g.runRaid(id, tier as 'normal' | 'nightmare' | 'hell');
+      rerender();
+    }));
+    this.modal.querySelector<HTMLElement>('[data-elite]')?.addEventListener('click', () => { g.runEliteMatch(); rerender(); });
+    this.modal.querySelector<HTMLElement>('[data-champion]')?.addEventListener('click', () => { g.runChampion(); rerender(); });
     this.modal.querySelectorAll<HTMLElement>('[data-neq]').forEach((el) => el.addEventListener('click', () => { g.equipNeutral(g.activeIdx, el.dataset.neq!); rerender(); }));
     this.modal.querySelectorAll<HTMLElement>('[data-nrr]').forEach((el) => el.addEventListener('click', () => { g.tinkerReroll(el.dataset.nrr!); rerender(); }));
     this.modal.querySelectorAll<HTMLElement>('[data-nen]').forEach((el) => el.addEventListener('click', () => { g.tinkerEnchant(el.dataset.nen!); rerender(); }));

@@ -13,6 +13,11 @@ export default defineConfig({
   },
   test: {
     include: ['src/test/**/*.test.ts'],
-    environment: 'node'
+    environment: 'node',
+    // Many tests run full headless sims (gyms, raids, gauntlets) to completion. Under
+    // concurrent workers these are compute-bound, not latency tests — give them headroom
+    // past the 5s default so CPU contention can't flake a deterministic correctness check.
+    testTimeout: 30000,
+    hookTimeout: 30000
   }
 });

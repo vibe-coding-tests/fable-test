@@ -755,6 +755,7 @@ export type SimEvent =
   | { t: 'capture-complete'; target: number; creepId: string }
   | { t: 'capture-interrupt'; target: number }
   | { t: 'summon'; uid: number; pos: Vec2 }
+  | { t: 'revive'; uid: number; pos: Vec2 }   // Aegis / Reincarnation: stand once
   | { t: 'item-used'; uid: number; itemId: string }
   | { t: 'gold'; amount: number; reason: string; pos?: Vec2 }
   | { t: 'xp'; uid: number; amount: number }

@@ -11,8 +11,10 @@ import {
   bossLootSeed,
   bossTierUnlocked,
   buybackCost,
+  chooseFaction,
   dayNightMods,
   defaultPhase3SaveFields,
+  draftTeams,
   enchantNeutralItem,
   migratePhase3Save,
   rerollNeutralItem,
@@ -20,6 +22,7 @@ import {
   rollLoot,
   rollNeutralDrop,
   scaledBounty,
+  stableContentSeed,
   tierScale,
   tomePurchase,
   type LootRoll
@@ -27,14 +30,18 @@ import {
 import { defaultAudioSettings, defaultPhase4SaveFields, migratePhase4Save } from '../core/phase4';
 import { mergeCreeps, newCreepInstanceId, validateEntourage } from '../core/capture';
 import { computeBuyPlan, executeBuy, itemSaveOf, itemStateFromSave, sellValue, sortInventory } from '../core/items';
-import { runRaidBattle } from '../core/macro';
+import { runRaidBattle, runRaidEncounter, runMacroBattle, type RaidEncounterResult } from '../core/macro';
+import { ELITE_DRAFT } from '../data/drafts';
 import { resonanceMods } from '../core/resonance';
 import { levelFromXp, xpForLevel } from '../core/stats';
 import { dist } from '../core/math2d';
-import type { BossDef, CreepTier, CreepInstanceSave, DifficultyTier, EchoProgress, GambitRule, GameSave, ItemSave, NeutralItemDef, Order, QuestProgress, RegionDef, SimEvent, Vec2 } from '../core/types';
+import type { BossDef, CreepTier, CreepInstanceSave, DifficultyTier, DraftDef, EchoProgress, GambitRule, GameSave, ItemSave, MacroHeroSetup, NeutralItemDef, Order, QuestProgress, RaidDef, RegionDef, SimEvent, Vec2 } from '../core/types';
 import { ProceduralAudio } from '../engine/audio';
 import { GameScene } from '../engine/scene';
 import { LiveGymFight, runGymMatch, type GymMatchHero, type GymMatchResult } from './macro-session';
+
+/** The Roshan raid — the only one that yields the Aegis, respawns on a timer, and re-drops cheese (§3.9). */
+const ROSHAN_RAID_ID = 'roshan-pit';
 
 /** Top-tier power that only drops from bosses/raids — never vended by any shop or gold sink (§6). */
 export const GATED_TOP_TIER: ReadonlySet<string> = new Set([
@@ -654,6 +661,207 @@ export class Game {
     }
   }
 
+  // ---------- raids, executed (§3.9): mechanics fire in the sim ----------
+
+  /** Raids the player can currently attempt (full party; Roshan respects its respawn timer). */
+  availableRaids(): { def: RaidDef; ready: boolean; reason?: string }[] {
+    return [...REG.raids.values()].map((def) => {
+      if (this.party.length < 5) return { def, ready: false, reason: 'needs a full party of 5' };
+      if (def.id === ROSHAN_RAID_ID) {
+        const at = this.raidProgress[def.id]?.roshanRespawnAt ?? 0;
+        if (at > this.playtime) return { def, ready: false, reason: `respawns in ${Math.ceil(at - this.playtime)}s` };
+      }
+      return { def, ready: true };
+    });
+  }
+
+  /** True if a held Aegis charge would carry into the next raid (one-use auto-revive, §3.9). */
+  aegisReady(): boolean {
+    return Object.values(this.raidProgress).some((r) => r?.aegisHeld);
+  }
+
+  private consumeAegisFlag(): void {
+    for (const r of Object.values(this.raidProgress)) if (r?.aegisHeld) { r.aegisHeld = false; return; }
+  }
+
+  /**
+   * Run a raid as a 5v1 with its scripted mechanics firing in the sim (phase zones, add
+   * waves, signature beat, enrage). On a clear: roll the raid's loot table, advance pity,
+   * and apply Roshan specifics (Aegis, respawn timer, repeat Refresher-Shard + Cheese, §3.9).
+   */
+  runRaid(raidId: string, tier: DifficultyTier = 'normal'): { won: boolean; loot?: LootRoll; result?: RaidEncounterResult } {
+    const def = REG.raid(raidId);
+    if (this.party.length < 5) {
+      this.msg('A raid needs a full party of 5 heroes', 'bad');
+      return { won: false };
+    }
+    if (def.id === ROSHAN_RAID_ID) {
+      const at = this.raidProgress[def.id]?.roshanRespawnAt ?? 0;
+      if (at > this.playtime) {
+        this.msg(`Roshan is dead — he claws back in ${Math.ceil(at - this.playtime)}s`, 'bad');
+        return { won: false };
+      }
+    }
+    const prog = this.raidProgress[raidId];
+    const clears = prog?.clears ?? 0;
+    const aegis = this.aegisReady();
+    const result = runRaidEncounter({
+      def,
+      party: this.gymPlayerTeam(),
+      tier,
+      seed: stableContentSeed(`${raidId}:${tier}`, clears) + Math.round(this.playtime),
+      aegis
+    });
+    if (aegis && result.aegisConsumed) {
+      this.consumeAegisFlag();
+      this.msg('The Aegis stands a fallen hero back up — and is spent.', 'info');
+    }
+    if (!result.cleared) {
+      this.msg(`${def.name} holds the deep. Regroup and return.`, 'bad');
+      this.autosave('raid');
+      return { won: false, result };
+    }
+    this.deliverRaidLoot(def, tier, raidId, clears);
+    this.msg(`${def.name} cleared! (clear #${clears + 1})`, 'good');
+    this.audio.handleEvent({ t: 'cast', uid: -1, abilityId: 'stinger:raid-clear', vfx: { archetype: 'global-mark', color: '#ffd27a' } });
+    this.autosave('raid');
+    return { won: true, result };
+  }
+
+  /** Deliver a raid clear's loot + pity; Roshan also grants the Aegis, sets the respawn timer, and re-drops cheese. */
+  private deliverRaidLoot(def: RaidDef, tier: DifficultyTier, raidId: string, clears: number): void {
+    const dryStreak = this.raidProgress[raidId]?.dryStreak ?? 0;
+    const loot = rollLoot(def.loot, tier, dryStreak, stableContentSeed(`${raidId}:loot:${tier}`, clears));
+    const next = { ...(this.raidProgress[raidId] ?? { clears: 0, dryStreak: 0 }) };
+    next.clears = clears + 1;
+    next.dryStreak = loot.dryStreak;
+    for (const it of loot.guaranteed) {
+      if (it.id === 'aegis-of-the-immortal') next.aegisHeld = true; // the held one-use charge
+      else this.inventoryStash.push({ ...it });
+    }
+    if (loot.assembled) {
+      this.inventoryStash.push({ ...loot.assembled });
+      if (!this.heldUniques.includes(loot.assembled.id)) this.heldUniques.push(loot.assembled.id);
+      this.msg(`Raid drop: ${REG.item(loot.assembled.id).name}${loot.pityUsed ? ' (pity!)' : ''}`, 'good');
+    }
+    if (def.id === ROSHAN_RAID_ID) {
+      next.aegisHeld = true;
+      next.roshanRespawnAt = this.playtime + TUNING.roshanRespawnSec;
+      this.msg('Roshan falls — the Aegis of the Immortal is yours.', 'good');
+      if (next.clears >= TUNING.roshanRepeatDropFromClear) {
+        this.inventoryStash.push({ id: 'refresher-shard' });
+        this.inventoryStash.push({ id: 'cheese', charges: 1 });
+        this.msg('A repeat kill spills a Refresher Shard and a Cheese.', 'good');
+      }
+    }
+    this.raidProgress[raidId] = next;
+  }
+
+  // ---------- Elite Five gauntlet + Champion (§3.10) ----------
+
+  eliteMembers(): { name: string; pool: string[] }[] {
+    return ELITE_DRAFT.members;
+  }
+
+  /** 0..4 = next undefeated member; 5 = the five are cleared, the Champion awaits. */
+  eliteNextIndex(): number {
+    return Math.min(this.eliteFive.defeated, ELITE_DRAFT.members.length);
+  }
+
+  private eliteDraftFor(memberIdx: number, seed: number): { player: MacroHeroSetup[]; enemy: MacroHeroSetup[]; bans: string[] } {
+    const member = ELITE_DRAFT.members[memberIdx];
+    const mini: DraftDef = { id: `${ELITE_DRAFT.id}-m${memberIdx}`, members: [member], banPickOrder: ELITE_DRAFT.banPickOrder, champion: ELITE_DRAFT.champion };
+    return draftTeams(mini, [...this.recruited], seed);
+  }
+
+  /**
+   * Run the next Elite Five match: a drafted 5v5 against the current member's pool. A win
+   * advances `eliteFive.defeated`; a loss leaves it untouched so the gauntlet restarts from
+   * that same member (never a hard lockout, §3.10). `playerTeam` overrides the drafted picks.
+   */
+  runEliteMatch(opts: { seed?: number; playerTeam?: MacroHeroSetup[] } = {}): { won: boolean; winner: 0 | 1 | -1; defeated: number; member: string } {
+    const idx = this.eliteNextIndex();
+    if (idx >= ELITE_DRAFT.members.length) {
+      this.msg('The Elite Five are beaten — challenge the Champion.', 'info');
+      return { won: false, winner: -1, defeated: this.eliteFive.defeated, member: 'Champion' };
+    }
+    if (!opts.playerTeam && this.party.length < 5) {
+      this.msg('The gauntlet needs a full party of 5 heroes', 'bad');
+      return { won: false, winner: -1, defeated: this.eliteFive.defeated, member: ELITE_DRAFT.members[idx].name };
+    }
+    const seed = opts.seed ?? (this.region.seed + idx * 101 + Math.round(this.playtime));
+    const draft = this.eliteDraftFor(idx, seed);
+    const player = opts.playerTeam ?? draft.player;
+    const result = runMacroBattle({ seed, teamA: player, teamB: draft.enemy });
+    const member = ELITE_DRAFT.members[idx];
+    const won = result.winner === 0;
+    if (won) {
+      this.eliteFive.defeated = idx + 1;
+      this.msg(`${member.name} falls — Elite Five ${this.eliteFive.defeated}/5.`, 'good');
+    } else {
+      this.msg(`${member.name} outdrafts you. Re-challenge them when ready.`, 'bad');
+    }
+    this.autosave('elite');
+    return { won, winner: result.winner, defeated: this.eliteFive.defeated, member: member.name };
+  }
+
+  /** The Champion fight, gated behind clearing all five. On a win, `championDown` flips (§3.10). */
+  runChampion(opts: { seed?: number; playerTeam?: MacroHeroSetup[] } = {}): { won: boolean; winner: 0 | 1 | -1 } {
+    if (this.eliteFive.defeated < ELITE_DRAFT.members.length) {
+      this.msg('Clear all five of the Elite before the Champion will see you.', 'bad');
+      return { won: false, winner: -1 };
+    }
+    if (!opts.playerTeam && this.party.length < 5) {
+      this.msg('The Champion fight needs a full party of 5 heroes', 'bad');
+      return { won: false, winner: -1 };
+    }
+    const seed = opts.seed ?? (this.region.seed + 999 + Math.round(this.playtime));
+    const player = opts.playerTeam ?? this.gymPlayerTeam();
+    const champ = ELITE_DRAFT.champion;
+    const enemy: MacroHeroSetup[] = Array.isArray(champ) ? champ : [{ heroId: champ.heroId, level: 30, items: ['black-king-bar', 'butterfly', 'heart-of-tarrasque'] }];
+    const result = runMacroBattle({ seed, teamA: player, teamB: enemy });
+    if (result.winner === 0) {
+      this.eliteFive.championDown = true;
+      this.msg('The Champion is dethroned. The ancients answer to you now.', 'good');
+      this.audio.handleEvent({ t: 'cast', uid: -1, abilityId: 'stinger:raid-clear', vfx: { archetype: 'global-mark', color: '#ffd27a' } });
+    } else {
+      this.msg('The Champion endures. Sharpen the draft and return.', 'bad');
+    }
+    this.autosave('champion');
+    return { won: result.winner === 0, winner: result.winner };
+  }
+
+  // ---------- faction exclusivity (§3.10): Shadeshore captains ----------
+
+  /** The two heroes whose recruitment forces an either/or in a region (Kunkka xor Tidehunter). */
+  private factionPair(regionId: string): [string, string] | null {
+    const pair = [...REG.trials.values()].filter((t) => t.kind === 'faction-choice' && t.regionId === regionId).map((t) => t.heroId);
+    return pair.length === 2 ? [pair[0], pair[1]] : null;
+  }
+
+  /** True if siding with one captain has locked this hero out of recruitment (§3.10). */
+  factionLockedHero(heroId: string): boolean {
+    const trial = REG.trials.get(`trial-${heroId}`);
+    if (!trial || trial.kind !== 'faction-choice') return false;
+    const chosen = this.factionChoices[trial.regionId];
+    return !!chosen && chosen !== heroId;
+  }
+
+  /** Record a faction pick through the real exclusivity helper, locking the rival captain (§3.10). */
+  private recordFactionChoice(regionId: string, heroId: string): void {
+    const pair = this.factionPair(regionId);
+    try {
+      this.factionChoices = pair
+        ? chooseFaction(this.factionChoices, regionId, heroId, pair)
+        : { ...this.factionChoices, [regionId]: heroId };
+    } catch {
+      // already committed to the other captain — keep the original choice
+      return;
+    }
+    const pairMate = pair?.find((h) => h !== heroId);
+    if (pairMate) this.msg(`${REG.hero(pairMate).name} turns away — that road is closed.`, 'info');
+  }
+
   // ---------- neutral items + Tinker's Bench (§3.7) ----------
 
   private neutralCandidates(): NeutralItemDef[] {
@@ -1214,6 +1422,10 @@ export class Game {
       return;
     }
     const def = REG.hero(heroId);
+    if (this.factionLockedHero(heroId)) {
+      this.msg(`You sided against ${def.name} at Shadeshore — they will not follow you now.`, 'bad');
+      return;
+    }
     const questId = def.recruitmentQuestId;
     if (!questId || !REG.quests.has(questId)) {
       this.recruitHero(heroId, uid);
@@ -1334,7 +1546,7 @@ export class Game {
     const questId = REG.hero(heroId).recruitmentQuestId!;
     const quest = REG.quest(questId);
     if (runner.karmaDelta) this.adjustReputation(runner.karmaDelta, `${REG.hero(heroId).name}'s trial`);
-    if (runner.factionChoice) this.factionChoices[runner.trial.regionId] = runner.factionChoice;
+    if (runner.factionChoice) this.recordFactionChoice(runner.trial.regionId, runner.factionChoice);
     if (outcome === 'complete') {
       const qp = this.questProgress[questId] ?? defaultQuestProgress();
       qp.stage = 'trial-complete';

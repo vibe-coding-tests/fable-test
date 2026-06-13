@@ -127,6 +127,10 @@ export const TUNING = {
   raidBossHpScale: 5,
   raidBossDamageScale: 1.25,
   raidBossRadiusScale: 1.7,
+  // Roshan (§3.9): respawn timer in playtime-seconds, and the clear at which repeat
+  // kills start dropping a Refresher Shard + Cheese alongside the Aegis.
+  roshanRespawnSec: 480,
+  roshanRepeatDropFromClear: 2,
   bossTierScale: {
     normal: { hp: 1.0, damage: 1.0, armor: 1.0 },
     nightmare: { hp: 1.65, damage: 1.28, armor: 1.18 },

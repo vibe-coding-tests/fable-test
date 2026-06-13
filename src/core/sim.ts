@@ -929,6 +929,33 @@ export class Sim {
     }
   }
 
+  /**
+   * Revive a fallen unit in place (Aegis of the Immortal, Reincarnation). Restores hp/mana,
+   * clears statuses and in-flight actions, and re-enters the spatial index next tick.
+   * Returns false if the unit is already alive or has been swept from the sim.
+   */
+  reviveUnit(u: Unit, hpPct = 1, manaPct = 1): boolean {
+    if (u.alive || !this.byUid.has(u.uid)) return false;
+    u.alive = true;
+    u.diedAt = -1;
+    u.removeAt = -1;
+    u.statuses = [];
+    u.elementAuras = {};
+    u.cast = null;
+    u.channel = null;
+    u.forced = [];
+    u.order = { kind: 'stop' };
+    u.windupUntil = -1;
+    u.attackTargetUid = -1;
+    u.markStatsDirty();
+    u.refresh(this.time);
+    u.hp = Math.max(1, Math.round(u.stats.maxHp * hpPct));
+    u.mana = Math.round(u.stats.maxMana * manaPct);
+    this.spatialDirty = true;
+    this.events.emit({ t: 'revive', uid: u.uid, pos: { ...u.pos } });
+    return true;
+  }
+
   // ---------- main tick ----------
 
   tick(): void {

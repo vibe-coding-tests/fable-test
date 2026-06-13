@@ -230,7 +230,9 @@ export class LiveGymFight {
         .filter((u) => u.alive && u.kind === 'hero')
         .map((u) => ({ heroId: u.heroId ?? '?', team: u.team, hpPct: u.hp / u.stats.maxHp })),
       hash: this.sim.hash(),
-      sim: this.sim
+      sim: this.sim,
+      rapierDrops: [],
+      aegisConsumed: false
     };
   }
 }
