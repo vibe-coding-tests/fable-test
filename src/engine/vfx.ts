@@ -14,14 +14,32 @@ interface Transient {
   update?: (t: number, lifeT: number) => void; // lifeT 0..1
 }
 
+const geometryCache = new Map<string, THREE.BufferGeometry>();
+
+function sharedGeometry<T extends THREE.BufferGeometry>(geo: T): T {
+  const key = `${geo.type}:${JSON.stringify((geo as T & { parameters?: unknown }).parameters ?? {})}`;
+  const cached = geometryCache.get(key);
+  if (cached) {
+    geo.dispose();
+    return cached as T;
+  }
+  geometryCache.set(key, geo);
+  return geo;
+}
+
+export function vfxGeometryCacheSize(): number {
+  return geometryCache.size;
+}
+
 export class VfxManager {
   group = new THREE.Group();
   private transients: Transient[] = [];
   private projectiles = new Map<number, { obj: THREE.Object3D; trail?: THREE.Object3D }>();
+  private projectileSeen = new Set<number>();
   private zones = new Map<number, Transient>();
   private time = 0;
 
-  constructor(private heightAt: (x: number, y: number) => number) {}
+  constructor(private heightAt: (x: number, y: number) => number, private transientCap: number = PERFORMANCE_BUDGET.transientVfxCap) {}
 
   private w(x: number, y: number, lift = 0): THREE.Vector3 {
     return new THREE.Vector3(x / WORLD_SCALE, this.heightAt(x, y) + lift, y / WORLD_SCALE);
@@ -125,7 +143,8 @@ export class VfxManager {
 
   /** Track in-flight projectile positions from the sim each frame. */
   syncProjectiles(list: Iterable<{ pid: number; pos: { x: number; y: number } }>): void {
-    const seen = new Set<number>();
+    const seen = this.projectileSeen;
+    seen.clear();
     for (const p of list) {
       seen.add(p.pid);
       const entry = this.projectiles.get(p.pid);
@@ -146,13 +165,16 @@ export class VfxManager {
   update(dt: number): void {
     this.time += dt;
     const t = this.time;
-    this.transients = this.transients.filter((tr) => {
+    let write = 0;
+    for (let read = 0; read < this.transients.length; read++) {
+      const tr = this.transients[read];
       if (t >= tr.until) {
         this.group.remove(tr.obj);
-        return false;
+      } else {
+        this.transients[write++] = tr;
       }
-      return true;
-    });
+    }
+    this.transients.length = write;
     for (const tr of this.transients) {
       tr.update?.(t, 1 - (tr.until - t) / ((tr as Transient & { dur?: number }).dur ?? 1));
     }
@@ -163,7 +185,7 @@ export class VfxManager {
     this.group.add(obj);
     const tr: Transient & { dur: number } = { obj, until: this.time + durSec, update, dur: durSec };
     this.transients.push(tr);
-    while (this.transients.length > PERFORMANCE_BUDGET.transientVfxCap) {
+    while (this.transients.length > this.transientCap) {
       const old = this.transients.shift();
       if (old) this.group.remove(old.obj);
     }
@@ -176,17 +198,17 @@ export class VfxManager {
     const scale = vfx.scale ?? 1;
     if (vfx.archetype === 'hook') {
       const hook = new THREE.Mesh(
-        new THREE.TorusGeometry(0.35 * scale, 0.1 * scale, 5, 8, Math.PI * 1.5),
+        sharedGeometry(new THREE.TorusGeometry(0.35 * scale, 0.1 * scale, 5, 8, Math.PI * 1.5)),
         new THREE.MeshBasicMaterial({ color: vfx.color })
       );
       g.add(hook);
     } else {
       const core = new THREE.Mesh(
-        new THREE.SphereGeometry(0.28 * scale, 6, 5),
+        sharedGeometry(new THREE.SphereGeometry(0.28 * scale, 6, 5)),
         new THREE.MeshBasicMaterial({ color: vfx.color })
       );
       const halo = new THREE.Mesh(
-        new THREE.SphereGeometry(0.42 * scale, 6, 5),
+        sharedGeometry(new THREE.SphereGeometry(0.42 * scale, 6, 5)),
         new THREE.MeshBasicMaterial({ color: vfx.color2 ?? vfx.color, transparent: true, opacity: 0.35 })
       );
       g.add(core, halo);
@@ -196,7 +218,7 @@ export class VfxManager {
 
   private burst(x: number, y: number, color: string, radiusW: number, dur: number, color2?: string): void {
     const ring = new THREE.Mesh(
-      new THREE.RingGeometry(0.1, 1, 20),
+      sharedGeometry(new THREE.RingGeometry(0.1, 1, 20)),
       new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false })
     );
     ring.rotation.x = -Math.PI / 2;
@@ -236,7 +258,7 @@ export class VfxManager {
 
   private blinkMark(x: number, y: number): void {
     const pillar = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.12, 0.3, 3.2, 6, 1, true),
+      sharedGeometry(new THREE.CylinderGeometry(0.12, 0.3, 3.2, 6, 1, true)),
       new THREE.MeshBasicMaterial({ color: '#7adfff', transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false })
     );
     pillar.position.copy(this.w(x, y, 1.6));
@@ -250,7 +272,7 @@ export class VfxManager {
 
   private pillar(x: number, y: number, color: string, dur: number): void {
     const beam = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.5, 0.7, 5, 8, 1, true),
+      sharedGeometry(new THREE.CylinderGeometry(0.5, 0.7, 5, 8, 1, true)),
       new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false })
     );
     beam.position.copy(this.w(x, y, 2.5));
@@ -268,7 +290,7 @@ export class VfxManager {
       return;
     }
     const flash = new THREE.Mesh(
-      new THREE.SphereGeometry(0.5, 8, 6),
+      sharedGeometry(new THREE.SphereGeometry(0.5, 8, 6)),
       new THREE.MeshBasicMaterial({ color: vfx.color, transparent: true, opacity: 0.7 })
     );
     flash.position.copy(this.w(x, y, 1.6));
@@ -286,7 +308,7 @@ export class VfxManager {
   private cleaveSweep(from: Vec2, to: Vec2, visual: AttackVisualSpec): void {
     const scale = visual.scale ?? 1;
     const arc = new THREE.Mesh(
-      new THREE.RingGeometry(0.55 * scale, 1.35 * scale, 28, 1, -0.55 * Math.PI, 1.1 * Math.PI),
+      sharedGeometry(new THREE.RingGeometry(0.55 * scale, 1.35 * scale, 28, 1, -0.55 * Math.PI, 1.1 * Math.PI)),
       new THREE.MeshBasicMaterial({ color: visual.color, transparent: true, opacity: 0.62, side: THREE.DoubleSide, depthWrite: false })
     );
     arc.rotation.x = -Math.PI / 2;
@@ -345,7 +367,7 @@ export class VfxManager {
 
   private critSlash(from: Vec2, to: Vec2, visual: AttackVisualSpec): void {
     const slash = new THREE.Mesh(
-      new THREE.ConeGeometry(0.2 * (visual.scale ?? 1), 1.1 * (visual.scale ?? 1), 3),
+      sharedGeometry(new THREE.ConeGeometry(0.2 * (visual.scale ?? 1), 1.1 * (visual.scale ?? 1), 3)),
       new THREE.MeshBasicMaterial({ color: visual.color, transparent: true, opacity: 0.7, depthWrite: false })
     );
     slash.position.copy(this.w(to.x, to.y, 1.0));
@@ -376,7 +398,7 @@ export class VfxManager {
     });
     // swirling ring on target
     const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(0.7, 0.06, 5, 16),
+      sharedGeometry(new THREE.TorusGeometry(0.7, 0.06, 5, 16)),
       new THREE.MeshBasicMaterial({ color: '#b7ffd9', transparent: true, opacity: 0.8, depthWrite: false })
     );
     ring.position.copy(to);
@@ -399,7 +421,7 @@ export class VfxManager {
       const n = Math.max(3, Math.floor(lenW / 0.9));
       for (let i = 0; i < n; i++) {
         const spike = new THREE.Mesh(
-          new THREE.ConeGeometry(0.34 + ((i * 13) % 5) * 0.05, 1.1 + ((i * 7) % 4) * 0.3, 5),
+          sharedGeometry(new THREE.ConeGeometry(0.34 + ((i * 13) % 5) * 0.05, 1.1 + ((i * 7) % 4) * 0.3, 5)),
           new THREE.MeshLambertMaterial({ color: spec.wall ? color : color2, flatShading: true })
         );
         const t = (i + 0.5) / n - 0.5;
@@ -412,13 +434,13 @@ export class VfxManager {
     } else {
       const rW = spec.radius / WORLD_SCALE;
       const disc = new THREE.Mesh(
-        new THREE.CircleGeometry(rW, 28),
+        sharedGeometry(new THREE.CircleGeometry(rW, 28)),
         new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.18, side: THREE.DoubleSide, depthWrite: false })
       );
       disc.rotation.x = -Math.PI / 2;
       disc.position.y = 0.12;
       const rim = new THREE.Mesh(
-        new THREE.RingGeometry(rW * 0.93, rW, 28),
+        sharedGeometry(new THREE.RingGeometry(rW * 0.93, rW, 28)),
         new THREE.MeshBasicMaterial({ color: color2, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false })
       );
       rim.rotation.x = -Math.PI / 2;
@@ -428,7 +450,7 @@ export class VfxManager {
         // slow swirling shards over the area
         for (let i = 0; i < 8; i++) {
           const shard = new THREE.Mesh(
-            new THREE.TetrahedronGeometry(0.22),
+            sharedGeometry(new THREE.TetrahedronGeometry(0.22)),
             new THREE.MeshBasicMaterial({ color: color2, transparent: true, opacity: 0.8 })
           );
           shard.userData.orbit = { r: rW * (0.3 + (i % 4) * 0.18), a: (i / 8) * Math.PI * 2, h: 0.6 + (i % 3) * 0.5 };

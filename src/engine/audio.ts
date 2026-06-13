@@ -5,6 +5,8 @@ type AudioSettings = GameSave['settings'];
 export class ProceduralAudio {
   private ctx: AudioContext | null = null;
   private unlocked = false;
+  private lastCoinAt = 0;
+  private coinStreak = 0;
 
   constructor(private settings: AudioSettings) {
     const unlock = () => {
@@ -32,8 +34,11 @@ export class ProceduralAudio {
         this.thump(0.055, 0.2, 520);
         break;
       case 'damage':
-        if (ev.crit) this.sweep(180, 70, 0.11, 'sawtooth', 0.28);
+        if (ev.crit) this.critImpact(ev.amount);
         else if (ev.amount > 80) this.thump(0.035, 0.08, 900);
+        break;
+      case 'gold':
+        this.coin(ev.amount, ev.reason);
         break;
       case 'heal':
         this.sweep(420, 620, 0.12, 'sine', 0.09);
@@ -135,6 +140,73 @@ export class ProceduralAudio {
     this.tone(520, 0.08, 'sine', 0.18);
     setTimeout(() => this.tone(780, 0.1, 'sine', 0.16), 80);
     setTimeout(() => this.tone(1040, 0.12, 'sine', 0.14), 160);
+  }
+
+  private coin(amount: number, reason: string): void {
+    const ctx = this.ensure();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+    this.coinStreak = now - this.lastCoinAt <= 1.5 ? Math.min(8, this.coinStreak + 1) : 0;
+    this.lastCoinAt = now;
+
+    const lastHitLift = reason === 'lasthit' ? 1.09 : 1;
+    const streakPitch = 2 ** (this.coinStreak / 12);
+    const base = 1850 * lastHitLift * streakPitch;
+    const size = Math.min(1, Math.log2(Math.max(2, amount)) / 9);
+    const vol = 0.09 + size * 0.12 + (reason === 'lasthit' ? 0.04 : 0);
+
+    this.coinRing(base, vol, 0);
+    if (amount >= 45 || reason === 'echo') this.coinRing(base * 1.122, vol * 0.75, 0.075);
+    if (amount >= 140 || reason === 'echo') this.coinRing(base * 1.26, vol * 0.65, 0.15);
+    if (amount >= 60 || reason === 'lasthit' || reason === 'echo') this.thump(0.045, 0.05 + size * 0.06, 420);
+  }
+
+  private coinRing(freq: number, vol: number, delaySec: number): void {
+    const ctx = this.ensure();
+    if (!ctx) return;
+    const start = ctx.currentTime + delaySec;
+    const dur = 0.23;
+    const gain = ctx.createGain();
+    const delay = ctx.createDelay();
+    const feedback = ctx.createGain();
+    const filter = ctx.createBiquadFilter();
+
+    filter.type = 'highpass';
+    filter.frequency.value = 900;
+    delay.delayTime.value = 0.045;
+    feedback.gain.value = 0.18;
+    gain.gain.setValueAtTime(0.0001, start);
+    gain.gain.exponentialRampToValueAtTime(this.volume(vol), start + 0.012);
+    gain.gain.exponentialRampToValueAtTime(0.0001, start + dur);
+
+    const partials: [number, number][] = [
+      [1, 1],
+      [1.5, 0.58],
+      [2.01, 0.38]
+    ];
+    for (const [mul, mix] of partials) {
+      const osc = ctx.createOscillator();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq * mul, start);
+      osc.frequency.exponentialRampToValueAtTime(freq * mul * 0.985, start + dur);
+      osc.connect(gain);
+      osc.start(start);
+      osc.stop(start + dur + 0.02);
+    }
+
+    gain.connect(filter).connect(ctx.destination);
+    filter.connect(delay);
+    delay.connect(feedback).connect(delay);
+    delay.connect(ctx.destination);
+  }
+
+  private critImpact(amount: number): void {
+    const weight = Math.min(1, Math.log2(Math.max(8, amount)) / 10);
+    this.sweep(2200, 760, 0.08, 'sawtooth', 0.12 + weight * 0.08);
+    this.tone(3100, 0.045, 'square', 0.08 + weight * 0.05);
+    this.thump(0.04, 0.1 + weight * 0.08, 760);
+    setTimeout(() => this.noise(0.04, 0.045 + weight * 0.03), 18);
   }
 
   private castSound(archetype: string): void {

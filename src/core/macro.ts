@@ -103,6 +103,7 @@ export function setupRaidSim(setup: RaidSetup): Sim {
   boss.externalMods.maxHp = (boss.externalMods.maxHp ?? 0) + boss.stats.maxHp * (hpScale - 1);
   boss.externalMods.damagePct = (boss.externalMods.damagePct ?? 0) + (damageScale - 1) * 100;
   boss.radius = TUNING.unitRadiusHero * TUNING.raidBossRadiusScale;
+  boss.markStatsDirty();
   boss.refresh(0);
   boss.hp = boss.stats.maxHp;
   boss.mana = boss.stats.maxMana;
@@ -133,6 +134,7 @@ function spawnConfiguredHero(
     const slot = u.items.findIndex((s) => s === null);
     if (slot >= 0) u.items[slot] = makeItemState(REG.item(itemId));
   }
+  u.markStatsDirty();
   u.refresh(0);
   u.hp = u.stats.maxHp;
   u.mana = u.stats.maxMana;

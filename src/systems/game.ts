@@ -162,6 +162,7 @@ export class Game {
   toasts: Toast[] = [];
   /** events the HUD wants this frame (damage floaters, gold, barks) */
   frameEvents: SimEvent[] = [];
+  private queuedPresentationEvents: SimEvent[] = [];
   paused = false;
 
   constructor(canvas: HTMLCanvasElement, save: GameSave) {
@@ -263,6 +264,21 @@ export class Game {
     if (this.toasts.length > 60) this.toasts.splice(0, this.toasts.length - 60);
   }
 
+  private emitPresentationEvent(ev: SimEvent, routeNow = false): void {
+    if (routeNow) this.frameEvents.push(ev);
+    else this.queuedPresentationEvents.push(ev);
+  }
+
+  private awardGold(amount: number, reason: string, pos?: Vec2, routeNow = false): void {
+    const rounded = Math.round(amount);
+    if (rounded <= 0) return;
+    this.gold += rounded;
+    this.emitPresentationEvent(
+      { t: 'gold', amount: rounded, reason, pos: pos ? { ...pos } : undefined },
+      routeNow
+    );
+  }
+
   isNight(): boolean {
     return this.dayTime >= 0.5;
   }
@@ -283,6 +299,7 @@ export class Game {
       for (const [k, v] of Object.entries(rec.dayNightMods)) {
         u.externalMods[k] = (u.externalMods[k] ?? 0) + v;
       }
+      u.markStatsDirty();
       u.refresh(this.sim.time);
     }
   }
@@ -312,6 +329,7 @@ export class Game {
       for (const [k, v] of Object.entries(rec.resonanceMods)) {
         u.externalMods[k] = (u.externalMods[k] ?? 0) + v;
       }
+      u.markStatsDirty();
       u.refresh(this.sim.time);
     }
   }
@@ -455,6 +473,7 @@ export class Game {
     u.name = `${def.name} Echo`;
     u.bounty = { xp: Math.round(def.bounty.xp * 1.4), gold: Math.round(def.bounty.gold * 1.4) };
     for (const k in build.externalMods) u.externalMods[k] = (u.externalMods[k] ?? 0) + build.externalMods[k];
+    u.markStatsDirty();
     u.refresh(this.sim.time);
     u.hp = u.stats.maxHp;
     u.mana = u.stats.maxMana;
@@ -516,6 +535,7 @@ export class Game {
     if (rec.fleshStacks) {
       for (const k in rec.fleshStacks) u.triggerStacks.set(k, rec.fleshStacks[k]);
     }
+    u.markStatsDirty();
     u.refresh(this.sim.time);
     u.hp = u.stats.maxHp * Math.max(0.05, rec.hpPct);
     u.mana = u.stats.maxMana * rec.manaPct;
@@ -796,6 +816,7 @@ export class Game {
     u.name = `${def.name} Binding Echo`;
     u.bounty = { xp: Math.round(def.bounty.xp * 0.8), gold: Math.round(def.bounty.gold * 0.8) };
     for (const k in build.externalMods) u.externalMods[k] = (u.externalMods[k] ?? 0) + build.externalMods[k];
+    u.markStatsDirty();
     u.refresh(this.sim.time);
     u.hp = u.stats.maxHp;
     u.mana = u.stats.maxMana;
@@ -881,8 +902,10 @@ export class Game {
     const def = REG.item(it.defId);
     u.items[invSlot] = null;
     u.items = sortInventory(u.items);
-    this.gold += sellValue(def);
-    this.msg(`Sold ${def.name} (+${sellValue(def)}g)`, 'info');
+    u.markStatsDirty();
+    const value = sellValue(def);
+    this.awardGold(value, 'sell', u.pos);
+    this.msg(`Sold ${def.name} (+${value}g)`, 'info');
   }
 
   // ---------- talents ----------
@@ -941,7 +964,7 @@ export class Game {
       this.msg(`${def.name}'s echo unlocks ${branchName}.`, 'good');
     } else {
       this.msg(`${def.name}'s echo yields surplus attunement gold.`, 'info');
-      this.gold += Math.round(def.bounty.gold * 1.5);
+      this.awardGold(Math.round(def.bounty.gold * 1.5), 'echo', this.activeUnit()?.pos ?? this.region.town.pos);
     }
 
     this.rebuildHeroUnit(recIdx);
@@ -1283,10 +1306,11 @@ export class Game {
         this.sim.time - rec.lastCombatAt <= TUNING.participantWindowSec
     }));
     const reward = computeKillReward(bounty, states, ev.lastHitByPlayer);
-    this.gold += reward.gold;
+    this.awardGold(reward.gold, ev.lastHitByPlayer ? 'lasthit' : 'kill', victim?.pos, true);
     for (const r of reward.perHeroXp) {
       const rec = this.party.find((p) => p.heroId === r.heroId)!;
-      this.gold += overflowXpToGold(rec.level, rec.unit ? rec.unit.xp : rec.xp, r.xp);
+      const overflowGold = overflowXpToGold(rec.level, rec.unit ? rec.unit.xp : rec.xp, r.xp);
+      this.awardGold(overflowGold, 'overflow', victim?.pos, true);
       if (rec.unit) {
         const gained = rec.unit.addXp(r.xp);
         if (gained > 0) {
@@ -1429,7 +1453,8 @@ export class Game {
     }
 
     // drain + route events
-    this.frameEvents = this.sim.events.drain();
+    this.frameEvents = [...this.sim.events.drain(), ...this.queuedPresentationEvents];
+    this.queuedPresentationEvents = [];
     for (const ev of this.frameEvents) {
       this.scene.pushEvent(ev, this.sim);
       this.audio.handleEvent(ev);

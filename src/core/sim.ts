@@ -293,6 +293,7 @@ export class Sim {
       chargesConsumed = 1;
       if (it.charges === 0 && def.tier === 'consumable') {
         u.items[invSlot] = null;
+        u.markStatsDirty();
       }
     }
 
@@ -356,6 +357,7 @@ export class Sim {
           if (!trig.statStack.max || cur < trig.statStack.max) {
             u.triggerStacks.set(a.def.id, cur + 1);
             for (const k in mods) u.permanentMods[k] = (u.permanentMods[k] ?? 0) + mods[k];
+            u.markStatsDirty();
           }
         }
         if (trig.effects) {

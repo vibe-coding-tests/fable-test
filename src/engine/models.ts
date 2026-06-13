@@ -45,11 +45,28 @@ function lam(color: string | number, emissive = 0): THREE.MeshLambertMaterial {
   return new THREE.MeshLambertMaterial({ color, flatShading: false, emissive });
 }
 
+const geometryCache = new Map<string, THREE.BufferGeometry>();
+
+function shareGeometry<T extends THREE.BufferGeometry>(geo: T): T {
+  const key = `${geo.type}:${JSON.stringify((geo as T & { parameters?: unknown }).parameters ?? {})}`;
+  const cached = geometryCache.get(key);
+  if (cached) {
+    geo.dispose();
+    return cached as T;
+  }
+  geometryCache.set(key, geo);
+  return geo;
+}
+
 function mesh(geo: THREE.BufferGeometry, mat: THREE.Material): THREE.Mesh {
-  const m = new THREE.Mesh(geo, mat);
+  const m = new THREE.Mesh(shareGeometry(geo), mat);
   m.castShadow = true;
   m.receiveShadow = true;
   return m;
+}
+
+export function modelGeometryCacheSize(): number {
+  return geometryCache.size;
 }
 
 export function buildUnitRig(sil: SilhouetteSpec, palette: [string, string, string]): UnitRig {

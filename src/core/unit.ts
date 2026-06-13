@@ -176,6 +176,9 @@ export class Unit {
   // caches (recomputed each tick)
   summary: StatusSummary;
   stats: DerivedStats;
+  private statsDirty = true;
+  private nextStatsRefreshAt = Infinity;
+  private statsSourceSig = '';
 
   // render hints
   castingUntil = -1;
@@ -208,6 +211,10 @@ export class Unit {
 
   // ---------- stats ----------
 
+  markStatsDirty(): void {
+    this.statsDirty = true;
+  }
+
   private aggregateMods(): Record<string, number> {
     const total: Record<string, number> = {};
     const addAll = (m?: Record<string, number>) => {
@@ -238,6 +245,7 @@ export class Unit {
 
   computeStats(now: number): DerivedStats {
     this.summary = summarize(this.statuses, now);
+    this.nextStatsRefreshAt = this.nextTimedSummaryRefresh(now);
     return deriveStats({
       attribute: this.attribute,
       base: this.base,
@@ -250,15 +258,35 @@ export class Unit {
   }
 
   refresh(now: number): void {
+    const sig = this.statSourceSignature();
+    if (!this.statsDirty && now < this.nextStatsRefreshAt && sig === this.statsSourceSig) return;
     const prevMaxHp = this.stats.maxHp;
     const prevMaxMana = this.stats.maxMana;
     this.stats = this.computeStats(now);
+    this.statsSourceSig = sig;
+    this.statsDirty = false;
     if (this.stats.maxHp !== prevMaxHp) {
       this.hp = clamp(this.hp + Math.max(0, this.stats.maxHp - prevMaxHp), 0, this.stats.maxHp);
     }
     this.hp = Math.min(this.hp, this.stats.maxHp);
     if (this.stats.maxMana > prevMaxMana) this.mana += this.stats.maxMana - prevMaxMana;
     this.mana = Math.min(this.mana, this.stats.maxMana);
+  }
+
+  private nextTimedSummaryRefresh(now: number): number {
+    let next = Infinity;
+    for (const s of this.statuses) {
+      if (s.status === 'invis' && s.fadeAt !== undefined && now < s.fadeAt) {
+        next = Math.min(next, s.fadeAt);
+      }
+    }
+    return next;
+  }
+
+  private statSourceSignature(): string {
+    const abilityLevels = this.abilities.map((a) => a.level).join(',');
+    const items = this.items.map((it) => it?.defId ?? '-').join(',');
+    return `${this.level}|${abilityLevels}|${items}|${modSig(this.externalMods)}|${modSig(this.permanentMods)}|${this.statuses.length}`;
   }
 
   // ---------- statuses ----------
@@ -270,6 +298,7 @@ export class Unit {
     if (!this.alive) return false;
     const existing = this.statuses.find((s) => s.tag === inst.tag && s.status === inst.status);
     if (existing) {
+      const affectsStats = statusRuntimeAffectsSummary(existing, inst);
       existing.until = Math.max(existing.until, inst.until);
       existing.mods = inst.mods;
       existing.dotDps = inst.dotDps;
@@ -277,9 +306,11 @@ export class Unit {
       existing.attackSlowPct = inst.attackSlowPct;
       existing.sourceUid = inst.sourceUid;
       if (inst.periodic && existing.periodic) existing.periodic.interval = inst.periodic.interval;
+      if (affectsStats) this.markStatsDirty();
       return true;
     }
     this.statuses.push(inst);
+    this.markStatsDirty();
     void meta;
     return true;
   }
@@ -290,13 +321,17 @@ export class Unit {
 
   removeStatusWhere(pred: (s: StatusInstance) => boolean): StatusInstance[] {
     const removed: StatusInstance[] = [];
-    this.statuses = this.statuses.filter((s) => {
+    let write = 0;
+    for (let read = 0; read < this.statuses.length; read++) {
+      const s = this.statuses[read];
       if (pred(s)) {
         removed.push(s);
-        return false;
+      } else {
+        this.statuses[write++] = s;
       }
-      return true;
-    });
+    }
+    this.statuses.length = write;
+    if (removed.length > 0) this.markStatsDirty();
     return removed;
   }
 
@@ -364,6 +399,7 @@ export class Unit {
         else a.charges = Math.min(a.charges, max);
       }
     }
+    this.markStatsDirty();
   }
 
   abilityReady(slot: number, now: number, manaScale = 1): { ok: boolean; reason?: string } {
@@ -393,6 +429,7 @@ export class Unit {
     const capXp = xpForLevel(TUNING.levelCap);
     if (this.xp > capXp) this.xp = capXp;
     this.level = levelFromXp(this.xp);
+    if (this.level !== before) this.markStatsDirty();
     return this.level - before;
   }
 
@@ -434,6 +471,35 @@ export class Unit {
     if (!a) return 0;
     return levelArr(a.def.cooldown, Math.max(1, a.level)) * TUNING.cooldownScale;
   }
+}
+
+function statusRuntimeAffectsSummary(a: StatusInstance, b: StatusInstance): boolean {
+  return (
+    a.isDebuff !== b.isDebuff ||
+    a.sourceUid !== b.sourceUid ||
+    a.sourceTeam !== b.sourceTeam ||
+    a.fadeAt !== b.fadeAt ||
+    a.moveSlowPct !== b.moveSlowPct ||
+    a.attackSlowPct !== b.attackSlowPct ||
+    !sameMods(a.mods, b.mods)
+  );
+}
+
+function sameMods(a?: Record<string, number>, b?: Record<string, number>): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  const ak = Object.keys(a);
+  const bk = Object.keys(b);
+  if (ak.length !== bk.length) return false;
+  for (const k of ak) {
+    if (a[k] !== b[k]) return false;
+  }
+  return true;
+}
+
+function modSig(mods: Record<string, number>): string {
+  const keys = Object.keys(mods).sort();
+  return keys.map((k) => `${k}:${mods[k]}`).join(',');
 }
 
 // ---------- factory helpers ----------

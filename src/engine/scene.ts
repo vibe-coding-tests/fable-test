@@ -9,7 +9,7 @@ import { animateRig, newAnimState, type AnimState } from './animator';
 import { VfxManager } from './vfx';
 import { WORLD_SCALE } from './scale';
 import { TUNING } from '../data/tuning';
-import { PERFORMANCE_BUDGET, clampedPixelRatio } from './performance';
+import { clampedPixelRatio, qualityPreset, type QualityTier } from './performance';
 
 // ------------------------------------------------------------------
 // GameScene: owns the three.js world. Reads sim state every frame,
@@ -21,9 +21,10 @@ interface UnitView {
   rig: UnitRig;
   anim: AnimState;
   ring: THREE.Mesh;
-  hpBar: THREE.Sprite;
-  hpCanvas: HTMLCanvasElement;
-  hpTex: THREE.CanvasTexture;
+  hpBar: THREE.Group;
+  hpFill: THREE.Mesh;
+  manaFill: THREE.Mesh;
+  hpMaterial: THREE.MeshBasicMaterial;
   lastHpPct: number;
   lastManaPct: number;
   lastTeamColor: string;
@@ -62,6 +63,11 @@ const NIGHT = {
   sunI: 0.22
 };
 
+const HP_BAR_GEOMETRY = new THREE.PlaneGeometry(1, 1);
+const HP_BAR_WIDTH = 1.5;
+const HP_BAR_HEIGHT = 0.16;
+const MANA_BAR_HEIGHT = 0.035;
+
 export class GameScene {
   readonly renderer: THREE.WebGLRenderer;
   readonly scene = new THREE.Scene();
@@ -84,11 +90,12 @@ export class GameScene {
   playerTeam = 0;
   private time = 0;
 
-  constructor(canvas: HTMLCanvasElement, region: RegionDef) {
+  constructor(canvas: HTMLCanvasElement, region: RegionDef, quality: QualityTier = 'high') {
+    const qualityCfg = qualityPreset(quality);
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-    this.renderer.setPixelRatio(clampedPixelRatio(window.devicePixelRatio));
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFShadowMap;
+    this.renderer.setPixelRatio(clampedPixelRatio(window.devicePixelRatio, quality));
+    this.renderer.shadowMap.enabled = qualityCfg.shadows;
+    this.renderer.shadowMap.type = qualityCfg.shadowType === 'pcf' ? THREE.PCFShadowMap : THREE.BasicShadowMap;
 
     this.camera = new THREE.PerspectiveCamera(46, 1, 0.5, 700);
     this.scene.fog = new THREE.Fog(DAY.fog.getHex(), 60, 300);
@@ -97,8 +104,8 @@ export class GameScene {
     this.scene.add(this.hemi);
 
     this.sun = new THREE.DirectionalLight(DAY.sun, DAY.sunI);
-    this.sun.castShadow = true;
-    this.sun.shadow.mapSize.set(PERFORMANCE_BUDGET.shadowMapSize, PERFORMANCE_BUDGET.shadowMapSize);
+    this.sun.castShadow = qualityCfg.shadows;
+    this.sun.shadow.mapSize.set(qualityCfg.shadowMapSize, qualityCfg.shadowMapSize);
     const sc = this.sun.shadow.camera;
     sc.left = -60; sc.right = 60; sc.top = 60; sc.bottom = -60;
     sc.near = 1; sc.far = 400;
@@ -107,7 +114,7 @@ export class GameScene {
     this.terrain = buildTerrain(region);
     this.scene.add(this.terrain.group);
 
-    this.vfx = new VfxManager((x, y) => this.terrain.heightAt(x, y));
+    this.vfx = new VfxManager((x, y) => this.terrain.heightAt(x, y), qualityCfg.transientVfxCap);
     this.scene.add(this.vfx.group);
 
     this.createMapMarkers(region);
@@ -217,7 +224,6 @@ export class GameScene {
       const deadLong = u && !u.alive && view.removeAt > 0 && this.time > view.removeAt;
       if (gone || deadLong) {
         this.scene.remove(view.rig.root);
-        view.hpTex.dispose();
         this.views.delete(uid);
       }
     }
@@ -249,14 +255,26 @@ export class GameScene {
     ring.visible = false;
     rig.root.add(ring);
 
-    // hp bar sprite
-    const hpCanvas = document.createElement('canvas');
-    hpCanvas.width = 96;
-    hpCanvas.height = 20;
-    const hpTex = new THREE.CanvasTexture(hpCanvas);
-    const hpBar = new THREE.Sprite(new THREE.SpriteMaterial({ map: hpTex, depthTest: false }));
-    hpBar.scale.set(1.5, 0.31, 1);
+    // mesh HP bars avoid per-unit canvases/textures and share one plane geometry.
+    const hpBar = new THREE.Group();
     hpBar.position.y = rig.height + 0.55;
+    hpBar.renderOrder = 40;
+    const hpBg = new THREE.Mesh(
+      HP_BAR_GEOMETRY,
+      new THREE.MeshBasicMaterial({ color: '#080a0e', transparent: true, opacity: 0.82, depthTest: false, depthWrite: false })
+    );
+    hpBg.scale.set(HP_BAR_WIDTH, HP_BAR_HEIGHT, 1);
+    const hpMaterial = new THREE.MeshBasicMaterial({ color: '#5ad95a', depthTest: false, depthWrite: false });
+    const hpFill = new THREE.Mesh(HP_BAR_GEOMETRY, hpMaterial);
+    hpFill.position.z = 0.002;
+    hpFill.scale.set(HP_BAR_WIDTH, HP_BAR_HEIGHT * 0.68, 1);
+    const manaFill = new THREE.Mesh(
+      HP_BAR_GEOMETRY,
+      new THREE.MeshBasicMaterial({ color: '#4a90e2', depthTest: false, depthWrite: false })
+    );
+    manaFill.position.set(0, -HP_BAR_HEIGHT * 0.38, 0.004);
+    manaFill.scale.set(HP_BAR_WIDTH, MANA_BAR_HEIGHT, 1);
+    hpBar.add(hpBg, hpFill, manaFill);
     rig.root.add(hpBar);
 
     // stun stars
@@ -283,7 +301,7 @@ export class GameScene {
     rig.root.add(immuneShell);
 
     return {
-      rig, anim: newAnimState(), ring, hpBar, hpCanvas, hpTex,
+      rig, anim: newAnimState(), ring, hpBar, hpFill, manaFill, hpMaterial,
       lastHpPct: -1, lastManaPct: -1, lastTeamColor: '',
       stars, immuneShell, lastItemVisualKey: this.itemVisualKey(u), removeAt: 0
     };
@@ -342,7 +360,10 @@ export class GameScene {
 
     // hp bar
     view.hpBar.visible = u.alive && u.kind !== 'npc';
-    if (view.hpBar.visible) this.redrawHpBar(u, view);
+    if (view.hpBar.visible) {
+      view.hpBar.rotation.y = -rig.root.rotation.y;
+      this.redrawHpBar(u, view);
+    }
 
     // status indicators
     const stunned = u.summary.stunned || u.summary.hexed || u.summary.frozen || u.summary.sleeping;
@@ -400,24 +421,17 @@ export class GameScene {
     view.lastHpPct = hpPct;
     view.lastManaPct = manaPct;
     view.lastTeamColor = teamColor;
-    const ctx = view.hpCanvas.getContext('2d')!;
-    const w = view.hpCanvas.width;
-    const h = view.hpCanvas.height;
-    ctx.clearRect(0, 0, w, h);
-    ctx.fillStyle = 'rgba(8,10,14,0.82)';
-    ctx.fillRect(0, 0, w, h);
     const isHero = u.kind === 'hero';
-    const hpH = isHero ? 11 : 14;
-    ctx.fillStyle = teamColor;
-    ctx.fillRect(2, 2, (w - 4) * hpPct, hpH);
-    // tick marks every 25%
-    ctx.fillStyle = 'rgba(0,0,0,0.45)';
-    for (let i = 1; i < 4; i++) ctx.fillRect((w - 4) * (i / 4) + 2, 2, 1, hpH);
-    if (isHero) {
-      ctx.fillStyle = '#4a90e2';
-      ctx.fillRect(2, 15, (w - 4) * Math.max(0, manaPct), 3);
-    }
-    view.hpTex.needsUpdate = true;
+    view.hpMaterial.color.set(teamColor);
+    const hpWidth = HP_BAR_WIDTH * Math.max(0, Math.min(1, hpPct));
+    view.hpFill.scale.x = hpWidth;
+    view.hpFill.position.x = -HP_BAR_WIDTH / 2 + hpWidth / 2;
+    view.hpFill.scale.y = HP_BAR_HEIGHT * (isHero ? 0.58 : 0.74);
+    view.hpFill.position.y = isHero ? HP_BAR_HEIGHT * 0.12 : 0;
+    const manaWidth = HP_BAR_WIDTH * Math.max(0, Math.min(1, manaPct));
+    view.manaFill.visible = isHero;
+    view.manaFill.scale.x = manaWidth;
+    view.manaFill.position.x = -HP_BAR_WIDTH / 2 + manaWidth / 2;
   }
 
   // ---------- day/night ----------

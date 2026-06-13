@@ -106,6 +106,7 @@ export function executeBuy(def: ItemDef, unit: Unit, gold: number): number | nul
   if (free < 0) return null;
   unit.items[free] = makeItemState(def);
   unit.items = sortInventory(unit.items);
+  unit.markStatsDirty();
   return gold - plan.goldCost;
 }
 
