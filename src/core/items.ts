@@ -137,7 +137,8 @@ export function itemSaveOf(it: ItemState | null, now: number): ItemSave | null {
     id: it.defId,
     charges: it.charges >= 0 ? it.charges : undefined,
     cooldownLeft: it.cooldownUntil > now ? it.cooldownUntil - now : undefined,
-    bound: it.bound || undefined
+    bound: it.bound || undefined,
+    quality: it.quality
   };
 }
 
@@ -147,6 +148,7 @@ export function itemStateFromSave(s: ItemSave, now: number): ItemState {
     defId: s.id,
     charges: s.charges ?? def.charges ?? -1,
     cooldownUntil: s.cooldownLeft ? now + s.cooldownLeft : 0,
-    bound: s.bound || undefined
+    bound: s.bound || undefined,
+    quality: s.quality
   };
 }

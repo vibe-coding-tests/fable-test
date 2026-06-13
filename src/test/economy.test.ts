@@ -7,7 +7,7 @@ import { scaledBounty } from '../core/phase3';
 import { overflowXpToGold } from '../core/progression';
 import { xpForLevel } from '../core/stats';
 import { TUNING } from '../data/tuning';
-import { GATED_TOP_TIER, Game, newGameSave } from '../systems/game';
+import { GATED_TOP_TIER, Game, itemAllowedFromSource, newGameSave } from '../systems/game';
 import type { CreepDef, GambitRule, GameSave, SimEvent } from '../core/types';
 
 beforeAll(() => registerAllContent());
@@ -385,5 +385,92 @@ describe('gold-sinks-faithful (test 12)', () => {
       g.buyItem(id);
       expect(hero.items.filter((it) => it?.defId === id).length).toBe(had);
     }
+  });
+});
+
+// ----------------------------------------------------------------
+// Loot overhaul L3/L4: curated chase + Black Market sinks
+// ----------------------------------------------------------------
+describe('loot overhaul curated chase and black-market sinks', () => {
+  it('themes boss anchor pools by hero identity instead of the old hash', () => {
+    const pa = REG.boss('boss-phantom-assassin');
+    const wk = REG.boss('boss-wraith-king');
+    const invoker = REG.boss('boss-invoker');
+
+    expect(pa.loot.guaranteed).toContain('eaglesong');
+    expect(pa.loot.assembledPool).toContain('butterfly');
+    expect(pa.loot.assembledPool).toContain('eye-of-skadi');
+    expect(pa.loot.assembledPool).not.toContain('heart-of-tarrasque');
+
+    expect(wk.loot.guaranteed).toContain('reaver');
+    expect(wk.loot.assembledPool).toContain('heart-of-tarrasque');
+    expect(wk.loot.assembledPool).toContain('assault-cuirass');
+    expect(wk.loot.assembledPool).not.toContain('butterfly');
+
+    expect(invoker.loot.guaranteed).toContain('mystic-staff');
+    expect(invoker.loot.assembledPool).toContain('scythe-of-vyse');
+    expect(invoker.loot.assembledPool).toContain('refresher-orb');
+
+    for (const item of REG.items.values()) expect(item.rarity, item.id).toBeDefined();
+    expect(itemAllowedFromSource('divine-rapier', 'gamble')).toBe(false);
+    expect(itemAllowedFromSource('aegis-of-the-immortal', 'shop')).toBe(false);
+  });
+
+  it('owned-hero echoes can drop attribute-themed components into the Armory', () => {
+    const save = soloSave('sven', 20);
+    const g = Game.headless(save);
+    const before = g.inventoryStash.length;
+
+    let dropped = false;
+    for (let i = 0; i < 12 && !dropped; i++) {
+      g.unlockOwnedHeroEcho('sven');
+      dropped = g.inventoryStash.length > before;
+    }
+
+    expect(dropped).toBe(true);
+    const ids = g.inventoryStash.slice(before).map((it) => it.id);
+    expect(ids.some((id) => ['belt-of-strength', 'ogre-axe', 'reaver', 'vitality-booster'].includes(id))).toBe(true);
+  });
+
+  it('Black Market wheels spend gold, obey source reservations, and bind relics', () => {
+    const save = soloSave('juggernaut', 20);
+    save.gold = 20000;
+    const g = Game.headless(save);
+    g.activeUnit()!.pos = { ...g.region.town.pos };
+
+    const goldBeforeRecipe = g.gold;
+    const recipe = g.blackMarketRecipeWheel('rare');
+    expect(recipe).not.toBeNull();
+    expect(g.gold).toBe(goldBeforeRecipe - TUNING.blackMarket.recipeWheelCost);
+    expect(REG.item(recipe!.id).tier === 'component' || REG.item(recipe!.id).tier === 'basic').toBe(true);
+    expect(itemAllowedFromSource(recipe!.id, 'gamble')).toBe(true);
+
+    const goldBeforeRelic = g.gold;
+    const relic = g.blackMarketRelicWheel('legendary');
+    expect(relic).not.toBeNull();
+    const relicDef = REG.item(relic!.id);
+    expect(g.gold).toBe(goldBeforeRelic - (TUNING.blackMarket.relicWheelBaseCost + TUNING.blackMarket.relicWheelStepCost));
+    expect(relicDef.tier).toBe('core');
+    expect(relicDef.rarity).not.toBe('immortal');
+    expect(relicDef.rarity).not.toBe('arcana');
+    expect(GATED_TOP_TIER.has(relic!.id)).toBe(false);
+    expect(g.inventoryStash.find((it) => it.id === relic!.id)?.bound).toBe(true);
+  });
+
+  it('salvages bound Armory dupes into essence without minting gold', () => {
+    const save = soloSave('juggernaut', 20);
+    save.inventoryStash = [{ id: 'battlefury', bound: true }, { id: 'broadsword' }];
+    const g = Game.headless(save);
+    const goldBefore = g.gold;
+
+    const essence = g.salvageArmoryItem(0);
+    expect(essence).toBeGreaterThan(0);
+    expect(g.essence).toBe(essence);
+    expect(g.gold).toBe(goldBefore);
+    expect(g.inventoryStash.some((it) => it.id === 'battlefury')).toBe(false);
+    expect(g.goldSinks.salvages).toBe(1);
+
+    expect(g.salvageArmoryItem(0)).toBe(0);
+    expect(g.inventoryStash.some((it) => it.id === 'broadsword')).toBe(true);
   });
 });

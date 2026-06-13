@@ -1,4 +1,4 @@
-import type { ItemDef } from '../../core/types';
+import type { DropSource, ItemDef, ItemRarity } from '../../core/types';
 
 // ============================================================
 // Phase 1 item catalog: consumables, components, and 15+
@@ -147,7 +147,7 @@ export const CONSUMABLES: ItemDef[] = [
       targeting: 'no-target',
       castPoint: 0,
       cooldown: [1],
-      effects: [{ kind: 'status', status: 'invis', duration: 12, target: 'allies-in-radius', radius: 1200, params: { fadeTime: 0.2, tag: 'smoke' } }],
+      effects: [{ kind: 'status', status: 'invis', duration: 12, target: 'allies-in-radius', radius: 1200, params: { fadeTime: 0.2, threatDropPct: 70, tag: 'smoke' } }],
       vfx: { archetype: 'ground-aoe', color: '#9a9a9a', scale: 0.8 },
       anim: 'item-use',
       sound: 'item'
@@ -426,7 +426,7 @@ export const ASSEMBLED: ItemDef[] = [
       cooldown: [14],
       manaCost: [90],
       effects: [
-        { kind: 'status', status: 'invis', duration: 5, target: 'target', params: { fadeTime: 0.6 } },
+        { kind: 'status', status: 'invis', duration: 5, target: 'target', params: { fadeTime: 0.6, threatDropPct: 45 } },
         { kind: 'statmod', mods: { magicResistPct: 45 }, duration: 5, target: 'target' }
       ],
       vfx: { archetype: 'shield', color: '#b89fff', color2: '#4a3a78', scale: 0.8 }
@@ -668,4 +668,69 @@ function normalizeItemActive(item: ItemDef): ItemDef {
   return item;
 }
 
-export const ALL_ITEMS: ItemDef[] = [...CONSUMABLES, ...COMPONENTS, ...ASSEMBLED].map(normalizeItemActive);
+const RARITY_OVERRIDES: Record<string, ItemRarity> = {
+  // Drop-gated recipe cores.
+  'demon-edge': 'mythical',
+  'sacred-relic': 'mythical',
+  reaver: 'mythical',
+  eaglesong: 'mythical',
+  'mystic-staff': 'mythical',
+  'ultimate-orb': 'rare',
+  // Boss/raid anchors.
+  'assault-cuirass': 'legendary',
+  'divine-rapier': 'immortal',
+  butterfly: 'immortal',
+  'scythe-of-vyse': 'immortal',
+  'heart-of-tarrasque': 'immortal',
+  'eye-of-skadi': 'immortal',
+  'refresher-orb': 'immortal',
+  'aghanims-scepter': 'immortal',
+  'aegis-of-the-immortal': 'arcana',
+  'refresher-shard': 'immortal',
+  cheese: 'legendary'
+};
+
+const SOURCE_OVERRIDES: Record<string, DropSource[]> = {
+  // These components are the dropped recipe membrane for the top-end anchors.
+  'demon-edge': ['creep', 'echo', 'boss', 'raid', 'dungeon'],
+  'sacred-relic': ['creep', 'echo', 'boss', 'raid', 'dungeon'],
+  reaver: ['creep', 'echo', 'boss', 'raid', 'dungeon'],
+  eaglesong: ['creep', 'echo', 'boss', 'raid', 'dungeon'],
+  'mystic-staff': ['creep', 'echo', 'boss', 'raid', 'dungeon'],
+  // Prestige anchors never enter shops or the gamble pool.
+  'divine-rapier': ['raid', 'special-battle'],
+  butterfly: ['boss', 'raid', 'dungeon'],
+  'scythe-of-vyse': ['boss', 'raid', 'dungeon'],
+  'heart-of-tarrasque': ['boss', 'raid', 'dungeon'],
+  'eye-of-skadi': ['boss', 'raid', 'dungeon'],
+  'refresher-orb': ['boss', 'raid', 'dungeon'],
+  'aghanims-scepter': ['boss', 'raid', 'dungeon'],
+  'aegis-of-the-immortal': ['raid'],
+  'refresher-shard': ['raid'],
+  cheese: ['raid']
+};
+
+function defaultRarity(item: ItemDef): ItemRarity {
+  if (item.tier === 'consumable') return 'common';
+  if (item.tier === 'component') {
+    if (item.cost >= 2200) return 'mythical';
+    if (item.cost >= 1000) return 'rare';
+    return 'uncommon';
+  }
+  if (item.tier === 'basic') return 'uncommon';
+  if (item.cost >= 5000) return 'legendary';
+  if (item.cost >= 2500) return 'mythical';
+  return 'rare';
+}
+
+function normalizeLootMetadata(item: ItemDef): ItemDef {
+  return {
+    ...item,
+    rarity: item.rarity ?? RARITY_OVERRIDES[item.id] ?? defaultRarity(item),
+    exclusiveTo: item.exclusiveTo ?? SOURCE_OVERRIDES[item.id]
+  };
+}
+
+export const ALL_ITEMS: ItemDef[] = [...CONSUMABLES, ...COMPONENTS, ...ASSEMBLED]
+  .map(normalizeItemActive)
+  .map(normalizeLootMetadata);

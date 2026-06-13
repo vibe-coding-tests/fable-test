@@ -21,6 +21,7 @@ import type {
   GambitRule,
   HeroBaseStats,
   HeroDef,
+  ItemQuality,
   Order,
   SilhouetteSpec,
   StatusId,
@@ -47,6 +48,7 @@ export interface ItemState {
   charges: number;           // -1 = n/a
   cooldownUntil: number;
   bound?: boolean;
+  quality?: ItemQuality;
 }
 
 export interface CastState {

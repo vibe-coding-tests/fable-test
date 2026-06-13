@@ -41,7 +41,7 @@ import { ELITE_DRAFT } from '../data/drafts';
 import { resonanceMods } from '../core/resonance';
 import { levelFromXp, xpForLevel } from '../core/stats';
 import { dist, fromAngle, norm, sub } from '../core/math2d';
-import type { ActiveElement, BossDef, CreepTier, CreepInstanceSave, DifficultyTier, DraftDef, EchoProgress, GambitRule, GameSave, GraphicsSettings, ItemDropTable, ItemSave, MacroHeroSetup, NeutralItemDef, Order, QuestProgress, RaidDef, RegionDef, SimEvent, StingerId, Vec2 } from '../core/types';
+import type { ActiveElement, BossDef, CreepTier, CreepInstanceSave, DifficultyTier, DraftDef, DropSource, EchoProgress, GambitRule, GameSave, GraphicsSettings, ItemDropTable, ItemRarity, ItemSave, MacroHeroSetup, NeutralItemDef, Order, QuestProgress, RaidDef, RegionDef, SimEvent, StingerId, Vec2 } from '../core/types';
 import { ProceduralAudio } from '../engine/audio';
 import { GameScene } from '../engine/scene';
 import { LiveGymFight, runGymMatch, type GymMatchHero, type GymMatchResult } from './macro-session';
@@ -57,9 +57,25 @@ export const GATED_TOP_TIER: ReadonlySet<string> = new Set([
   'refresher-orb', 'aghanims-scepter', 'aegis-of-the-immortal', 'refresher-shard', 'cheese'
 ]);
 
+const RARITY_RANK: Record<ItemRarity, number> = {
+  common: 0,
+  uncommon: 1,
+  rare: 2,
+  mythical: 3,
+  legendary: 4,
+  immortal: 5,
+  arcana: 6
+};
+
+export function itemAllowedFromSource(itemId: string, source: DropSource): boolean {
+  const def = REG.item(itemId);
+  return !def.exclusiveTo || def.exclusiveTo.includes(source);
+}
+
 function shouldBindDroppedItem(id: string): boolean {
   const def = REG.item(id);
-  return GATED_TOP_TIER.has(id) || def.tier === 'core';
+  const rarity = def.rarity ?? 'common';
+  return GATED_TOP_TIER.has(id) || def.tier === 'core' || RARITY_RANK[rarity] >= RARITY_RANK.legendary;
 }
 
 function bindIfNeeded(item: ItemSave): ItemSave {
@@ -268,7 +284,8 @@ export class Game {
   factionChoices: Record<string, string> = {};
   heldUniques: string[] = [];
   neutralStash: GameSave['neutralStash'] = [];
-  goldSinks: GameSave['goldSinks'] = { buybacks: 0, tomesUsed: 0, respecs: 0 };
+  goldSinks: GameSave['goldSinks'] = { buybacks: 0, tomesUsed: 0, respecs: 0, gambleRolls: 0, salvages: 0 };
+  essence = 0;
   reputation = 0;
   codexUnlocks = new Set<string>();
   journalSeen = new Set<string>();
@@ -357,7 +374,14 @@ export class Game {
     this.factionChoices = { ...save.factionChoices };
     this.heldUniques = [...save.heldUniques];
     this.neutralStash = save.neutralStash.map((n) => ({ ...n }));
-    this.goldSinks = { ...save.goldSinks };
+    this.goldSinks = {
+      buybacks: save.goldSinks.buybacks ?? 0,
+      tomesUsed: save.goldSinks.tomesUsed ?? 0,
+      respecs: save.goldSinks.respecs ?? 0,
+      gambleRolls: save.goldSinks.gambleRolls ?? 0,
+      salvages: save.goldSinks.salvages ?? 0
+    };
+    this.essence = save.essence ?? 0;
     this.reputation = save.reputation ?? 0;
     this.codexUnlocks = new Set(save.codexUnlocks ?? []);
     this.journalSeen = new Set(save.journalSeen ?? []);
@@ -1405,13 +1429,52 @@ export class Game {
     const seed = stableContentSeed(`${this.region.id}:creep-drops:${tier}`, Math.round(this.sim.time * 1000) + salt);
     const roll = rollItemDrops(table, 'normal', {}, new Rng(seed));
     if (roll.items.length === 0) return;
-    for (const it of roll.items) {
+    this.addDroppedItems(roll.items);
+    const names = roll.items.map((it) => REG.item(it.id).name).join(', ');
+    this.msg(`Creep drop: ${names} (→ stash)`, 'good');
+  }
+
+  private addDroppedItems(items: ItemSave[]): ItemSave[] {
+    const drops: ItemSave[] = [];
+    for (const it of items) {
       const drop = bindIfNeeded(it);
       this.inventoryStash.push(drop);
       this.codexUnlock('item:' + drop.id);
+      drops.push(drop);
     }
-    const names = roll.items.map((it) => REG.item(it.id).name).join(', ');
-    this.msg(`Creep drop: ${names} (→ stash)`, 'good');
+    return drops;
+  }
+
+  private echoComponentTable(heroId: string): ItemDropTable {
+    const hero = REG.hero(heroId);
+    const pool =
+      hero.attribute === 'agi'
+        ? ['band-of-elvenskin', 'blade-of-alacrity', 'eaglesong', 'ultimate-orb']
+        : hero.attribute === 'str'
+          ? ['belt-of-strength', 'ogre-axe', 'reaver', 'vitality-booster']
+          : ['robe-of-the-magi', 'staff-of-wizardry', 'mystic-staff', 'void-stone'];
+    return {
+      guaranteed: [],
+      slots: [
+        {
+          id: `${heroId}-echo-component`,
+          rarity: 'rare',
+          rolls: 1,
+          chance: { normal: 0.55, nightmare: 0.65, hell: 0.75 },
+          pool: pool.filter((id) => itemAllowedFromSource(id, 'echo')).map((id) => ({ id, weight: REG.item(id).cost })),
+          source: 'echo'
+        }
+      ]
+    };
+  }
+
+  private rollEchoComponentDrop(heroId: string): ItemSave[] {
+    const seed = stableContentSeed(`${heroId}:echo-drop`, this.party.find((r) => r.heroId === heroId)?.echo.kills ?? 0);
+    const roll = rollItemDrops(this.echoComponentTable(heroId), 'normal', {}, new Rng(seed));
+    if (roll.items.length === 0) return [];
+    const drops = this.addDroppedItems(roll.items);
+    this.msg(`Echo drop: ${roll.items.map((it) => REG.item(it.id).name).join(', ')} (→ Armory)`, 'good');
+    return drops;
   }
 
   private addNeutral(id: string, n = 1): void {
@@ -1557,6 +1620,107 @@ export class Game {
     this.inventoryStash.push(saved);
     this.msg(`Returned ${REG.item(saved.id).name} to the Armory`, 'info');
     return true;
+  }
+
+  private blackMarketCost(kind: 'recipe' | 'relic'): number {
+    if (kind === 'recipe') return TUNING.blackMarket.recipeWheelCost;
+    return TUNING.blackMarket.relicWheelBaseCost + this.goldSinks.gambleRolls * TUNING.blackMarket.relicWheelStepCost;
+  }
+
+  private itemRarity(id: string): ItemRarity {
+    return REG.item(id).rarity ?? 'common';
+  }
+
+  private rollMarketItem(candidates: string[], salt: string): string | null {
+    if (candidates.length === 0) return null;
+    const rng = new Rng(stableContentSeed(`black-market:${salt}`, Math.round(this.playtime) + this.gold + this.inventoryStash.length));
+    const weighted = candidates.map((id) => ({ id, weight: Math.max(1, REG.item(id).cost) }));
+    const total = weighted.reduce((sum, e) => sum + e.weight, 0);
+    let draw = rng.range(0, total);
+    for (const entry of weighted) {
+      draw -= entry.weight;
+      if (draw <= 0) return entry.id;
+    }
+    return weighted[weighted.length - 1].id;
+  }
+
+  /** Cheap Black Market roll for liquid recipe pieces/components; reserved drops stay excluded. */
+  blackMarketRecipeWheel(rarity: ItemRarity = 'rare'): ItemSave | null {
+    if (!this.inTown()) {
+      this.msg('The Black Market trades from town', 'bad');
+      return null;
+    }
+    const cost = this.blackMarketCost('recipe');
+    if (this.gold < cost) {
+      this.msg(`Recipe wheel costs ${cost}g`, 'bad');
+      return null;
+    }
+    const candidates = [...REG.items.values()]
+      .filter((item) => ['component', 'basic'].includes(item.tier))
+      .filter((item) => this.itemRarity(item.id) === rarity)
+      .filter((item) => itemAllowedFromSource(item.id, 'gamble'))
+      .map((item) => item.id);
+    const id = this.rollMarketItem(candidates, `recipe:${rarity}:${this.goldSinks.gambleRolls}`);
+    if (!id) {
+      this.msg(`No ${rarity} recipe stock is available`, 'bad');
+      return null;
+    }
+    this.gold -= cost;
+    this.goldSinks.gambleRolls += 1;
+    const item: ItemSave = { id };
+    this.addDroppedItems([item]);
+    this.msg(`Recipe wheel: ${REG.item(id).name} (→ Armory)`, 'good');
+    return item;
+  }
+
+  /** Expensive Black Market roll for bound assembled relics, capped below reserved prestige. */
+  blackMarketRelicWheel(maxRarity: ItemRarity = TUNING.blackMarket.relicRarityCeiling): ItemSave | null {
+    if (!this.inTown()) {
+      this.msg('The Black Market trades from town', 'bad');
+      return null;
+    }
+    const ceiling = Math.min(RARITY_RANK[maxRarity], RARITY_RANK[TUNING.blackMarket.relicRarityCeiling]);
+    const cost = this.blackMarketCost('relic');
+    if (this.gold < cost) {
+      this.msg(`Relic wheel costs ${cost}g`, 'bad');
+      return null;
+    }
+    const candidates = [...REG.items.values()]
+      .filter((item) => item.tier === 'core')
+      .filter((item) => {
+        const rank = RARITY_RANK[this.itemRarity(item.id)];
+        return rank >= RARITY_RANK.rare && rank <= ceiling;
+      })
+      .filter((item) => itemAllowedFromSource(item.id, 'gamble'))
+      .filter((item) => !GATED_TOP_TIER.has(item.id))
+      .map((item) => item.id);
+    const id = this.rollMarketItem(candidates, `relic:${maxRarity}:${this.goldSinks.gambleRolls}`);
+    if (!id) {
+      this.msg(`No relics are available below ${maxRarity}`, 'bad');
+      return null;
+    }
+    this.gold -= cost;
+    this.goldSinks.gambleRolls += 1;
+    const item: ItemSave = { id, bound: true };
+    this.addDroppedItems([item]);
+    this.msg(`Relic wheel: ${REG.item(id).name} (bound, → Armory)`, 'good');
+    return item;
+  }
+
+  /** Salvage a bound Armory item into essence. Liquid items still sell for gold instead. */
+  salvageArmoryItem(stashIdx: number): number {
+    const saved = this.inventoryStash[stashIdx];
+    if (!saved?.bound) {
+      this.msg('Only bound Armory items salvage into essence', 'bad');
+      return 0;
+    }
+    const rarity = this.itemRarity(saved.id);
+    const amount = TUNING.blackMarket.salvageEssence[rarity];
+    this.inventoryStash.splice(stashIdx, 1);
+    this.essence += amount;
+    this.goldSinks.salvages += 1;
+    this.msg(`Salvaged ${REG.item(saved.id).name} (+${amount} essence)`, 'info');
+    return amount;
   }
 
   /** Tinker's Bench reroll: swap a stashed neutral for another of the same tier, for gold (§3.7). */
@@ -2364,6 +2528,7 @@ export class Game {
   /** Items the current location vends. Gated top-tier power is never sold by any shop (§6). */
   shopSells(itemId: string): boolean {
     if (GATED_TOP_TIER.has(itemId)) return false;
+    if (!itemAllowedFromSource(itemId, 'shop')) return false;
     if (this.region.shopInventory.includes(itemId)) return true;
     const sec = this.region.secretShop;
     const u = this.activeUnit();
@@ -2482,6 +2647,7 @@ export class Game {
       this.awardGold(Math.round(def.bounty.gold * 1.5), 'echo', this.activeUnit()?.pos ?? this.region.town.pos);
     }
 
+    this.rollEchoComponentDrop(heroId);
     this.rebuildHeroUnit(recIdx);
     this.autosave('echo');
     return true;
@@ -2605,6 +2771,7 @@ export class Game {
       heldUniques: [...this.heldUniques],
       neutralStash: this.neutralStash.map((n) => ({ ...n })),
       goldSinks: { ...this.goldSinks },
+      essence: this.essence,
       reputation: this.reputation,
       codexUnlocks: [...this.codexUnlocks],
       journalSeen: [...this.journalSeen],
@@ -2732,6 +2899,8 @@ export class Game {
     if (!Array.isArray(v.heldUniques) || !v.heldUniques.every((id) => typeof id === 'string' && REG.items.has(id))) return false;
     if (!Array.isArray(v.neutralStash) || !v.neutralStash.every((n) => REG.neutralItems.has(n.id) && typeof n.count === 'number' && n.count >= 0)) return false;
     if (!v.goldSinks || typeof v.goldSinks.buybacks !== 'number' || typeof v.goldSinks.tomesUsed !== 'number' || typeof v.goldSinks.respecs !== 'number') return false;
+    if (typeof v.goldSinks.gambleRolls !== 'number' || typeof v.goldSinks.salvages !== 'number') return false;
+    if (typeof v.essence !== 'number' || v.essence < 0) return false;
     if (typeof v.reputation !== 'number') return false;
     if (!Array.isArray(v.codexUnlocks) || !v.codexUnlocks.every((id) => typeof id === 'string')) return false;
     if (!Array.isArray(v.journalSeen) || !v.journalSeen.every((id) => typeof id === 'string')) return false;

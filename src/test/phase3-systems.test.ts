@@ -143,7 +143,7 @@ describe('Phase 3 day/night, factions, and save v3', () => {
     save.factionChoices = { shadeshore: 'kunkka' };
     save.heldUniques = ['aegis-of-the-immortal'];
     save.neutralStash = [{ id: 'trusty-shovel', count: 2 }];
-    save.goldSinks = { buybacks: 1, tomesUsed: 2, respecs: 1 };
+    save.goldSinks = { buybacks: 1, tomesUsed: 2, respecs: 1, gambleRolls: 0, salvages: 0 };
     save.roster[0].neutralSlot = { id: 'trusty-shovel' };
     expect(save.version).toBe(SAVE_VERSION);
     expect(Game.validateSave(save)).toBe(true);

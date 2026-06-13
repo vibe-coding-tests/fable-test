@@ -153,6 +153,7 @@ export interface StatusParams {
   attackMod?: AttackModSpec;  // temp attack buffs (Enchant Totem)
   consumeOnAttack?: boolean;
   basicDispelOnApply?: boolean; // BKB
+  threatDropPct?: number;     // reduce this unit's active threat-table entries on apply
   tag?: string;               // stacking key override
 }
 

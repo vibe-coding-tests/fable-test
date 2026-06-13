@@ -1,16 +1,42 @@
 import type { BossDef, LootTable } from '../core/types';
 import { TUNING } from './tuning';
 
-const ANCHORS = ['butterfly', 'heart-of-tarrasque', 'eye-of-skadi', 'refresher-orb', 'aghanims-scepter', 'divine-rapier'];
-const COMPONENTS = ['demon-edge', 'eaglesong', 'reaver', 'mystic-staff', 'ultimate-orb', 'point-booster', 'sacred-relic'];
+const AGILITY_CARRIES = new Set([
+  'phantom-assassin', 'medusa', 'naga-siren', 'slark', 'broodmother', 'faceless-void', 'terrorblade', 'spectre'
+]);
+const STRENGTH_TITANS = new Set([
+  'pudge', 'lifestealer', 'doom', 'wraith-king', 'tidehunter', 'magnus', 'elder-titan', 'centaur-warrunner', 'sven', 'axe'
+]);
+const INTELLIGENCE_BOSSES = new Set([
+  'invoker', 'zeus', 'silencer', 'outworld-destroyer', 'skywrath-mage', 'tinker', 'lich', 'crystal-maiden', 'lina'
+]);
 
-function loot(heroId: string): LootTable {
-  const idx = Math.abs(heroId.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0));
+function themedLoot(heroId: string, rank: BossDef['rank']): LootTable {
+  const isMini = rank === 'mini-boss';
+  let guaranteed = ['ultimate-orb'];
+  let assembledPool = ['aghanims-scepter', 'refresher-orb'];
+  if (AGILITY_CARRIES.has(heroId)) {
+    guaranteed = ['eaglesong'];
+    assembledPool = ['butterfly', 'eye-of-skadi', 'diffusal-blade'];
+  } else if (STRENGTH_TITANS.has(heroId)) {
+    guaranteed = ['reaver'];
+    assembledPool = ['heart-of-tarrasque', 'assault-cuirass', 'black-king-bar'];
+  } else if (INTELLIGENCE_BOSSES.has(heroId)) {
+    guaranteed = ['mystic-staff'];
+    assembledPool = ['scythe-of-vyse', 'refresher-orb', 'aghanims-scepter'];
+  }
+  const dropPct = isMini
+    ? {
+        normal: TUNING.bossAssembledDropPct.normal * 0.45,
+        nightmare: TUNING.bossAssembledDropPct.nightmare * 0.5,
+        hell: TUNING.bossAssembledDropPct.hell * 0.55
+      }
+    : TUNING.bossAssembledDropPct;
   return {
-    guaranteed: [COMPONENTS[idx % COMPONENTS.length]],
-    assembledPool: [ANCHORS[idx % ANCHORS.length]],
-    dropPct: TUNING.bossAssembledDropPct,
-    pity: TUNING.raidBadLuckPity
+    guaranteed,
+    assembledPool: isMini ? assembledPool.filter((id) => id !== 'aghanims-scepter').slice(0, 2) : assembledPool,
+    dropPct,
+    pity: isMini ? TUNING.raidBadLuckPity + 2 : TUNING.raidBadLuckPity
   };
 }
 
@@ -26,7 +52,7 @@ function boss(id: string, heroId: string, region: string, rank: BossDef['rank'])
           { atHpPct: 33, onEnter: [{ kind: 'status', status: 'buff', duration: 8, target: 'self', params: { mods: { attackSpeed: 45 }, tag: `${id}-phase-3` } }], gambitBias: 'finish' }
         ]
       : [{ atHpPct: 50, onEnter: [{ kind: 'status', status: 'buff', duration: 5, target: 'self', params: { mods: { moveSpeedPct: 12 }, tag: `${id}-mini-phase` } }] }],
-    loot: loot(heroId),
+    loot: themedLoot(heroId, rank),
     tiers: ['normal', 'nightmare', 'hell']
   };
 }

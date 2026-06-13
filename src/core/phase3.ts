@@ -217,7 +217,7 @@ export function defaultPhase3SaveFields(): Pick<GameSave, 'difficulty' | 'invent
     factionChoices: {},
     heldUniques: [],
     neutralStash: [],
-    goldSinks: { buybacks: 0, tomesUsed: 0, respecs: 0 }
+    goldSinks: { buybacks: 0, tomesUsed: 0, respecs: 0, gambleRolls: 0, salvages: 0 }
   };
 }
 
@@ -236,7 +236,7 @@ export function migratePhase3Save(s: { version: number; [k: string]: unknown }):
     factionChoices: base.factionChoices ?? defaults.factionChoices,
     heldUniques: base.heldUniques ?? defaults.heldUniques,
     neutralStash: base.neutralStash ?? defaults.neutralStash,
-    goldSinks: base.goldSinks ?? defaults.goldSinks,
+    goldSinks: { ...defaults.goldSinks, ...(base.goldSinks ?? {}) },
     settings: {
       ...settings,
       quickcast: settings.quickcast ?? true,
