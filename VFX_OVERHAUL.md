@@ -3,25 +3,35 @@
 Goal: now that the roster (122 heroes) and the item catalog are mechanically
 complete, make the whole thing **look** finished. Push every hero, spell, and
 item from "lint-valid placeholder" to "reads like its Dota counterpart at
-gameplay zoom." This is a presentation pass, not an engine rewrite or an asset
-import: the renderer is already procedural, data-driven, and gated by tests, so
-the work is mostly (a) filling the per-hero/per-spell detail the auto-resolver
-leaves generic, and (b) a handful of carefully-scoped engine extensions where a
-signature truly has no good fit.
+gameplay zoom."
 
-The hard constraints from the existing specs hold:
+Two levers do this work together:
 
-- **No asset files required.** Everything renders procedurally today
-  (`ENABLED_HERO_MODELS` is empty, the no-asset boot guarantee and the test-21
-  no-audio-import guard stay green). GLB heroes remain the optional long tail.
+1. **Author the procedural detail** the auto-resolver leaves generic: per-hero
+   likeness, per-spell VFX, weapon-driven attacks, plus a few scoped engine
+   extensions.
+2. **Bring in real assets** (downloaded, imported, or generated) wherever a
+   model, texture, HDRI, sprite, or sound reaches a fidelity that primitives
+   cannot. Procedural is the floor that always boots. Real assets are the
+   ceiling, and this plan raises it on purpose.
+
+The constraints that still hold:
+
+- **Procedural stays as the fallback floor.** The game boots and plays with zero
+  asset files, and every hero keeps a procedural rig. That guarantee stays. On
+  top of it, adding assets is encouraged: flip `ENABLED_HERO_MODELS` on as GLBs
+  ship, load texture/HDRI/sprite sets, and lazy-load the heavy pieces. Whether an
+  asset is local or remote is a performance call (§4a), and storage size is a
+  budget line, not a reason to avoid an asset.
 - **Boundary stays clean.** Nothing under `/src/core/` imports `three` or reads
   the renderer-only `appearance`/`attackVisual` fields (`boundary.test.ts`).
-- **Closed vocabularies stay closed-ish.** 99% of new visual content is pure
-  data picked from the existing vocabularies; new vocabulary entries are rare,
-  costed, and lint-gated (§3, §10).
+- **Closed vocabularies stay disciplined.** Most new visual content is pure data
+  picked from the existing vocabularies. New vocabulary entries stay rare,
+  costed, and lint-gated (§3, §11). Real assets are a separate lever: a GLB or a
+  texture raises fidelity without adding a vocabulary entry.
 - **Tier-gated + perf-bounded.** Every addition respects the performance budget
   (30 active units / 200 live projectiles, `maxPixelRatio ≤ 2`) and degrades on
-  the low tier.
+  the low tier. Assets load per-tier, so the low tier can stay fully procedural.
 
 ---
 
@@ -41,7 +51,7 @@ Six procedural subsystems, all file-free, all driven by sim events + data:
 ### The closed vocabularies (what is free vs. what costs engine work)
 
 Picking from these is **pure data (free)**. Adding an entry costs one enum +
-one renderer/synth branch + one lint-array entry + one coverage test (§10).
+one renderer/synth branch + one lint-array entry + one coverage test (§11).
 
 - `VfxArchetype` — 12 (`types.ts` → `engine/vfx.ts`)
 - `AnimGesture` — 9 (`types.ts` → `engine/animator.ts`)
@@ -79,7 +89,7 @@ Everything is lint-valid, so the failure mode is **sameness**, not breakage:
 - **Data first, engine second.** Most of the fix is authoring `silhouette`,
   `vfx` color/scale, `anim`, `sound`, `appearance`, and `attackVisual` data, plus
   new `HERO_LIKENESS_PROFILES` entries (data + a geometry switch case). Reach for
-  a new vocabulary entry only when §10's bar is met.
+  a new vocabulary entry only when §11's bar is met.
 - **Make the renderer derive more, so data does less.** Where a per-hero hand
   branch exists today (attack animation), replace it with a rule keyed off the
   data the hero already has (weapon kind, silhouette weight). One engine change
@@ -87,6 +97,12 @@ Everything is lint-valid, so the failure mode is **sameness**, not breakage:
 - **Signature, not uniform.** Spend the hand-authoring budget on the ~40 spells
   and ~30 items a Dota player would immediately recognize; let the rest ride the
   (now richer) archetype defaults.
+- **Match the tool to the fidelity target.** Primitives and procedural detail
+  get every hero to "recognizable" cheaply and offline, so they do the bulk of
+  the roster. When a hero, prop, or texture needs to cross from recognizable to
+  genuinely good, bring in a real asset (a CC0 download, an import, or a
+  generated one) instead of stacking more primitives. Keep the procedural
+  version as the fallback so a missing or slow asset never blocks play (§4a, §18).
 - **Every batch ships green.** `npm run typecheck && npm test && npm run build`
   after each batch. Presentation is lint-gated (tests 19–21, appearance/attack
   coverage, boundary, exotic budget, no-asset guards) — treat those as the bar.
@@ -108,6 +124,43 @@ Everything is lint-valid, so the failure mode is **sameness**, not breakage:
 | G | New vocabulary entries (vortex/dome/mine, gun/mount, shred-flash) | `types.ts` + renderers + lint | engine | ★★ |
 | H | Scene / material / texture polish | `scene.ts`, `terrain.ts`, `performance.ts` | engine | ★★★ |
 | I | Audio tie-ins (optional) | `audio.ts` | data + small engine | ★ |
+| J | Asset acquisition, generation & import pipeline | `assets.ts`, build scripts, `public/assets/` | tooling + assets | ★★★★ |
+
+WS-J is the new lever this revision adds. It is detailed in §18, and it feeds A,
+E, H, and I: real GLBs upgrade likeness, texture/sprite sets upgrade items and
+the frame, HDRIs and music beds upgrade the scene and audio.
+
+---
+
+## 4a. Local vs. remote is a performance decision
+
+Where an asset lives is a question about load time and the perf budget, not about
+saving disk. Decide per asset with three questions:
+
+1. **Is it on the boot path?** Anything needed to render the town, the starter
+   heroes, and the active region ships **local** (committed under
+   `public/assets/`, bundled at build). Local means zero network latency and full
+   offline play.
+2. **Is it big and optional?** Marquee GLBs, raid-boss models, high-res HDRIs, and
+   alternate texture tiers can load **remote** (a CDN or release bucket), fetched
+   lazily on first use and cached. Remote keeps the initial download small and
+   the repo lean while still raising fidelity for players who reach that content.
+3. **What tier is the player on?** The low tier loads neither the heavy local nor
+   the remote extras and stays procedural. Medium loads local. High/ultra may
+   pull remote upgrades.
+
+Rules that make this safe:
+
+- **Procedural fallback is always wired** behind both paths. A failed or slow
+  fetch falls back to the local asset; a missing local asset falls back to
+  procedural. Play never blocks on a load (the existing scene-token guard in
+  `scene.ts` already invalidates stale async loads).
+- **Budget is explicit, not zero.** Per `DECISIONS` §13.5 the committed budget is
+  ~60–90 MB, tier-gated. Remote assets sit outside that and carry their own
+  size/latency budget. Track both in `ASSETS.md`.
+- **Provenance is tracked.** Every shipped asset (local or remote) gets an
+  `ASSETS.md` row: source, license (CC0 or original/generated), and which
+  manifest entry references it. An asset with no row fails review.
 
 ---
 
@@ -190,7 +243,7 @@ cover most spells. Two moves:
    `color`/`color2`/`scale` so a `storm` Ravage reads teal-and-foam while a
    `storm` Black Hole reads violet-void. Pure data; do this for the whole §11
    "signature" column.
-2. **Add a small number of new archetypes** for shapes nothing covers (§10):
+2. **Add a small number of new archetypes** for shapes nothing covers (§11):
    - `vortex` — inward-spiraling pull: Black Hole, Reverse Polarity, Vacuum,
      Rolling Thunder, Maelstrom-style, Macropyre rings.
    - `dome` — a hemispherical zone: Chronosphere, Arena of Blood, Static Storm,
@@ -298,7 +351,7 @@ the perf budget with the extras off.
 Mostly already covered. Optional: hand-set `sound` on signature casts to a
 better-fitting archetype (`roar` for big STR ults, `void` for void/portal kits,
 `frost` for cryo), and consider one new `SoundArchetype` only if a signature
-family (e.g. `lightning` distinct from `storm`) is worth §10's cost. The
+family (e.g. `lightning` distinct from `storm`) is worth §11's cost. The
 no-audio-import guard (test 21) and voice-pool cap must stay green.
 
 ---
@@ -537,8 +590,15 @@ override. `[has]` = present today. Pure data unless a kind is flagged `[G]`.
 ## 16. Delivery batches
 
 Each batch ships green (`typecheck` + `test` + `build`), adds a couple of feel
-tests for bespoke pieces, and respects the perf budget.
+tests for bespoke pieces, and respects the perf budget. The procedural batches
+(1–10) and the asset batches (0, 11–13) run in parallel: procedural raises the
+whole roster's floor while assets raise the ceiling on the marquee pieces.
 
+0. **WS-J P0 — asset pipeline + ledger.** Stand up
+   `scripts/assets/build_assets.mjs`, the `public/assets/` tree, and the
+   `ASSETS.md` provenance ledger; confirm the local/remote loader policy (§4a) and
+   the no-asset boot floor. No visible change yet; this unblocks every asset
+   batch. Gate: build + no-asset boot.
 1. **WS-D attack rework + WS-C signature cast `anim` pass.** One engine change in
    `animator.ts` (weapon-driven attack) lifts all 122 heroes; hand-set `anim` on
    signature casts (pure data). Gate: `movement`, `kit-smoke`, anim coverage.
@@ -564,6 +624,15 @@ tests for bespoke pieces, and respects the perf budget.
    harness.
 10. **WS-I audio tie-ins (optional, last).** Signature `sound` reassignments;
     keep no-audio-import + voice-cap green.
+11. **WS-J terrain PBR + HDRI sky** (highest-ROI assets, §18.3). Local,
+    region-preloaded; the low tier skips the HDR. Gate: perf budget +
+    scene-token guard.
+12. **WS-J props / foliage / town + particle sprites**, feeding WS-H and WS-B.
+    All `InstancedMesh`. Gate: perf budget + perf-harness.
+13. **WS-J marquee GLBs** — raid bosses first, then the starter + iconic heroes
+    — flipped on one at a time in `ENABLED_HERO_MODELS` with the procedural
+    fallback intact; this upgrades WS-A likeness for those heroes and unlocks the
+    live rotating portrait (WS-F). Gate: manifest tests + boundary + no-asset boot.
 
 ---
 
@@ -580,12 +649,99 @@ tests for bespoke pieces, and respects the perf budget.
   dilutes "content is pure data." Map onto existing archetypes first; the §14
   `[G]` flags are the *only* approved candidates — anything beyond them needs the
   same §11 bar.
-- **Boundary + no-asset guarantees are non-negotiable.** Core never reads
-  `appearance`/`attackVisual`; no batch adds a raw audio/model import; the low
-  tier and the GLB-absent path keep booting and playing.
-- **Perf under load.** New particles, rim light, and per-element grade must hold
-  the 30-unit / 200-projectile budget on a teamfight; verify with `perf-harness`
-  and `perf-budget` after WS-H. Everything extra is off on the low tier and under
-  `reducedMotion`.
-- **Balance/feel unaffected.** This plan touches only renderer-side data and
-  engine; no sim numbers change, so the macro/determinism tests should not move.
+- **Boundary + boot floor stay non-negotiable; asset imports are welcome.** Core
+  never reads `appearance`/`attackVisual`, and the low tier plus the asset-absent
+  path keep booting and playing. Importing model/texture/HDRI assets is allowed
+  and encouraged. The synth audio path keeps its no-raw-import guard until we add
+  a separate, budgeted sampled-audio loader (§18.3), so the guard stays meaningful.
+- **Asset weight, latency, and licensing are real costs.** Every committed asset
+  counts against the ~60–90 MB tier-gated budget; every remote asset adds first-
+  use latency. Compress hard (meshopt GLB, webp/ktx2 textures), lazy-load by
+  region and tier, and keep `ASSETS.md` honest: CC0 or original/generated only,
+  never Valve files (`DECISIONS` §1.1).
+- **Perf under load.** New particles, rim light, per-element grade, and any GLBs
+  must hold the 30-unit / 200-projectile budget on a teamfight; verify with
+  `perf-harness` and `perf-budget` after WS-H and after each GLB flip. Everything
+  extra is off on the low tier and under `reducedMotion`.
+- **Balance/feel unaffected.** This plan touches only renderer-side data, engine,
+  and assets; no sim numbers change, so the macro/determinism tests should not
+  move.
+
+---
+
+## 18. WS-J — Asset acquisition, generation & import pipeline
+
+Procedural detail gets the roster to "recognizable." This workstream is how we
+cross to "good" where it pays off, by sourcing real assets and running them
+through the pipeline that already exists in the codebase (`assets.ts` manifest +
+`HeroAssetLoader` + the meshopt/sharp build scripts described in `DECISIONS`
+§13.5).
+
+### 18.1 Where assets come from
+
+Three sources, each ending in an `ASSETS.md` row:
+
+- **Download (CC0 packs).** The art direction is locked to one stylized-but-
+  grounded CC0 family (`DECISIONS` §13.3): Quaternius / KayKit / Kenney for models
+  and props, Poly Haven for HDRIs, ambientCG for terrain PBR. CC0 needs no
+  attribution; we credit in `ASSETS.md` for provenance. Off-family assets get
+  retextured into the family or stay procedural.
+- **Generate.** When no CC0 asset fits, generate one. Tools (gltf-transform,
+  procedural mesh/texture scripts) or asset-generation models produce textures,
+  sprites, normal/detail maps, icons, and HDRIs. Generated assets are "original"
+  in `ASSETS.md` and pass the same family-cohesion review and the esports/IP
+  denylist that `data-lint` test 23 already enforces on names and lore.
+- **Author by hand.** Small bespoke pieces (a signature weapon, a boss prop)
+  where neither a download nor a generation lands well.
+
+The IP rule from `DECISIONS` §1.1 holds: never ship Valve hero files. A hero is a
+CC0 archetype base plus our retexture and gear for resemblance, or generated, or
+procedural.
+
+### 18.2 The pipeline (mostly already wired)
+
+- **Build step.** `scripts/assets/build_assets.mjs` (gltf-transform + meshopt +
+  sharp) resamples, prunes, dedups, and meshopt-compresses GLBs, and resizes
+  textures to webp/ktx2. Raw source packs stay gitignored under `tmp/asset_src/`;
+  only the optimized output lands in `public/assets/`.
+- **Manifest + loader.** `assets.ts` already exposes the hero manifest,
+  `ENABLED_HERO_MODELS` (empty today), `HeroAssetLoader`, and `creepCreatureUrl`,
+  with the meshopt decoder wired. Shipping an asset means: drop the optimized file
+  under `public/assets/`, add a manifest entry, add an `ASSETS.md` row, and (for
+  heroes) flip the id into `ENABLED_HERO_MODELS`.
+- **Mount + fallback.** `models.mountHeroModel` swaps the procedural body for the
+  loaded scene (height-fit, feet-seat, shadows on), and the animator drives its
+  clips through the mixer path. The procedural rig stays hidden rather than
+  disposed, so a later failure falls back cleanly.
+- **Remote variant.** For lazy/remote assets the loader takes an absolute CDN URL
+  instead of a `public/assets/` path. The scene-token guard already invalidates
+  stale async loads, so the same mount-and-fallback path covers remote too.
+
+### 18.3 What to acquire, in payoff order
+
+1. **Terrain PBR + HDRI sky** (ambientCG + Poly Haven). Highest ROI, zero hero
+   IP, lifts every scene at once. Local, region-preloaded; the low tier skips the
+   HDR.
+2. **Props / foliage / town** (Quaternius / KayKit), all `InstancedMesh`. Makes
+   the overworld and town read like a base instead of a primitive field.
+3. **Particle sprites + telegraph textures** (Kenney or generated) feeding WS-H
+   and WS-B: shard/ember/snow sprites, spiked/hatched/dotted telegraphs.
+4. **Creep / boss GLBs** for the marquee raid bosses (the Roshan-like and Lord-of-
+   Terror-like fights) where the payoff is highest; mapped via the creep manifest.
+5. **Hero GLBs**, starting with the 3 starters plus a few iconic heroes (the
+   `PHASE5_STARTER_ASSETS` set), flipped on one at a time in `ENABLED_HERO_MODELS`
+   with the procedural fallback intact. Each flip upgrades WS-A likeness for that
+   hero and unlocks the live rotating portrait in WS-F.
+6. **Sampled audio (optional).** If the synth ever caps out, add a separate,
+   budgeted sampled-audio loader rather than touching the synth path, so the
+   test-21 no-raw-import guard on the synth stays meaningful.
+
+### 18.4 Gates
+
+- Every shipped asset (local or remote) has an `ASSETS.md` row; review rejects
+  orphans.
+- The no-asset boot and low-tier-procedural paths stay green (the boot floor).
+- Committed assets stay within the ~60–90 MB tier-gated ceiling; remote assets are
+  tracked separately with their own latency budget.
+- The `data-lint` manifest tests (`PHASE5_STARTER_ASSETS` shape, fallback =
+  `procedural`) and the boundary guard stay green.
