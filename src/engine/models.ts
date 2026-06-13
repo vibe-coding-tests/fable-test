@@ -20,6 +20,8 @@ export interface UnitRig {
   itemLayer: THREE.Group;
   height: number;
   scale: number;
+  attackBuild: SilhouetteSpec['build'];
+  attackWeapon: NonNullable<SilhouetteSpec['weapon']> | ItemWeaponVisualKind;
   materials: THREE.MeshStandardMaterial[];
   mixer?: THREE.AnimationMixer;
   actions?: Partial<Record<AuthoredActionName, THREE.AnimationAction>>;
@@ -180,7 +182,16 @@ export function buildUnitRig(sil: SilhouetteSpec, palette: [string, string, stri
   root.add(body);
   root.add(itemLayer);
 
-  const rig: UnitRig = { root, body, itemLayer, height: 1.8 * s, scale: s, materials };
+  const rig: UnitRig = {
+    root,
+    body,
+    itemLayer,
+    height: 1.8 * s,
+    scale: s,
+    attackBuild: sil.build,
+    attackWeapon: sil.weapon ?? 'none',
+    materials
+  };
 
   switch (sil.build) {
     case 'ward': {
@@ -1005,6 +1016,7 @@ export function applyItemAppearances(rig: UnitRig, apps: ItemAppearanceSpec[]): 
 function replaceWeapon(rig: UnitRig, weapon: ItemAppearanceSpec['weapon'] | undefined): void {
   if (!weapon) return;
   if (rig.weapon?.parent) rig.weapon.parent.remove(rig.weapon);
+  rig.attackWeapon = weapon.kind;
   const matS = lam(weapon.color ?? '#d8dce8', weapon.emissive ? 0x111111 : 0);
   const matA = lam(weapon.emissive ?? '#ffe27d', weapon.emissive ? 0x181818 : 0);
   const next = buildWeapon(weapon.kind, rig.scale, matS, matA);

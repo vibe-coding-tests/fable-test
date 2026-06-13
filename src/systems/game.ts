@@ -1740,6 +1740,172 @@ export class Game {
     for (const id of ids) this.journalSeen.add(id);
   }
 
+  // ---------- the Compendium: Atlas (Items) + Heroes (LOOT_OVERHAUL §3.7) ----------
+
+  /**
+   * Invert every live drop/shop/gamble source into a per-item index, so the
+   * Atlas is derived from the tables and can never drift: add a boss anchor in
+   * data and it shows up here for free. Pure read; touches no save state.
+   */
+  private buildAtlasSourceIndex(): Map<string, { label: string; detail: string }[]> {
+    const idx = new Map<string, { label: string; detail: string }[]>();
+    const add = (itemId: string, label: string, detail: string): void => {
+      if (!REG.items.has(itemId)) return;
+      const list = idx.get(itemId) ?? [];
+      if (!list.some((s) => s.label === label && s.detail === detail)) list.push({ label, detail });
+      idx.set(itemId, list);
+    };
+    const addDropTable = (table: ItemDropTable | undefined, label: string, detail: string): void => {
+      if (!table) return;
+      for (const g of table.guaranteed) add(g, label, `${detail} · guaranteed`);
+      for (const slot of table.slots) for (const e of slot.pool) add(e.id, label, `${detail} · ${slot.rarity}`);
+    };
+
+    for (const boss of REG.bosses.values()) {
+      const hero = REG.heroes.get(boss.heroId);
+      const label = `${hero?.name ?? boss.heroId} (${boss.rank})`;
+      const where = REG.regions.get(boss.region)?.name ?? boss.region;
+      for (const g of boss.loot.guaranteed) add(g, label, `${where} · guaranteed`);
+      for (const a of boss.loot.assembledPool) add(a, label, `${where} · drop`);
+    }
+    for (const raid of REG.raids.values()) {
+      for (const g of raid.loot.guaranteed) add(g, raid.name, 'Raid · guaranteed');
+      for (const a of raid.loot.assembledPool) add(a, raid.name, 'Raid · drop');
+    }
+    for (const d of REG.dungeons.values()) {
+      for (const [roomType, table] of Object.entries(d.loot)) addDropTable(table, d.name, `Dungeon · ${roomType}`);
+    }
+    for (const c of REG.creeps.values()) {
+      if (c.drops) addDropTable(c.drops, c.name, 'Wild creep');
+    }
+    for (const [tier, table] of Object.entries(DEFAULT_CREEP_DROP_TABLES)) {
+      addDropTable(table, `Wild creeps (${tier})`, 'Overworld');
+    }
+    for (const attribute of ['str', 'agi', 'int']) {
+      for (const id of this.echoComponentPool(attribute)) {
+        if (itemAllowedFromSource(id, 'echo')) add(id, 'Owned-hero echoes', `${attribute.toUpperCase()} heroes`);
+      }
+    }
+    for (const region of REG.regions.values()) {
+      for (const id of region.shopInventory ?? []) add(id, 'Town shop', region.name);
+      for (const id of region.secretShop?.inventory ?? []) add(id, 'Secret shop', region.name);
+    }
+    const relicCeiling = RARITY_RANK[TUNING.blackMarket.relicRarityCeiling];
+    for (const item of REG.items.values()) {
+      if (!itemAllowedFromSource(item.id, 'gamble')) continue;
+      if (['component', 'basic'].includes(item.tier)) add(item.id, 'Black Market', 'Recipe wheel');
+      if (item.tier === 'core' && !GATED_TOP_TIER.has(item.id)) {
+        const rank = RARITY_RANK[item.rarity ?? 'common'];
+        if (rank >= RARITY_RANK.rare && rank <= relicCeiling) add(item.id, 'Black Market', 'Relic wheel');
+      }
+    }
+    return idx;
+  }
+
+  /**
+   * The Items tab / loot Atlas: for every encountered item, its identity,
+   * recipe (flagging the drop-gated core), the quality grades it can wear, and
+   * every source computed live from the drop tables (LOOT_OVERHAUL §3.7).
+   */
+  atlasEntries(): {
+    items: {
+      id: string;
+      name: string;
+      rarity: ItemRarity;
+      tier: string;
+      cost: number;
+      reserved: string;
+      recipe: { id: string; name: string; gated: boolean }[];
+      recipeCost: number;
+      qualities: string[];
+      sources: { label: string; detail: string }[];
+      lore: string;
+    }[];
+  } {
+    this.syncEncounterCodex();
+    const index = this.buildAtlasSourceIndex();
+    const qualities = Object.values(QUALITY_GRADES).map((q) => q.name);
+    const items = [...REG.items.values()]
+      .filter((def) => this.codexUnlocks.has('item:' + def.id))
+      .map((def) => ({
+        id: def.id,
+        name: def.name,
+        rarity: (def.rarity ?? 'common') as ItemRarity,
+        tier: def.tier,
+        cost: def.cost,
+        reserved: def.exclusiveTo && def.exclusiveTo.length > 0 ? def.exclusiveTo.join('/') + '-only' : '',
+        recipe: (def.components ?? []).map((cid) => ({
+          id: cid,
+          name: REG.items.get(cid)?.name ?? cid,
+          gated: shouldBindDroppedItem(cid)
+        })),
+        recipeCost: def.recipeCost ?? 0,
+        qualities,
+        sources: index.get(def.id) ?? [],
+        lore: def.lore
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    return { items };
+  }
+
+  /**
+   * The Heroes tab: every encountered hero projected from `HeroDef` (abilities,
+   * the full 4-tier talent tree, facets, Aghs), with an owned hero's live level
+   * and talent picks overlaid. Pure projection; writes nothing (LOOT_OVERHAUL §3.7).
+   */
+  heroCompendium(): {
+    heroes: {
+      id: string;
+      name: string;
+      title: string;
+      attribute: string;
+      roles: string[];
+      lore: string;
+      owned: boolean;
+      level: number | null;
+      abilities: { name: string; ult: boolean; lore: string; cooldown: string; manaCost: string }[];
+      talents: { level: number; options: [string, string]; picked: 0 | 1 | null }[];
+      facets: { name: string; description: string }[];
+      aghs: { name: string; description: string; implemented: boolean } | null;
+    }[];
+  } {
+    this.syncEncounterCodex();
+    const owned = new Map(this.allOwnedHeroSaves().map((h) => [h.heroId, h]));
+    const heroes = [...REG.heroes.values()]
+      .filter((h) => this.codexUnlocks.has('hero:' + h.id))
+      .map((h) => {
+        const save = owned.get(h.id);
+        return {
+          id: h.id,
+          name: h.name,
+          title: h.title,
+          attribute: h.attribute.toUpperCase(),
+          roles: h.roles,
+          lore: h.lore,
+          owned: !!save,
+          level: save?.level ?? null,
+          abilities: h.abilities.map((a) => ({
+            name: a.name,
+            ult: !!a.ult,
+            lore: a.lore ?? '',
+            cooldown: a.cooldown && a.cooldown.length > 0 ? a.cooldown.join('/') + 's' : '—',
+            manaCost: a.manaCost && a.manaCost.length > 0 ? a.manaCost.join('/') : '—'
+          })),
+          talents: h.talents.map((t, i) => ({
+            level: t.level,
+            options: [t.options[0].name, t.options[1].name] as [string, string],
+            picked: save?.talentPicks?.[i] ?? null
+          })),
+          facets: h.facets.map((f) => ({ name: f.name, description: f.description })),
+          aghs: h.aghanim
+            ? { name: h.aghanim.name, description: h.aghanim.description, implemented: h.aghanim.implemented }
+            : null
+        };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+    return { heroes };
+  }
+
   // ---------- neutral items + Tinker's Bench (§3.7) ----------
 
   private neutralCandidates(): NeutralItemDef[] {
@@ -1775,14 +1941,18 @@ export class Game {
     return drops;
   }
 
+  /** The component pool an owned-hero echo can drop, by the hero's attribute. Single source of truth for the live table and the Atlas inversion. */
+  private echoComponentPool(attribute: string): string[] {
+    return attribute === 'agi'
+      ? ['band-of-elvenskin', 'blade-of-alacrity', 'eaglesong', 'ultimate-orb']
+      : attribute === 'str'
+        ? ['belt-of-strength', 'ogre-axe', 'reaver', 'vitality-booster']
+        : ['robe-of-the-magi', 'staff-of-wizardry', 'mystic-staff', 'void-stone'];
+  }
+
   private echoComponentTable(heroId: string): ItemDropTable {
     const hero = REG.hero(heroId);
-    const pool =
-      hero.attribute === 'agi'
-        ? ['band-of-elvenskin', 'blade-of-alacrity', 'eaglesong', 'ultimate-orb']
-        : hero.attribute === 'str'
-          ? ['belt-of-strength', 'ogre-axe', 'reaver', 'vitality-booster']
-          : ['robe-of-the-magi', 'staff-of-wizardry', 'mystic-staff', 'void-stone'];
+    const pool = this.echoComponentPool(hero.attribute);
     return {
       guaranteed: [],
       slots: [

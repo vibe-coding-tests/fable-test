@@ -94,8 +94,8 @@ export const FROST_HOLLOW: DungeonDef = {
     { creepId: 'polar-furbolg', weight: 2, cost: 28, minDepth: 2 },
     { creepId: 'granite-golem', weight: 1, cost: 42, minDepth: 4, rarity: 'rare' }
   ],
-  affixPool: ['jailer', 'frozen', 'vortex'],
-  affixes: dungeonAffixes(['jailer', 'frozen', 'vortex']),
+  affixPool: ['jailer', 'frozen', 'vortex', 'fast', 'molten', 'waller', 'shielding', 'thunderstorm'],
+  affixes: dungeonAffixes(['jailer', 'frozen', 'vortex', 'fast', 'molten', 'waller', 'shielding', 'thunderstorm']),
   modifiers: [
     {
       id: 'packed-halls',

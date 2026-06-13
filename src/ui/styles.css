@@ -780,6 +780,21 @@ button:disabled { opacity: 0.45; cursor: default; }
   font-size: 13px;
 }
 
+/* compendium — heroes + atlas tabs */
+.compendium-single { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 22px; }
+.codex-note { padding-left: 8px; }
+.codex-list { margin: 2px 0 6px; padding-left: 16px; font-size: 12px; }
+.codex-list li { margin: 2px 0; color: #cdd9ee; }
+.codex-list em { color: var(--dim); font-style: normal; margin-left: 5px; font-size: 11px; }
+.hero-codex h4, .codex-note h4 { margin: 7px 0 2px; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--gold); }
+.tal-row { font-size: 12px; color: #aebbd2; margin: 1px 0; }
+.tal-row em { color: var(--dim); font-style: normal; margin-right: 5px; }
+.tal-pick { color: var(--gold); font-weight: 600; }
+.atlas-recipe { font-size: 12px; color: #aebbd2; margin: 3px 0; }
+.atlas-core { color: var(--gold); }
+.atlas-qual { font-size: 11px; margin: 3px 0; }
+@media (max-width: 720px) { .compendium-single { grid-template-columns: 1fr; } }
+
 /* menu */
 .menu-grid { display: grid; grid-template-columns: 1.2fr 1fr; gap: 24px; }
 .save-slot {

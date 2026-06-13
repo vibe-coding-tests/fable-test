@@ -25,6 +25,98 @@ interface CastPose {
 // Reused across frames so the cast path never allocates in the render hot loop.
 const POSE: CastPose = { l: 0, r: 0, bodyZ: 0, bodyY: 0, bodyX: 0 };
 
+type AttackStyle =
+  | 'heavy-chop'
+  | 'sword-slash'
+  | 'hook-fling'
+  | 'rifle-shot'
+  | 'staff-jab'
+  | 'creature-lunge'
+  | 'bird-dive'
+  | 'generic-strike';
+
+function attackStyleFor(rig: UnitRig, unit: Unit): AttackStyle {
+  const weapon = rig.attackWeapon;
+  if (rig.attackBuild === 'bird') return 'bird-dive';
+  if ((rig.attackBuild === 'quad' || rig.attackBuild === 'blob') && weapon === 'none') return 'creature-lunge';
+  if (weapon === 'hook') return 'hook-fling';
+  if (weapon === 'rifle') return 'rifle-shot';
+  if (weapon === 'staff' || weapon === 'long-pole') return 'staff-jab';
+  if (weapon === 'sword' || weapon === 'glowing-blade') return 'sword-slash';
+  if (weapon === 'cleaver' || weapon === 'totem' || weapon === 'broad-cleaver' || weapon === 'storm-haft') {
+    return 'heavy-chop';
+  }
+  if (unit.stats.attackRange > 260) return 'rifle-shot';
+  return 'generic-strike';
+}
+
+function applyAttackWindup(
+  style: AttackStyle,
+  rig: UnitRig,
+  body: UnitRig['body'],
+  t: number
+): { l: number; r: number } {
+  const w = rig.scale;
+  const strike = Math.sin(t * Math.PI);
+  switch (style) {
+    case 'heavy-chop':
+      body.rotation.z = strike * 0.16 * w;
+      body.position.x += strike * 0.05;
+      return { l: -2.3 + t * 2.9, r: -2.3 + t * 2.9 };
+    case 'sword-slash':
+      body.rotation.y = strike * 0.38;
+      body.rotation.z = strike * 0.05;
+      return { l: 0.1 - t * 0.35, r: -1.8 + t * 3.2 };
+    case 'hook-fling':
+      body.rotation.z = strike * 0.14;
+      body.position.x -= strike * 0.04;
+      return { l: -0.35, r: -1.95 + t * 2.95 };
+    case 'rifle-shot':
+      body.position.x -= strike * 0.08;
+      return { l: -1.05, r: -1.05 + t * 0.32 };
+    case 'staff-jab':
+      body.rotation.z = strike * 0.04;
+      body.position.x += strike * 0.04;
+      return { l: -0.7, r: -1.55 + t * 1.25 };
+    case 'creature-lunge':
+      body.position.x += strike * 0.18 * w;
+      body.position.y += strike * 0.06;
+      body.rotation.z = strike * 0.04 * w;
+      return { l: 0.45 - t * 0.55, r: 0.45 - t * 0.55 };
+    case 'bird-dive':
+      body.position.x += strike * 0.14 * w;
+      body.position.y -= strike * 0.08;
+      body.rotation.z = strike * 0.08;
+      return { l: -0.35 + strike * 0.45, r: -0.35 + strike * 0.45 };
+    case 'generic-strike':
+    default:
+      body.rotation.z = strike * 0.05 * w;
+      return { l: 0.05, r: (-1.4 - 0.4 * w) + t * (2.0 + 0.6 * w) };
+  }
+}
+
+function applyAttackFollowThrough(style: AttackStyle, body: UnitRig['body'], flash: number): { l?: number; r?: number } {
+  switch (style) {
+    case 'rifle-shot':
+      return { l: -0.85, r: -0.85 };
+    case 'staff-jab':
+      return { l: -0.25, r: 0.45 * flash };
+    case 'heavy-chop':
+      body.rotation.z -= 0.08 * flash;
+      return { l: 0.45 * flash, r: 0.65 * flash };
+    case 'hook-fling':
+      return { r: 0.9 * flash };
+    case 'creature-lunge':
+    case 'bird-dive':
+      body.position.x += 0.12 * flash;
+      return {};
+    case 'sword-slash':
+    case 'generic-strike':
+    default:
+      return { r: 0.8 * flash };
+  }
+}
+
 /** Closed-vocabulary gesture player: one pose per AnimGesture, weight-shaped. */
 function castPose(g: AnimGesture, castStyle: string | undefined, time: number, weight: number): CastPose {
   // Heavier silhouettes sway slower and lean more; daintier ones flit.
@@ -239,6 +331,7 @@ export function animateRig(rig: UnitRig, unit: Unit, st: AnimState, dt: number, 
   }
   st.deathT = 0;
   body.rotation.z = 0;
+  body.rotation.y = 0;
 
   // run cycle
   st.runPhase += dt * (4 + st.speedSmooth / 60);
@@ -260,39 +353,18 @@ export function animateRig(rig: UnitRig, unit: Unit, st: AnimState, dt: number, 
   let armSwingR = moving ? swing * 0.6 : -0.05;
 
   // attack windup/strike. The timing is still driven by attackPoint/BAT;
-  // these branches just give iconic heroes different silhouettes in motion.
+  // weapon/build only changes the silhouette of the motion.
   if (unit.windupUntil > 0) {
     const total = Math.max(0.05, unit.stats.attackPoint);
     const t = 1 - Math.max(0, unit.windupUntil - simTime) / total;
-    const ranged = unit.stats.attackRange > 260;
-    if (unit.heroId === 'earthshaker') {
-      armSwingL = -2.3 + t * 2.9;
-      armSwingR = -2.3 + t * 2.9;
-      body.rotation.z = Math.sin(t * Math.PI) * 0.18;
-    } else if (unit.heroId === 'pudge') {
-      armSwingR = -1.9 + t * 2.8;
-      body.rotation.z = Math.sin(t * Math.PI) * 0.14;
-    } else if (unit.heroId === 'sniper' || ranged) {
-      armSwingL = -1.05;
-      armSwingR = -1.05 + t * 0.32;
-      body.position.x -= Math.sin(t * Math.PI) * 0.08;
-    } else if (unit.heroId === 'juggernaut') {
-      armSwingR = -1.8 + t * 3.2;
-      body.rotation.y = Math.sin(t * Math.PI) * 0.42;
-    } else {
-      // weighted generic strike: heavy silhouettes wind up bigger/slower
-      const w = rig.scale;
-      armSwingR = (-1.4 - 0.4 * w) + t * (2.0 + 0.6 * w);
-      body.rotation.z = Math.sin(t * Math.PI) * 0.05 * w;
-    }
+    const pose = applyAttackWindup(attackStyleFor(rig, unit), rig, body, t);
+    armSwingL = pose.l;
+    armSwingR = pose.r;
     st.attackFlash = 1;
   } else if (st.attackFlash > 0) {
-    if (unit.heroId === 'sniper' || unit.stats.attackRange > 260) {
-      armSwingL = -0.85;
-      armSwingR = -0.85;
-    } else {
-      armSwingR = 0.8 * st.attackFlash;
-    }
+    const pose = applyAttackFollowThrough(attackStyleFor(rig, unit), body, st.attackFlash);
+    if (pose.l !== undefined) armSwingL = pose.l;
+    if (pose.r !== undefined) armSwingR = pose.r;
     st.attackFlash = Math.max(0, st.attackFlash - dt * 5);
   }
   if (st.lungeFlash > 0) {
@@ -338,7 +410,6 @@ export function animateRig(rig: UnitRig, unit: Unit, st: AnimState, dt: number, 
 
   // lean into motion
   body.rotation.x = 0;
-  body.rotation.y = 0;
   if (moving) body.rotation.x = Math.min(0.18, st.speedSmooth / 3000);
 
   // spin (Blade Fury / cyclone visuals)

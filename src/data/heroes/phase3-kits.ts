@@ -15,6 +15,10 @@ function tag(a: AbilityDef): AbilityDef {
   return { ...a, anim: gestureForAbility(a), sound: soundForAbility(a) };
 }
 
+function withAnim(a: AbilityDef, anim: NonNullable<AbilityDef['anim']>): AbilityDef {
+  return { ...a, anim };
+}
+
 function kit(a: AbilityDef, b: AbilityDef, c: AbilityDef, d: AbilityDef): Kit {
   return [tag(a), tag(b), tag(c), tag(d)];
 }
@@ -142,13 +146,13 @@ export const AUTHORED_PHASE3_KITS: Partial<Record<HeroDef['id'], Kit>> = {
     nova('sf-shadowraze-near', 'Shadowraze', '#d84a32', [], 'magical'),
     attack('sf-necromastery', 'Necromastery', '#111111', { procChance: 100, bonusDamage: 'damage' }, { damage: [14, 26, 38, 50] }),
     passive('sf-presence', 'Presence of the Dark Lord', '#5f0b0b', { damage: 16 }),
-    ultArea('sf-requiem', 'Requiem of Souls', '#d84a32', [{ kind: 'damage', dtype: 'magical', amount: 'damage', target: 'enemies-in-radius', radius: 'radius' }, { kind: 'status', status: 'fear', duration: 'disable', target: 'enemies-in-radius', radius: 'radius' }], 'storm')
+    withAnim(ultArea('sf-requiem', 'Requiem of Souls', '#d84a32', [{ kind: 'damage', dtype: 'magical', amount: 'damage', target: 'enemies-in-radius', radius: 'radius' }, { kind: 'status', status: 'fear', duration: 'disable', target: 'enemies-in-radius', radius: 'radius' }], 'storm'), 'global-cast')
   ),
   riki: kit(
     ground('riki-smoke-screen', 'Smoke Screen', '#6a4cff', [{ kind: 'status', status: 'silence', duration: 1.2, target: 'target' }, { kind: 'status', status: 'blind', duration: 1.2, target: 'target' }]),
     target('riki-blink-strike', 'Blink Strike', '#c8b8ff', [{ kind: 'displace', mode: 'blink', target: 'self', toward: 'target-unit' }], 'physical'),
     passive('riki-cloak-and-dagger', 'Cloak and Dagger', '#1c1436', { evasionPct: 18, damage: 18 }),
-    ultArea('riki-tricks', 'Tricks of the Trade', '#6a4cff', [{ kind: 'status', status: 'cyclone', duration: 1.5, target: 'self' }, { kind: 'damage', dtype: 'physical', amount: 'damage', target: 'enemies-in-radius', radius: 'radius' }], 'channel')
+    withAnim(ultArea('riki-tricks', 'Tricks of the Trade', '#6a4cff', [{ kind: 'status', status: 'cyclone', duration: 1.5, target: 'self' }, { kind: 'damage', dtype: 'physical', amount: 'damage', target: 'enemies-in-radius', radius: 'radius' }], 'channel'), 'channel-loop')
   ),
   'bounty-hunter': kit(
     target('bh-shuriken-toss', 'Shuriken Toss', '#d99a28'),
@@ -172,7 +176,7 @@ export const AUTHORED_PHASE3_KITS: Partial<Record<HeroDef['id'], Kit>> = {
     line('sk-burrowstrike', 'Burrowstrike', '#d9a441', [status('stun', 1.3)]),
     ground('sk-sand-storm', 'Sand Storm', '#7a4b1c', [{ kind: 'status', status: 'blind', duration: 1, target: 'target' }]),
     attack('sk-caustic-finale', 'Caustic Finale', '#fff0a8', { procChance: 100, bonusDamage: 'damage', procStatus: { status: 'slow', duration: 2, params: { moveSlowPct: 'slow' } } }, { damage: [20, 35, 50, 65], slow: [10, 15, 20, 25] }),
-    ultArea('sk-epicenter', 'Epicenter', '#d9a441', [{ kind: 'repeat', count: 6, interval: 0.45, effects: [{ kind: 'damage', dtype: 'magical', amount: 'damage', target: 'enemies-in-radius', radius: 'radius' }, { kind: 'status', status: 'slow', duration: 1, target: 'enemies-in-radius', radius: 'radius', params: { moveSlowPct: 35 } }] }], 'storm')
+    withAnim(ultArea('sk-epicenter', 'Epicenter', '#d9a441', [{ kind: 'repeat', count: 6, interval: 0.45, effects: [{ kind: 'damage', dtype: 'magical', amount: 'damage', target: 'enemies-in-radius', radius: 'radius' }, { kind: 'status', status: 'slow', duration: 1, target: 'enemies-in-radius', radius: 'radius', params: { moveSlowPct: 35 } }] }], 'storm'), 'channel-loop')
   ),
   'nyx-assassin': kit(
     line('nyx-impale', 'Impale', '#5d3b9a', [status('stun', 1.4)]),
@@ -202,7 +206,7 @@ export const AUTHORED_PHASE3_KITS: Partial<Record<HeroDef['id'], Kit>> = {
     target('tide-gush', 'Gush', '#2aa88f', [{ kind: 'statmod', mods: { armor: -5 }, duration: 4, target: 'target' }, { kind: 'status', status: 'slow', duration: 4, target: 'target', params: { moveSlowPct: 35 } }]),
     passive('tide-kraken-shell', 'Kraken Shell', '#13453e', { damageTakenReductionPct: 14, statusResistPct: 25 }),
     nova('tide-anchor-smash', 'Anchor Smash', '#b4f0dd', [{ kind: 'statmod', mods: { damagePct: -25 }, duration: 4, target: 'enemies-in-radius', radius: 'radius' }], 'physical'),
-    ultArea('tide-ravage', 'Ravage', '#2aa88f', [{ kind: 'damage', dtype: 'magical', amount: 'damage', target: 'enemies-in-radius', radius: 'radius' }, { kind: 'status', status: 'stun', duration: 'disable', target: 'enemies-in-radius', radius: 'radius' }], 'storm')
+    withAnim(ultArea('tide-ravage', 'Ravage', '#2aa88f', [{ kind: 'damage', dtype: 'magical', amount: 'damage', target: 'enemies-in-radius', radius: 'radius' }, { kind: 'status', status: 'stun', duration: 'disable', target: 'enemies-in-radius', radius: 'radius' }], 'storm'), 'ground-slam')
   ),
   slardar: kit(
     buff('slardar-sprint', 'Guardian Sprint', '#8050d8', { moveSpeedPct: 35 }, { duration: [5, 6, 7, 8] }),
@@ -214,7 +218,7 @@ export const AUTHORED_PHASE3_KITS: Partial<Record<HeroDef['id'], Kit>> = {
     summonSpell('naga-mirror-image', 'Mirror Image', '#4bb8d8', nagaImage, 'count'),
     target('naga-ensnare', 'Ensnare', '#f0d08a', [status('root', 2.2)]),
     nova('naga-rip-tide', 'Rip Tide', '#174257', [{ kind: 'statmod', mods: { armor: -4 }, duration: 4, target: 'enemies-in-radius', radius: 'radius' }], 'physical'),
-    ultArea('naga-song', 'Song of the Siren', '#4bb8d8', [{ kind: 'status', status: 'sleep', duration: 'disable', target: 'enemies-in-radius', radius: 'radius' }], 'channel')
+    withAnim(ultArea('naga-song', 'Song of the Siren', '#4bb8d8', [{ kind: 'status', status: 'sleep', duration: 'disable', target: 'enemies-in-radius', radius: 'radius' }], 'channel'), 'channel-loop')
   ),
   slark: kit(
     nova('slark-dark-pact', 'Dark Pact', '#2a6f8f', [{ kind: 'purge', target: 'self' }], 'magical'),
@@ -254,7 +258,7 @@ export const AUTHORED_PHASE3_KITS: Partial<Record<HeroDef['id'], Kit>> = {
   ),
   invoker: kit(
     buff('invoker-orbs', 'Quas Wex Exort', '#f8d36a', { spellAmpPct: 10, manaRegen: 2, attackSpeed: 25 }, { duration: [8, 9, 10, 11] }),
-    ground('invoker-sun-strike', 'Sun Strike', '#f8d36a', [], 'pure'),
+    withAnim(ground('invoker-sun-strike', 'Sun Strike', '#f8d36a', [], 'pure'), 'global-cast'),
     summonSpell('invoker-forge-spirit', 'Forge Spirit', '#7a3cff', forgeSpirit, 1),
     ultArea('invoker-invoke', 'Invoke', '#a8e8ff', [{ kind: 'exotic', id: 'invoke', params: { heroId: 'invoker' } }, { kind: 'repeat', count: 3, interval: 0.4, effects: [{ kind: 'damage', dtype: 'magical', amount: 'damage', target: 'enemies-in-radius', radius: 'radius' }] }], 'global-mark')
   ),
@@ -274,7 +278,7 @@ export const AUTHORED_PHASE3_KITS: Partial<Record<HeroDef['id'], Kit>> = {
     target('sky-arcane-bolt', 'Arcane Bolt', '#7ec8ff'),
     target('sky-concussive-shot', 'Concussive Shot', '#f7e39a', [status('slow', 3, { moveSlowPct: 40 })]),
     target('sky-ancient-seal', 'Ancient Seal', '#244d86', [{ kind: 'status', status: 'silence', duration: 3, target: 'target' }, { kind: 'statmod', mods: { magicResistPct: -20 }, duration: 3, target: 'target' }]),
-    ultArea('sky-mystic-flare', 'Mystic Flare', '#7ec8ff', [{ kind: 'repeat', count: 4, interval: 0.35, effects: [{ kind: 'damage', dtype: 'magical', amount: 'damage', target: 'enemies-in-radius', radius: 'radius' }] }], 'channel')
+    withAnim(ultArea('sky-mystic-flare', 'Mystic Flare', '#7ec8ff', [{ kind: 'repeat', count: 4, interval: 0.35, effects: [{ kind: 'damage', dtype: 'magical', amount: 'damage', target: 'enemies-in-radius', radius: 'radius' }] }], 'channel'), 'channel-loop')
   ),
   tinker: kit(
     target('tinker-laser', 'Laser', '#e05040', [status('blind', 2.5)]),
@@ -328,13 +332,13 @@ export const AUTHORED_PHASE3_KITS: Partial<Record<HeroDef['id'], Kit>> = {
     line('magnus-shockwave', 'Shockwave', '#7a4a32', [{ kind: 'displace', mode: 'pull', target: 'target', toward: 'caster', distance: 180, speed: 900 }]),
     buff('magnus-empower', 'Empower', '#d8b080', { damagePct: 25 }, { duration: [8, 9, 10, 11] }, 'target'),
     line('magnus-skewer', 'Skewer', '#331a14', [{ kind: 'displace', mode: 'pull', target: 'target', toward: 'caster', distance: 360, speed: 1100 }, status('stun', 0.8)], 'physical'),
-    ultArea('magnus-rp', 'Reverse Polarity', '#7a4a32', [{ kind: 'displace', mode: 'pull', target: 'enemies-in-radius', radius: 'radius', toward: 'caster', distance: 520, speed: 1200 }, { kind: 'status', status: 'stun', duration: 'disable', target: 'enemies-in-radius', radius: 'radius' }, { kind: 'damage', dtype: 'magical', amount: 'damage', target: 'enemies-in-radius', radius: 'radius' }], 'storm')
+    withAnim(ultArea('magnus-rp', 'Reverse Polarity', '#7a4a32', [{ kind: 'displace', mode: 'pull', target: 'enemies-in-radius', radius: 'radius', toward: 'caster', distance: 520, speed: 1200 }, { kind: 'status', status: 'stun', duration: 'disable', target: 'enemies-in-radius', radius: 'radius' }, { kind: 'damage', dtype: 'magical', amount: 'damage', target: 'enemies-in-radius', radius: 'radius' }], 'storm'), 'ground-slam')
   ),
   'elder-titan': kit(
     nova('et-echo-stomp', 'Echo Stomp', '#8a6a4a', [{ kind: 'status', status: 'sleep', duration: 1.6, target: 'enemies-in-radius', radius: 'radius' }]),
     summonSpell('et-astral-spirit', 'Astral Spirit', '#e0d0b0', beast, 1),
     passive('et-natural-order', 'Natural Order', '#2f2418', { spellAmpPct: 10, damage: 16 }),
-    ultArea('et-earth-splitter', 'Earth Splitter', '#8a6a4a', [{ kind: 'damage', dtype: 'pure', amount: 'damage', target: 'enemies-in-radius', radius: 'radius' }, { kind: 'status', status: 'slow', duration: 'disable', target: 'enemies-in-radius', radius: 'radius', params: { moveSlowPct: 55 } }], 'wall')
+    withAnim(ultArea('et-earth-splitter', 'Earth Splitter', '#8a6a4a', [{ kind: 'damage', dtype: 'pure', amount: 'damage', target: 'enemies-in-radius', radius: 'radius' }, { kind: 'status', status: 'slow', duration: 'disable', target: 'enemies-in-radius', radius: 'radius', params: { moveSlowPct: 55 } }], 'wall'), 'ground-slam')
   ),
   tiny: kit(
     ground('tiny-avalanche', 'Avalanche', '#9a9a8a', [{ kind: 'status', status: 'stun', duration: 0.8, target: 'target' }], 'physical'),
@@ -358,19 +362,19 @@ export const AUTHORED_PHASE3_KITS: Partial<Record<HeroDef['id'], Kit>> = {
     ground('storm-remnant', 'Static Remnant', '#58a8ff'),
     target('storm-vortex', 'Electric Vortex', '#ffffff', [{ kind: 'displace', mode: 'pull', target: 'target', toward: 'caster', distance: 300, speed: 900 }, status('stun', 1.1)]),
     attack('storm-overload', 'Overload', '#1c3c7a', { procChance: 35, bonusDamage: 'damage', procStatus: { status: 'slow', duration: 1, params: { moveSlowPct: 35 } } }, { damage: [30, 50, 70, 90] }),
-    ultArea('storm-ball-lightning', 'Ball Lightning', '#58a8ff', [{ kind: 'displace', mode: 'blink', target: 'self', toward: 'point', distance: 800 }, { kind: 'damage', dtype: 'magical', amount: 'damage', target: 'enemies-in-radius', radius: 'radius' }], 'global-mark')
+    withAnim(ultArea('storm-ball-lightning', 'Ball Lightning', '#58a8ff', [{ kind: 'displace', mode: 'blink', target: 'self', toward: 'point', distance: 800 }, { kind: 'damage', dtype: 'magical', amount: 'damage', target: 'enemies-in-radius', radius: 'radius' }], 'global-mark'), 'dash')
   ),
   'ember-spirit': kit(
     nova('ember-searing-chains', 'Searing Chains', '#ff6b2a', [{ kind: 'status', status: 'root', duration: 1.6, target: 'enemies-in-radius', radius: 'radius' }]),
     nova('ember-sleight', 'Sleight of Fist', '#ffd27a', [], 'physical'),
     buff('ember-flame-guard', 'Flame Guard', '#4a1308', { damageTakenReductionPct: 35 }, { duration: [6, 7, 8, 9] }),
-    ultArea('ember-fire-remnant', 'Fire Remnant', '#ff6b2a', [{ kind: 'displace', mode: 'blink', target: 'self', toward: 'point', distance: 850 }, { kind: 'damage', dtype: 'magical', amount: 'damage', target: 'enemies-in-radius', radius: 'radius' }])
+    withAnim(ultArea('ember-fire-remnant', 'Fire Remnant', '#ff6b2a', [{ kind: 'displace', mode: 'blink', target: 'self', toward: 'point', distance: 850 }, { kind: 'damage', dtype: 'magical', amount: 'damage', target: 'enemies-in-radius', radius: 'radius' }]), 'dash')
   ),
   spectre: kit(
     line('spectre-dagger', 'Spectral Dagger', '#7a67ff', [status('slow', 2.5, { moveSlowPct: 35 })]),
     attack('spectre-desolate', 'Desolate', '#d8d0ff', { procChance: 100, bonusDamage: 'damage' }, { damage: [20, 35, 50, 65] }),
     passive('spectre-dispersion', 'Dispersion', '#1d1838', { damageTakenReductionPct: 16, armor: 4 }),
-    ultArea('spectre-haunt', 'Haunt', '#7a67ff', [{ kind: 'damage', dtype: 'magical', amount: 'damage', target: 'enemies-in-radius', radius: 'radius' }, { kind: 'status', status: 'fear', duration: 'disable', target: 'enemies-in-radius', radius: 'radius' }], 'global-mark')
+    withAnim(ultArea('spectre-haunt', 'Haunt', '#7a67ff', [{ kind: 'damage', dtype: 'magical', amount: 'damage', target: 'enemies-in-radius', radius: 'radius' }, { kind: 'status', status: 'fear', duration: 'disable', target: 'enemies-in-radius', radius: 'radius' }], 'global-mark'), 'summon-gesture')
   ),
   'faceless-void': kit(
     buff('fv-time-walk', 'Time Walk', '#5a46c8', { moveSpeedPct: 45, damageTakenReductionPct: 30 }, { duration: [3, 3.5, 4, 4.5] }),
@@ -388,7 +392,7 @@ export const AUTHORED_PHASE3_KITS: Partial<Record<HeroDef['id'], Kit>> = {
     line('phoenix-icarus-dive', 'Icarus Dive', '#ff7a30', [status('slow', 2, { moveSlowPct: 30 })]),
     target('phoenix-fire-spirits', 'Fire Spirits', '#ffe07a', [{ kind: 'status', status: 'slow', duration: 3, target: 'target', params: { attackSlowPct: 55, dotDps: 24, dotType: 'magical' } }]),
     line('phoenix-sun-ray', 'Sun Ray', '#7a1e08', [{ kind: 'heal', amount: 'damage', target: 'self' }]),
-    ultArea('phoenix-supernova', 'Supernova', '#ff7a30', [{ kind: 'summon', summon: egg, count: 1, at: 'self' }, { kind: 'damage', dtype: 'magical', amount: 'damage', target: 'enemies-in-radius', radius: 'radius' }, { kind: 'status', status: 'stun', duration: 'disable', target: 'enemies-in-radius', radius: 'radius' }], 'global-mark')
+    withAnim(ultArea('phoenix-supernova', 'Supernova', '#ff7a30', [{ kind: 'summon', summon: egg, count: 1, at: 'self' }, { kind: 'damage', dtype: 'magical', amount: 'damage', target: 'enemies-in-radius', radius: 'radius' }, { kind: 'status', status: 'stun', duration: 'disable', target: 'enemies-in-radius', radius: 'radius' }], 'global-mark'), 'summon-gesture')
   ),
   io: kit(
     buff('io-tether', 'Tether', '#c8f6ff', { moveSpeedPct: 20, hpRegen: 18 }, { duration: [6, 7, 8, 9] }, 'target'),

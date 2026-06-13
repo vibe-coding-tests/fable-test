@@ -361,6 +361,31 @@ describe('dungeon session D1/D2', () => {
     expect(g.toasts.some((t) => t.text.includes('ejects the party at the portal'))).toBe(true);
   });
 
+  it('ships the full affix library, each composed from existing primitives', () => {
+    const ids = ['jailer', 'frozen', 'vortex', 'fast', 'molten', 'waller', 'shielding', 'thunderstorm'];
+    const defs = dungeonAffixes(ids);
+    expect(defs).toHaveLength(ids.length);
+    for (const def of defs) expect(def.apply.length).toBeGreaterThan(0);
+    // Frost Hollow draws from the whole library (D3).
+    for (const id of ids) expect(REG.dungeon('frost-hollow').affixPool).toContain(id);
+  });
+
+  it('applies the Shielding affix as a stat buff on the pack', () => {
+    const shieldDungeon: DungeonDef = {
+      ...BASE_DUNGEON,
+      id: 'shield-affix-test',
+      roomCount: { min: 3, max: 3 },
+      spawnPool: [{ creepId: 'kobold', weight: 1, cost: 1, rarity: 'rare' }],
+      affixPool: ['shielding'],
+      affixes: dungeonAffixes(['shielding']),
+      budget: { base: 20, perDepth: 0 }
+    };
+    const session = new DungeonSession(shieldDungeon, [{ heroId: 'juggernaut', level: 30, items: ['battlefury'] }], 'normal', 51);
+    const enemy = session.enemyUids.map((uid) => session.sim.unit(uid)).find((u) => !!u);
+    expect(enemy).toBeDefined();
+    expect(enemy!.hasStatus('buff')).toBe(true);
+  });
+
   it('applies authored affixes to spawned dungeon packs', () => {
     const fastDungeon: DungeonDef = {
       ...BASE_DUNGEON,

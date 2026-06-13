@@ -1535,6 +1535,7 @@ export class Hud {
   // --- shop ---
 
   private shopTab: 'consumable' | 'component' | 'assembled' = 'assembled';
+  private compendiumTab: 'lore' | 'heroes' | 'atlas' = 'lore';
 
   private renderShopModal(): void {
     const g = this.game;
@@ -1690,6 +1691,25 @@ export class Hud {
   }
 
   private renderCodexModal(): void {
+    const tabs = (['lore', 'heroes', 'atlas'] as const)
+      .map((t) => `<button class="tab ${this.compendiumTab === t ? 'on' : ''}" data-ctab="${t}">${t === 'lore' ? 'Lore' : t === 'heroes' ? 'Heroes' : 'Atlas'}</button>`)
+      .join('');
+    const body =
+      this.compendiumTab === 'heroes'
+        ? this.compendiumHeroesBody()
+        : this.compendiumTab === 'atlas'
+          ? this.compendiumAtlasBody()
+          : this.compendiumLoreBody();
+    this.modalShell('Compendium', `<div class="shop-tabs">${tabs}</div>${body}`);
+    this.modal.querySelectorAll('[data-ctab]').forEach((el) => {
+      el.addEventListener('click', () => {
+        this.compendiumTab = (el as HTMLElement).dataset.ctab as typeof this.compendiumTab;
+        this.renderCodexModal();
+      });
+    });
+  }
+
+  private compendiumLoreBody(): string {
     const cx = this.game.codexEntries();
     const heroes = [...cx.heroes]
       .sort((a, b) => a.name.localeCompare(b.name))
@@ -1717,17 +1737,71 @@ export class Hud {
     const raids = cx.raids
       .map((r) => `<div class="codex-note"><b>${r.name}</b> <em>${r.title}</em><p>${r.lore}</p></div>`)
       .join('') || '<p class="dim">Clear raids to reveal their lords.</p>';
-    this.modalShell(
-      'Codex',
-      `
+    return `
       <div class="codex-grid">
         <section><h3>Known Heroes</h3>${heroes}</section>
         <section><h3>Regions</h3>${regions}</section>
         <section><h3>Relics</h3>${items}</section>
         <section><h3>Bestiary</h3>${creeps}</section>
         <section><h3>Raid Lords</h3>${raids}</section>
-      </div>`
-    );
+      </div>`;
+  }
+
+  private compendiumHeroesBody(): string {
+    const hc = this.game.heroCompendium();
+    if (hc.heroes.length === 0) return '<p class="dim">No heroes encountered yet — recruit or meet heroes to reveal their kits.</p>';
+    const cards = hc.heroes.map((h) => {
+      const abilities = h.abilities
+        .map((a) => `<li><b>${a.ult ? '★ ' : ''}${a.name}</b> <em>cd ${a.cooldown} · mana ${a.manaCost}</em>${a.lore ? `<p>${a.lore}</p>` : ''}</li>`)
+        .join('');
+      const talents = h.talents
+        .map((t) => {
+          const left = `<span class="${t.picked === 0 ? 'tal-pick' : ''}">${t.options[0]}</span>`;
+          const right = `<span class="${t.picked === 1 ? 'tal-pick' : ''}">${t.options[1]}</span>`;
+          return `<div class="tal-row"><em>Lv ${t.level}</em> ${left} <span class="dim">·</span> ${right}</div>`;
+        })
+        .join('');
+      const facets = h.facets.map((f) => `<li><b>${f.name}</b> — ${f.description}</li>`).join('');
+      const aghs = h.aghs
+        ? `<div class="codex-note"><b>Aghanim's: ${h.aghs.name}</b> <em>${h.aghs.implemented ? 'implemented' : 'planned'}</em><p>${h.aghs.description}</p></div>`
+        : '';
+      const ownTag = h.owned ? `<em>Owned · Lv ${h.level}</em>` : '<em>Met — plan the recruit</em>';
+      return `
+        <div class="codex-card hero-codex">
+          <img src="${heroPortrait(REG.hero(h.id).palette, h.name[0], 48)}" alt="">
+          <div>
+            <b>${h.name}</b> <span class="dim">${h.title}</span><br>
+            <em>${h.attribute} · ${h.roles.slice(0, 3).join(' / ')}</em> ${ownTag}
+            <h4>Abilities</h4><ul class="codex-list">${abilities}</ul>
+            <h4>Talent Tree</h4>${talents}
+            <h4>Facets</h4><ul class="codex-list">${facets}</ul>
+            ${aghs}
+          </div>
+        </div>`;
+    }).join('');
+    return `<h3>Heroes (${hc.heroes.length})</h3><div class="compendium-single">${cards}</div>`;
+  }
+
+  private compendiumAtlasBody(): string {
+    const atlas = this.game.atlasEntries();
+    if (atlas.items.length === 0) return '<p class="dim">Find, buy, or drop items to chart their sources in the Atlas.</p>';
+    const cards = atlas.items.map((i) => {
+      const reserved = i.reserved ? ` · <span style="color:${rarityColor(i.rarity)}">${i.reserved}</span>` : '';
+      const recipe = i.recipe.length > 0
+        ? `<div class="atlas-recipe">Recipe: ${i.recipe.map((c) => `<span class="${c.gated ? 'atlas-core' : ''}">${c.name}${c.gated ? ' (drop core)' : ''}</span>`).join(' + ')}${i.recipeCost > 0 ? ` + ${i.recipeCost}g` : ''}</div>`
+        : '';
+      const sources = i.sources.length > 0
+        ? `<ul class="codex-list">${i.sources.map((s) => `<li><b>${s.label}</b> <em>${s.detail}</em></li>`).join('')}</ul>`
+        : '<p class="dim">No farmable source yet — shop or recipe only.</p>';
+      return `
+        <div class="codex-note" style="border-left:3px solid ${rarityColor(i.rarity)}">
+          <b style="color:${rarityColor(i.rarity)}">${i.name}</b> <em>${i.rarity} · ${i.tier} · ${i.cost}g${reserved}</em>
+          ${recipe}
+          <div class="atlas-qual dim">Qualities: ${i.qualities.join(', ')}</div>
+          <h4>Sources</h4>${sources}
+        </div>`;
+    }).join('');
+    return `<h3>Atlas — ${atlas.items.length} items charted</h3><div class="compendium-single">${cards}</div>`;
   }
 
   // --- talents ---
