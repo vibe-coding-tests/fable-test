@@ -3,8 +3,10 @@ import { REG } from '../core/registry';
 import { Sim } from '../core/sim';
 import { Unit } from '../core/unit';
 import { autoPicksForLevel, buildHero } from '../core/hero-setup';
+import { spawnHeroEchoUnit } from '../core/echo-unit';
+import { TrialRunner, trialGateOpen, type TrialGateCtx, type TrialOutcome } from '../core/trials';
 import { freshEchoProgress, normalizeEchoProgress, recordOwnedHeroEchoKill } from '../core/echo';
-import { computeKillReward, overflowXpToGold } from '../core/progression';
+import { computeKillReward, overflowXpToGold, recruitLevelCap } from '../core/progression';
 import { dayNightMods, defaultPhase3SaveFields, migratePhase3Save, scaledBounty } from '../core/phase3';
 import { defaultAudioSettings, defaultPhase4SaveFields, migratePhase4Save } from '../core/phase4';
 import { mergeCreeps, newCreepInstanceId, validateEntourage } from '../core/capture';
@@ -115,6 +117,39 @@ export function newGameSave(starterHeroId: string): GameSave {
   };
 }
 
+/** The slice of GameScene the orchestrator calls; lets tests run headless. */
+export interface SceneLike {
+  selectedUid: number;
+  terrain: { obstacles: { pos: Vec2; radius: number }[] };
+  pushEvent(ev: SimEvent, sim: Sim): void;
+  update(sim: Sim, followUnit: Unit | null, renderDt: number, timeOfDay01: number): void;
+}
+
+/** The slice of ProceduralAudio the orchestrator calls. */
+export interface AudioLike {
+  setSettings(settings: GameSave['settings']): void;
+  handleEvent(ev: SimEvent): void;
+}
+
+/** No-op scene for headless (test/CI) runs — no WebGL, no DOM. */
+export class HeadlessScene implements SceneLike {
+  selectedUid = -1;
+  terrain = { obstacles: [] as { pos: Vec2; radius: number }[] };
+  pushEvent(): void {}
+  update(): void {}
+}
+
+/** No-op audio for headless runs. */
+export class HeadlessAudio implements AudioLike {
+  setSettings(): void {}
+  handleEvent(): void {}
+}
+
+export interface GameDeps {
+  scene?: SceneLike;
+  audio?: AudioLike;
+}
+
 export class Game {
   sim: Sim;
   scene: GameScene;
@@ -155,6 +190,13 @@ export class Game {
   codexUnlocks = new Set<string>();
   journalSeen = new Set<string>();
 
+  /** active recruitment trial (Phase 6 §3.1) */
+  activeTrial: TrialRunner | null = null;
+  private activeTrialHeroId: string | null = null;
+  private activeTrialNpcUid: number | null = null;
+  /** heroId -> how many times its trial has relocated (cycles relocateSpots) */
+  private trialRelocations = new Map<string, number>();
+
   private camps = new Map<string, CampState>();
   private echoes = new Map<string, EchoState>();
   private accumulator = 0;
@@ -170,10 +212,15 @@ export class Game {
   private queuedPresentationEvents: SimEvent[] = [];
   paused = false;
 
-  constructor(canvas: HTMLCanvasElement, save: GameSave) {
+  /** Headless game for tests/CI: no WebGL scene, no audio. */
+  static headless(save: GameSave): Game {
+    return new Game(null, save, { scene: new HeadlessScene(), audio: new HeadlessAudio() });
+  }
+
+  constructor(canvas: HTMLCanvasElement | null, save: GameSave, deps?: GameDeps) {
     this.region = REG.region(save.regionId);
-    this.scene = new GameScene(canvas, this.region);
-    this.audio = new ProceduralAudio(this.settings);
+    this.scene = (deps?.scene ?? new GameScene(canvas as HTMLCanvasElement, this.region)) as unknown as GameScene;
+    this.audio = (deps?.audio ?? new ProceduralAudio(this.settings)) as unknown as ProceduralAudio;
     this.sim = new Sim({
       seed: save.worldSeed,
       bounds: { w: this.region.size, h: this.region.size },
@@ -383,6 +430,10 @@ export class Game {
       this.msg(`${gate.name} requires ${gate.requiredBadge.replace('-', ' ')}`, 'bad');
       return false;
     }
+    if (gate.requiresRecruits && this.recruitedCount() < gate.requiresRecruits) {
+      this.msg(`${gate.name} requires recruiting ${gate.requiresRecruits} hero${gate.requiresRecruits > 1 ? 'es' : ''} first`, 'bad');
+      return false;
+    }
     const target = REG.region(gate.toRegionId);
     const save = this.buildSave();
     save.regionId = target.id;
@@ -420,6 +471,7 @@ export class Game {
     if (result.winner === 0) {
       this.defeatedGyms.add(gym.id);
       this.badges.add(gym.badgeId);
+      this.applyRecruitCeiling(); // a new badge raises the ceiling; banked XP catches up (§3.4)
       this.msg(`${gym.leader} awards the ${gym.badgeId.replace('-', ' ')}!`, 'good');
       this.autosave('badge');
       return true;
@@ -469,21 +521,17 @@ export class Game {
   private spawnHeroEcho(spawnId: string): number {
     const spawn = this.region.echoSpawns?.find((e) => e.id === spawnId);
     if (!spawn) return -1;
-    const def = REG.hero(spawn.heroId);
-    const build = buildHero(def, autoPicksForLevel(spawn.level), 0);
-    const u = this.sim.spawnHero(build.def, {
+    // Echo fidelity (§3.3): full kit, gambit controller, ×0.6 HP, no items, echo flag.
+    const u = spawnHeroEchoUnit(this.sim, {
+      heroId: spawn.heroId,
       team: 1,
-      pos: { ...spawn.pos },
+      pos: spawn.pos,
       level: spawn.level,
-      ctrl: { kind: 'creep', homePos: { ...spawn.pos } }
+      gambit: true,
+      leashRadius: TUNING.echoLeashRadius,
+      echoFlag: true,
+      bountyMult: 1.4
     });
-    u.name = `${def.name} Echo`;
-    u.bounty = { xp: Math.round(def.bounty.xp * 1.4), gold: Math.round(def.bounty.gold * 1.4) };
-    for (const k in build.externalMods) u.externalMods[k] = (u.externalMods[k] ?? 0) + build.externalMods[k];
-    u.markStatsDirty();
-    u.refresh(this.sim.time);
-    u.hp = u.stats.maxHp;
-    u.mana = u.stats.maxMana;
     this.echoHeroes.set(u.uid, spawnId);
     return u.uid;
   }
@@ -730,28 +778,160 @@ export class Game {
       this.recruitHero(heroId, uid);
       return;
     }
-    const quest = REG.quest(questId);
-    const trial = REG.trial(quest.trialId);
-    const qp = this.questProgress[questId] ?? defaultQuestProgress();
-    if (qp.stage === 'unfound') {
-      qp.stage = 'found';
-      this.questProgress[questId] = qp;
-      this.msg(quest.findText, 'info');
-      this.msg(`Trial: ${trial.name} — ${trial.description}`, 'info');
-      this.autosave('quest-found');
+    if (this.activeTrial) {
+      this.msg('Finish the active trial first.', 'bad');
       return;
     }
+    const quest = REG.quest(questId);
+    const qp = this.questProgress[questId] ?? defaultQuestProgress();
+    this.questProgress[questId] = qp;
+    const needed = quest.findShardsNeeded ?? TUNING.findShardsNeeded;
+    // Find is shard-gated (§3.1): the hero is a rumor until enough echo shards reveal the marker.
+    if (qp.stage === 'unfound' && qp.attunement < needed) {
+      this.msg(`${def.name} is only a rumor — defeat their echoes (${qp.attunement}/${needed}).`, 'info');
+      return;
+    }
+    if (qp.stage === 'unfound') qp.stage = 'found';
     if (qp.stage === 'found') {
-      qp.stage = 'trial-complete';
-      qp.trialCompletions += 1;
-      this.questProgress[questId] = qp;
-      this.msg(`${trial.name} complete. ${quest.bindText}`, 'good');
-      this.autosave('trial');
+      this.startTrial(heroId, uid);
       return;
     }
     if (qp.stage === 'trial-complete') {
       this.startBindDuel(heroId, uid);
     }
+  }
+
+  // ---------- recruitment helpers (Phase 6 §3.1–3.4) ----------
+
+  private trialGateCtx(): TrialGateCtx {
+    return { reputation: this.reputation, recruitedTotal: this.recruited.size, raidClears: this.totalRaidClears() };
+  }
+
+  totalRaidClears(): number {
+    return Object.values(this.raidProgress).reduce((acc, r) => acc + (r?.clears ?? 0), 0);
+  }
+
+  adjustReputation(delta: number, reason: string): void {
+    this.reputation = Math.max(-20, Math.min(20, this.reputation + delta));
+    this.msg(`Reputation ${delta >= 0 ? '+' : ''}${delta} (now ${this.reputation}) — ${reason}`, delta >= 0 ? 'good' : 'bad');
+  }
+
+  /** Recruit level ceiling by badge count (§3.4); rises with badges toward 30. */
+  recruitLevelCap(): number {
+    return recruitLevelCap(this.badges.size);
+  }
+
+  /** Recruits beyond the starter (TV→Nightsilver gate, §3.4). */
+  recruitedCount(): number {
+    return Math.max(0, this.recruited.size - 1);
+  }
+
+  /** Re-clamp the roster to the current ceiling so a new badge lets banked XP catch up. */
+  private applyRecruitCeiling(): void {
+    const cap = this.recruitLevelCap();
+    for (const rec of this.party) {
+      const natural = levelFromXp(rec.unit ? rec.unit.xp : rec.xp);
+      const lvl = Math.min(natural, cap);
+      if (rec.unit && rec.unit.level !== lvl) {
+        rec.unit.level = lvl;
+        rec.unit.autoLevelAbilities(REG.hero(rec.heroId).skillOrder);
+        rec.unit.markStatsDirty();
+        rec.unit.refresh(this.sim.time);
+      }
+      rec.level = lvl;
+    }
+  }
+
+  private startTrial(heroId: string, npcUid: number): void {
+    const questId = REG.hero(heroId).recruitmentQuestId;
+    if (!questId) return;
+    const trial = REG.trial(REG.quest(questId).trialId);
+    const gate = trialGateOpen(trial, this.trialGateCtx());
+    if (!gate.open) {
+      this.msg(`${trial.name}: ${gate.reason}`, 'bad');
+      return;
+    }
+    const player = this.activeUnit();
+    if (!player) {
+      this.msg('Field a hero before attempting a trial.', 'bad');
+      return;
+    }
+    const level = this.party[this.activeIdx]?.level ?? 1;
+    this.activeTrial = new TrialRunner(this.sim, player.uid, trial, { level, gateCtx: this.trialGateCtx() });
+    this.activeTrialHeroId = heroId;
+    this.activeTrialNpcUid = npcUid;
+    if (trial.dialogue?.[0]) this.msg(trial.dialogue[0], 'bark');
+    this.msg(`Trial begins: ${trial.name} — ${trial.description}`, 'info');
+  }
+
+  trialChoiceOptions(): { id: string; label: string }[] {
+    const r = this.activeTrial;
+    if (!r || r.mechanic !== 'choice') return [];
+    if (r.kind === 'souls-pact') return [{ id: 'greed', label: 'Take the pact (power, lost honor)' }, { id: 'honor', label: 'Refuse (keep your honor)' }];
+    if (r.kind === 'faction-choice') return [{ id: 'kunkka', label: 'Side with Kunkka' }, { id: 'tidehunter', label: 'Side with Tidehunter' }];
+    if (r.kind === 'lore-riddle') return [{ id: 'origin', label: '"A name yet to be spoken."' }, { id: 'silence', label: '"Nothing at all."' }];
+    return [];
+  }
+
+  resolveTrialChoice(choice: string): void {
+    const r = this.activeTrial;
+    if (!r || r.mechanic !== 'choice') return;
+    r.choose(choice);
+    const outcome = r.tick(this.sim.time);
+    if (outcome !== 'running') this.finishTrial(outcome);
+  }
+
+  private finishTrial(outcome: TrialOutcome): void {
+    const runner = this.activeTrial;
+    const heroId = this.activeTrialHeroId;
+    if (!runner || !heroId) {
+      this.activeTrial = null;
+      this.activeTrialHeroId = null;
+      this.activeTrialNpcUid = null;
+      return;
+    }
+    const questId = REG.hero(heroId).recruitmentQuestId!;
+    const quest = REG.quest(questId);
+    if (runner.karmaDelta) this.adjustReputation(runner.karmaDelta, `${REG.hero(heroId).name}'s trial`);
+    if (runner.factionChoice) this.factionChoices[runner.trial.regionId] = runner.factionChoice;
+    if (outcome === 'complete') {
+      const qp = this.questProgress[questId] ?? defaultQuestProgress();
+      qp.stage = 'trial-complete';
+      qp.trialCompletions += 1;
+      this.questProgress[questId] = qp;
+      this.msg(`${REG.hero(heroId).name}'s trial complete. ${quest.bindText}`, 'good');
+      if (runner.trial.dialogue?.[1]) this.msg(runner.trial.dialogue[1], 'bark');
+      this.autosave('trial');
+    } else {
+      this.relocateTrial(heroId, runner);
+    }
+    this.activeTrial = null;
+    this.activeTrialHeroId = null;
+    this.activeTrialNpcUid = null;
+  }
+
+  private relocateTrial(heroId: string, runner: TrialRunner): void {
+    const questId = REG.hero(heroId).recruitmentQuestId!;
+    const quest = REG.quest(questId);
+    const trial = runner.trial;
+    const needed = quest.findShardsNeeded ?? TUNING.findShardsNeeded;
+    const floor = trial.relocationFloor ?? TUNING.relocationShardFloor;
+    const qp = this.questProgress[questId] ?? defaultQuestProgress();
+    qp.attunement = Math.min(floor, needed); // drop to the floor, never zero-locked
+    qp.stage = 'unfound';                     // a rumor again until re-found
+    this.questProgress[questId] = qp;
+    const spots = trial.relocateSpots ?? [];
+    if (spots.length > 0 && this.activeTrialNpcUid !== null) {
+      const idx = (this.trialRelocations.get(heroId) ?? 0) % spots.length;
+      this.trialRelocations.set(heroId, idx + 1);
+      const npc = this.sim.unit(this.activeTrialNpcUid);
+      if (npc) {
+        npc.pos = { ...spots[idx] };
+        npc.prevPos = { ...spots[idx] };
+      }
+    }
+    this.msg(`${REG.hero(heroId).name}'s trial failed — the rumor relocates. Shards reset to ${qp.attunement}/${needed}.`, 'bad');
+    this.autosave('trial-fail');
   }
 
   private recruitHero(heroId: string, npcUid?: number): boolean {
@@ -983,12 +1163,19 @@ export class Game {
     const def = REG.hero(heroId);
     const questId = def.recruitmentQuestId;
     if (!questId) return;
-    const qp = this.questProgress[questId] ?? defaultQuestProgress();
-    qp.stage = qp.stage === 'unfound' ? 'found' : qp.stage;
-    qp.attunement += 1;
-    this.questProgress[questId] = qp;
     const quest = REG.quests.get(questId);
-    this.msg(`${def.name} attunement shard ${qp.attunement}/2${quest ? ` — ${quest.findText}` : ''}`, 'good');
+    const needed = quest?.findShardsNeeded ?? TUNING.findShardsNeeded;
+    const qp = this.questProgress[questId] ?? defaultQuestProgress();
+    qp.attunement += 1;
+    // Find gating (§3.1): the trial marker reveals only when shards hit the threshold.
+    if (qp.attunement >= needed && qp.stage === 'unfound') {
+      qp.stage = 'found';
+      this.questProgress[questId] = qp;
+      this.msg(`${def.name}'s trial marker reveals — seek them out! (${Math.min(qp.attunement, needed)}/${needed})`, 'good');
+    } else {
+      this.questProgress[questId] = qp;
+      this.msg(`${def.name} attunement shard ${Math.min(qp.attunement, needed)}/${needed}${quest ? ` — ${quest.findText}` : ''}`, 'good');
+    }
   }
 
   private handleEchoDeath(spawnId: string): void {
@@ -1322,12 +1509,14 @@ export class Game {
     }));
     const reward = computeKillReward(bounty, states, ev.lastHitByPlayer);
     this.awardGold(reward.gold, ev.lastHitByPlayer ? 'lasthit' : 'kill', victim?.pos, true);
+    const cap = this.recruitLevelCap();
     for (const r of reward.perHeroXp) {
       const rec = this.party.find((p) => p.heroId === r.heroId)!;
       const overflowGold = overflowXpToGold(rec.level, rec.unit ? rec.unit.xp : rec.xp, r.xp);
       this.awardGold(overflowGold, 'overflow', victim?.pos, true);
       if (rec.unit) {
-        const gained = rec.unit.addXp(r.xp);
+        // recruit ceiling (§3.4): XP banks past the cap, the level stays clamped
+        const gained = rec.unit.addXp(r.xp, cap);
         if (gained > 0) {
           rec.unit.autoLevelAbilities(REG.hero(rec.heroId).skillOrder);
           rec.unit.refresh(this.sim.time);
@@ -1340,7 +1529,7 @@ export class Game {
         rec.xp = rec.unit.xp;
       } else {
         rec.xp = Math.min(rec.xp + r.xp, xpForLevel(TUNING.levelCap));
-        const newLevel = levelFromXp(rec.xp);
+        const newLevel = Math.min(levelFromXp(rec.xp), cap);
         if (newLevel > rec.level) {
           rec.level = newLevel;
           this.msg(`${REG.hero(rec.heroId).name} reached level ${newLevel}!`, 'good');
@@ -1473,6 +1662,7 @@ export class Game {
     for (const ev of this.frameEvents) {
       this.scene.pushEvent(ev, this.sim);
       this.audio.handleEvent(ev);
+      this.activeTrial?.observe(ev);
       switch (ev.t) {
         case 'kill-credit':
           this.handleKillCredit(ev);
@@ -1515,6 +1705,12 @@ export class Game {
         default:
           break;
       }
+    }
+
+    // recruitment trial (§3.1): evaluate after events are observed
+    if (this.activeTrial) {
+      const outcome = this.activeTrial.tick(this.sim.time);
+      if (outcome !== 'running') this.finishTrial(outcome);
     }
 
     // faint timers (1 Hz)

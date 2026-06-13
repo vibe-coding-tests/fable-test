@@ -346,6 +346,12 @@ export class GameScene {
         m.transparent = true;
         m.opacity = 0.4;
       }
+    } else if (u.isEcho && u.alive) {
+      // echo flag (§3.3): translucent, desaturated read
+      for (const m of rig.materials) {
+        m.transparent = true;
+        m.opacity = 0.5;
+      }
     } else if (u.alive) {
       for (const m of rig.materials) {
         if (m.transparent && view.anim.deathT === 0) {

@@ -579,6 +579,8 @@ export interface GateDef {
   toRegionId: string;
   toPos: Vec2;
   requiredBadge?: string;
+  /** Route opens only after this many heroes have been recruited (Phase 6 §3.4). */
+  requiresRecruits?: number;
 }
 export interface RegionDef {
   id: string;
@@ -616,7 +618,9 @@ export type TrialKind =
   | 'faction-choice'
   | 'lore-riddle'
   | 'raid-recruit'
-  | 'roster-legend';
+  | 'roster-legend'
+  | 'souls-pact'
+  | 'stealth-hunt';
 
 export interface TrialDef {
   id: string;

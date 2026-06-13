@@ -40,6 +40,12 @@ export function overflowXpToGold(level: number, xp: number, addXp: number): numb
   return Math.round(addXp * TUNING.postCapXpToGold);
 }
 
+/** Recruit level ceiling by badge count (§3.4); clamps to the last tuning entry. */
+export function recruitLevelCap(badgeCount: number): number {
+  const arr = TUNING.recruitLevelCap;
+  return arr[Math.min(Math.max(0, badgeCount), arr.length - 1)];
+}
+
 export function xpProgress(level: number, xp: number): { current: number; needed: number; pct: number } {
   if (level >= TUNING.levelCap) return { current: 0, needed: 0, pct: 1 };
   const cur = xpForLevel(level);

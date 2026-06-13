@@ -400,6 +400,27 @@ button:disabled { opacity: 0.45; cursor: default; }
   color: #ffe9a8;
 }
 
+/* ---------- trial choice ---------- */
+
+#trial-choice {
+  position: absolute;
+  bottom: 200px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(560px, 80vw);
+  background: rgba(10, 13, 20, 0.92);
+  border: 1px solid #6a5ba8;
+  border-radius: 14px;
+  padding: 14px 18px;
+  text-align: center;
+  box-shadow: 0 6px 28px rgba(0, 0, 0, 0.5);
+}
+#trial-choice .tc-title { font-size: 15px; font-weight: 600; color: #c9b8ff; margin-bottom: 6px; }
+#trial-choice .tc-prompt { font-size: 13px; color: #e8e2ff; font-style: italic; margin-bottom: 12px; }
+#trial-choice .tc-buttons { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+#trial-choice .tc-btn { background: #2a2350; border-color: #6a5ba8; }
+#trial-choice .tc-btn:hover { background: #3a3070; }
+
 /* ---------- modals ---------- */
 
 #modal-root {

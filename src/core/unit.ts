@@ -91,6 +91,8 @@ export interface ControllerRef {
   wanderTarget?: Vec2 | null;
   nextThinkAt?: number;
   leashed?: boolean;
+  /** Optional tether for gambit units (overworld echoes); macro/raid units leave it unset. */
+  leashRadius?: number;
 }
 
 export interface TriggerRuntime {
@@ -182,6 +184,8 @@ export class Unit {
 
   // render hints
   castingUntil = -1;
+  /** Echo units render desaturated and translucent (Phase 6 §3.3). */
+  isEcho = false;
 
   constructor(opts: {
     kind: UnitKind;
@@ -422,13 +426,15 @@ export class Unit {
   // ---------- xp ----------
 
   /** Returns number of levels gained. */
-  addXp(amount: number): number {
+  addXp(amount: number, levelCap = TUNING.levelCap): number {
     if (this.kind !== 'hero') return 0;
     const before = this.level;
     this.xp += amount;
     const capXp = xpForLevel(TUNING.levelCap);
     if (this.xp > capXp) this.xp = capXp;
-    this.level = levelFromXp(this.xp);
+    // Recruit ceiling (Phase 6 §3.4): XP past the cap banks (xp is kept) but the
+    // level is clamped, so a later badge that raises the ceiling lets it catch up.
+    this.level = Math.min(levelFromXp(this.xp), levelCap);
     if (this.level !== before) this.markStatsDirty();
     return this.level - before;
   }

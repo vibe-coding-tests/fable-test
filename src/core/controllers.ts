@@ -194,9 +194,29 @@ export function thinkGambit(sim: Sim, u: Unit): void {
   const c = u.ctrl;
   const rules = c.rules ?? [];
 
+  // Optional leash (overworld echoes, §3.3): tether to home so a gambit unit does
+  // not roam the whole region. Macro/raid units leave leashRadius unset and skip this.
+  if (c.homePos && c.leashRadius !== undefined) {
+    const home = c.homePos;
+    const dHome = dist(u.pos, home);
+    if (c.leashed) {
+      if (dHome < 160) {
+        c.leashed = false;
+        u.hp = u.stats.maxHp;
+      } else {
+        u.order = { kind: 'move', point: { ...home } };
+        return;
+      }
+    } else if (dHome > c.leashRadius) {
+      c.leashed = true;
+      u.order = { kind: 'move', point: { ...home } };
+      return;
+    }
+  }
+
   // maintain focus target
   let focus = c.focusUid !== undefined ? sim.unit(c.focusUid) : undefined;
-  if (!focus || !focus.alive || focus.summary.untargetable || !focus.isVisibleTo(u.team, sim.time)) {
+  if (!focus || !focus.alive || focus.summary.untargetable || !focus.isVisibleTo(u.team, sim.time) || !withinLeash(u, focus)) {
     focus = pickFocus(sim, u) ?? undefined;
     c.focusUid = focus?.uid;
   }
@@ -210,12 +230,20 @@ export function thinkGambit(sim: Sim, u: Unit): void {
   else u.order = { kind: 'stop' };
 }
 
+/** Leash gate for gambit echoes: an enemy out of tether range is ignored. */
+function withinLeash(u: Unit, target: Unit): boolean {
+  const c = u.ctrl;
+  if (c.leashRadius === undefined || !c.homePos) return true;
+  return dist2(target.pos, c.homePos) <= c.leashRadius * c.leashRadius;
+}
+
 function pickFocus(sim: Sim, u: Unit): Unit | null {
   let best: Unit | null = null;
   let bestScore = Infinity;
   for (const o of sim.unitsArr) {
     if (!o.alive || o.team === u.team || o.kind === 'npc') continue;
     if (o.summary.untargetable || !o.isVisibleTo(u.team, sim.time)) continue;
+    if (!withinLeash(u, o)) continue;
     const hpScore = o.hp / o.stats.maxHp;
     const distScore = dist(o.pos, u.pos) / 4000;
     const heroBias = o.kind === 'hero' ? 0 : 0.5;

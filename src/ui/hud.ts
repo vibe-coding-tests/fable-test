@@ -53,6 +53,8 @@ export class Hud {
   private minimapCtx: CanvasRenderingContext2D;
   private modal: HTMLElement;
   private hint: HTMLElement;
+  private trialChoice: HTMLElement;
+  private lastTrialChoiceKey = '';
 
   private floaters: Floater[] = [];
   private coinFx: CoinFx[] = [];
@@ -86,6 +88,7 @@ export class Hud {
       <div id="capture-bar" class="hidden"><div class="fill"></div><span>Binding...</span></div>
       <div id="hero-panel"></div>
       <div id="hud-hint"></div>
+      <div id="trial-choice" class="hidden"></div>
       <div id="modal-root" class="hidden"></div>
     `;
     this.topBar = this.root.querySelector('#top-bar')!;
@@ -98,6 +101,11 @@ export class Hud {
     this.minimapCtx = this.minimap.getContext('2d')!;
     this.modal = this.root.querySelector('#modal-root')!;
     this.hint = this.root.querySelector('#hud-hint')!;
+    this.trialChoice = this.root.querySelector('#trial-choice')!;
+    this.trialChoice.addEventListener('click', (e) => {
+      const btn = (e.target as HTMLElement).closest('[data-choice]') as HTMLElement | null;
+      if (btn?.dataset.choice) this.game.resolveTrialChoice(btn.dataset.choice);
+    });
     this.displayGold = this.game.gold;
     this.goldTweenFrom = this.game.gold;
     this.goldTweenTo = this.game.gold;
@@ -134,6 +142,7 @@ export class Hud {
     this.updateCoinFx();
     this.updateCaptureBar();
     this.renderHint();
+    this.renderTrialChoice();
     if (this.modalKind === 'shop' || this.modalKind === 'party') this.refreshModalDynamic();
     // auto-open talent picker
     if (this.modalKind === 'none') {
@@ -612,6 +621,30 @@ export class Hud {
     if (g.canShop() && this.modalKind === 'none' && !hint) hint = `${g.region.town.name} — press B to shop`;
     this.hint.textContent = hint;
     this.hint.classList.toggle('hidden', hint === '');
+  }
+
+  private renderTrialChoice(): void {
+    const g = this.game;
+    const r = g.activeTrial;
+    const opts = r && r.mechanic === 'choice' ? g.trialChoiceOptions() : [];
+    if (!r || opts.length === 0) {
+      if (!this.trialChoice.classList.contains('hidden')) {
+        this.trialChoice.classList.add('hidden');
+        this.lastTrialChoiceKey = '';
+      }
+      return;
+    }
+    const key = `${r.kind}|${opts.map((o) => o.id).join(',')}`;
+    if (key !== this.lastTrialChoiceKey) {
+      this.lastTrialChoiceKey = key;
+      const prompt = r.trial.dialogue?.[0] ?? r.trial.description;
+      this.trialChoice.innerHTML = `
+        <div class="tc-title">${r.trial.name}</div>
+        <div class="tc-prompt">${prompt}</div>
+        <div class="tc-buttons">${opts.map((o) => `<button class="tc-btn" data-choice="${o.id}">${o.label}</button>`).join('')}</div>
+      `;
+      this.trialChoice.classList.remove('hidden');
+    }
   }
 
   // ---------- modals ----------

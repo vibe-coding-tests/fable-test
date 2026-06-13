@@ -59,7 +59,7 @@ export const TRANQUIL_VALE: RegionDef = {
     { id: 'tv-echo-axe', heroId: 'axe', pos: { x: 7900, y: 2700 }, level: 11, respawnSec: 160 }
   ],
   gates: [
-    { id: 'tv-to-nw', name: 'North Pass to Nightsilver Woods', pos: { x: 6000, y: 850 }, radius: 520, toRegionId: 'nightsilver-woods', toPos: { x: 5600, y: 11050 } }
+    { id: 'tv-to-nw', name: 'North Pass to Nightsilver Woods', pos: { x: 6000, y: 850 }, radius: 520, toRegionId: 'nightsilver-woods', toPos: { x: 5600, y: 11050 }, requiresRecruits: 1 }
   ],
   gyms: [],
   props: { treeDensity: 0.7, rockDensity: 0.3 },

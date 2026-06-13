@@ -76,13 +76,18 @@ export const TUNING = {
   healServiceCost: 120,
 
   // --- recruitment ceiling + trials (Phase 6 §3.1, §3.4) ---
-  recruitLevelCap: [15, 18, 21, 23, 25, 27, 29, 30, 30],   // index = badge count, capped at 30
+  recruitLevelCap: [15, 22, 30],  // index = badge count, clamped at last entry (test §6.8 names [15,22,30])
   relocationShardFloor: 1,        // failed trial drops Find shards to this floor, never locks out
   findShardsNeeded: 2,            // default echo kills to reveal a trial marker
+  echoHpTaxPct: 0.4,              // overworld/trial echoes lose this fraction of max HP (×0.6, §3.2)
+  echoLeashRadius: 2200,          // gambit echo tether so it does not roam the region
+  trialDefaultSec: 45,            // default trial time limit for timed/endure templates
 
   // --- reputation / karma (Phase 6 §3.2) ---
   reputationGoodGate: 3,          // a good-karma recruit opens at/above this
   reputationSoulsPactDrop: 4,     // Souls Pact greed path lowers karma by this
+  reputationHonorGain: 2,         // honorable trial resolutions raise karma
+  rosterLegendNeeded: 50,         // Io roster-legend trial: recruited heroes required
 
   // --- audio (Phase 6 §3.12, §3.16) ---
   audioVoiceCap: 6,               // pooled voice concurrency cap (perf budget)
