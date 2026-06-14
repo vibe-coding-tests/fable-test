@@ -1,11 +1,11 @@
 import { TUNING } from '../data/tuning';
-import { add, dist, dist2, norm, scale, sub, v2 } from './math2d';
+import { add, dist, dist2, norm, pointSegDist, scale, sub, v2 } from './math2d';
 import { combatProfile, type CombatProfile } from './combat-profile';
 import { abilityVal } from './values';
 import { itemReady } from './items';
 import { isDisabled } from './status';
 import { REG } from './registry';
-import type { AbilityDef, EffectNode, Order, StatusId, Team, Vec2 } from './types';
+import type { AbilityDef, EffectNode, Order, StatusId, TargetSel, Team, ValueRef, Vec2 } from './types';
 import type { Sim, TeamMind } from './sim';
 import type { Unit } from './unit';
 
@@ -145,6 +145,14 @@ function representativeRadius(def: AbilityDef, level: number): number {
 
 export type CastCategory = 'blink' | 'ult' | 'channel' | 'any';
 
+interface CurrentCast {
+  def: AbilityDef;
+  level: number;
+  channeling: boolean;
+  targetUid?: number;
+  point?: Vec2;
+}
+
 function defHasBlink(def: AbilityDef): boolean {
   const visit = (nodes?: EffectNode[]): boolean => {
     if (!nodes) return false;
@@ -158,24 +166,24 @@ function defHasBlink(def: AbilityDef): boolean {
 }
 
 /** The ability/item def a unit is currently casting or channeling, if any. */
-function currentCastDef(u: Unit): { def: AbilityDef; channeling: boolean } | null {
+function currentCastDef(u: Unit): CurrentCast | null {
   const cs = u.cast;
   if (cs) {
     if (cs.source === 'ability') {
-      const def = u.abilities[cs.slot]?.def;
-      return def ? { def, channeling: false } : null;
+      const a = u.abilities[cs.slot];
+      return a ? { def: a.def, level: a.level, channeling: false, targetUid: cs.targetUid, point: cs.point } : null;
     }
     const idef = REG.items.get(u.items[cs.slot]?.defId ?? '')?.active;
-    return idef ? { def: idef, channeling: false } : null;
+    return idef ? { def: idef, level: 1, channeling: false, targetUid: cs.targetUid, point: cs.point } : null;
   }
   const ch = u.channel;
   if (ch) {
     if (ch.source === 'ability') {
-      const def = u.abilities[ch.slot]?.def;
-      return def ? { def, channeling: true } : null;
+      const a = u.abilities[ch.slot];
+      return a ? { def: a.def, level: a.level, channeling: true, targetUid: ch.targetUid, point: ch.point } : null;
     }
     const idef = REG.items.get(u.items[ch.slot]?.defId ?? '')?.active;
-    return idef ? { def: idef, channeling: true } : null;
+    return idef ? { def: idef, level: 1, channeling: true, targetUid: ch.targetUid, point: ch.point } : null;
   }
   return null;
 }
@@ -187,6 +195,118 @@ function castMatches(def: AbilityDef, channeling: boolean, category: CastCategor
     case 'channel': return channeling || !!def.channel;
     case 'blink': return defHasBlink(def);
   }
+}
+
+function currentTarget(sim: Sim, cur: CurrentCast): Unit | undefined {
+  return cur.targetUid !== undefined ? sim.unit(cur.targetUid) : undefined;
+}
+
+function primaryCenter(sim: Sim, caster: Unit, cur: CurrentCast): Vec2 {
+  return cur.point ?? currentTarget(sim, cur)?.pos ?? caster.pos;
+}
+
+function pointThreatensUnit(point: Vec2 | undefined, radius: number, victim: Unit): boolean {
+  if (!point) return false;
+  const r = Math.max(0, radius) + victim.radius * 0.5;
+  return dist2(victim.pos, point) <= r * r;
+}
+
+function selectorThreatensUnit(sim: Sim, caster: Unit, victim: Unit, cur: CurrentCast, selector: TargetSel, radiusRef?: ValueRef): boolean {
+  const radius = radiusRef !== undefined ? abilityVal(cur.def, radiusRef, cur.level) : 0;
+  const target = currentTarget(sim, cur);
+  switch (selector) {
+    case 'target':
+      if (target?.uid === victim.uid) return true;
+      return radius > 0 && pointThreatensUnit(target?.pos, radius, victim);
+    case 'enemies-in-radius':
+    case 'random-enemy-in-radius':
+      return victim.team !== caster.team && pointThreatensUnit(primaryCenter(sim, caster, cur), radius, victim);
+    case 'units-in-radius':
+      return pointThreatensUnit(primaryCenter(sim, caster, cur), radius, victim);
+    case 'self':
+    case 'allies-in-radius':
+    case 'lowest-hp-ally-in-radius':
+    case 'point':
+      return false;
+  }
+}
+
+function zoneThreatensUnit(sim: Sim, caster: Unit, victim: Unit, cur: CurrentCast, node: Extract<EffectNode, { kind: 'zone' }>): boolean {
+  const z = node.zone;
+  const disables =
+    nodesContainHardDisable(z.tick?.effects ?? []) ||
+    nodesContainHardDisable(z.onEnter?.effects ?? []);
+  if (!disables) return false;
+
+  if (z.shape === 'line') {
+    const point = cur.point ?? currentTarget(sim, cur)?.pos;
+    if (!point) return false;
+    const width = abilityVal(cur.def, z.width, cur.level);
+    return pointSegDist(victim.pos, caster.pos, point) <= width / 2 + victim.radius * 0.5;
+  }
+
+  const center =
+    node.at === 'self' ? caster.pos :
+    node.at === 'target' ? currentTarget(sim, cur)?.pos :
+    primaryCenter(sim, caster, cur);
+  return pointThreatensUnit(center, abilityVal(cur.def, z.radius, cur.level), victim);
+}
+
+function projectileThreatensUnit(sim: Sim, caster: Unit, victim: Unit, cur: CurrentCast, node: Extract<EffectNode, { kind: 'projectile' }>): boolean {
+  if (!nodesContainHardDisable(node.proj.onHit)) return false;
+  if (node.proj.model === 'homing' || node.to === 'target') return cur.targetUid === victim.uid;
+  const point = cur.point ?? currentTarget(sim, cur)?.pos;
+  if (!point) return false;
+  const width = abilityVal(cur.def, node.proj.width, cur.level);
+  return pointSegDist(victim.pos, caster.pos, point) <= width / 2 + victim.radius * 0.5;
+}
+
+function nodeThreatensUnit(sim: Sim, caster: Unit, victim: Unit, cur: CurrentCast, node: EffectNode): boolean {
+  switch (node.kind) {
+    case 'status':
+      return HARD_DISABLES.has(node.status) && selectorThreatensUnit(sim, caster, victim, cur, node.target, node.radius);
+    case 'displace':
+      return node.mode !== 'blink' && selectorThreatensUnit(sim, caster, victim, cur, node.target, node.radius);
+    case 'zone':
+      return zoneThreatensUnit(sim, caster, victim, cur, node);
+    case 'projectile':
+      return projectileThreatensUnit(sim, caster, victim, cur, node);
+    case 'repeat':
+      return nodesThreatenUnit(sim, caster, victim, cur, node.effects);
+    default:
+      return false;
+  }
+}
+
+function nodesThreatenUnit(sim: Sim, caster: Unit, victim: Unit, cur: CurrentCast, nodes: EffectNode[]): boolean {
+  return nodes.some((node) => nodeThreatensUnit(sim, caster, victim, cur, node));
+}
+
+function nodeContainsHardDisable(node: EffectNode): boolean {
+  switch (node.kind) {
+    case 'status':
+      return HARD_DISABLES.has(node.status);
+    case 'displace':
+      return node.mode !== 'blink';
+    case 'zone':
+      return nodesContainHardDisable(node.zone.tick?.effects ?? []) || nodesContainHardDisable(node.zone.onEnter?.effects ?? []);
+    case 'projectile':
+      return nodesContainHardDisable(node.proj.onHit);
+    case 'repeat':
+      return nodesContainHardDisable(node.effects);
+    default:
+      return false;
+  }
+}
+
+function nodesContainHardDisable(nodes: EffectNode[]): boolean {
+  return nodes.some(nodeContainsHardDisable);
+}
+
+function hardDisableThreatensUnit(sim: Sim, caster: Unit, victim: Unit, cur: CurrentCast): boolean {
+  return nodesThreatenUnit(sim, caster, victim, cur, cur.def.effects ?? []) ||
+    nodesThreatenUnit(sim, caster, victim, cur, cur.def.channel?.tick?.effects ?? []) ||
+    nodesThreatenUnit(sim, caster, victim, cur, cur.def.channel?.onEnd ?? []);
 }
 
 /** An enemy within range is casting/channeling something of the given category. */
@@ -208,7 +328,7 @@ export function incomingDisable(sim: Sim, u: Unit, radius = 1200): boolean {
     if (inc || !enemyCandidate(sim, u, o)) return;
     if (dist2(o.pos, u.pos) > radius * radius) return;
     const cur = currentCastDef(o);
-    if (cur && classify(cur.def).hardControl) inc = true;
+    if (cur && classify(cur.def).hardControl && hardDisableThreatensUnit(sim, o, u, cur)) inc = true;
   });
   return inc;
 }
@@ -456,6 +576,21 @@ function finalAbilityScore(u: Unit, score: number, intent: AbilityIntent, order:
   return manaAdjustedScore(u, out, manaCost);
 }
 
+function comboAdjustedScore(u: Unit, def: AbilityDef, now: number, score: number): number {
+  if (!u.heroId || !u.lastAbilityCastId) return score;
+  const combo = REG.heroes.get(u.heroId)?.combo;
+  if (!combo) return score;
+  let mult = 1;
+  for (const c of combo) {
+    if (c.after !== def.id || c.before !== u.lastAbilityCastId) continue;
+    const window = c.windowSec ?? 4;
+    const age = now - u.lastAbilityCastAt;
+    if (age < 0 || age > window) continue;
+    mult = Math.max(mult, c.weight ?? 1.25);
+  }
+  return score * mult;
+}
+
 function scoreAbility(sim: Sim, u: Unit, slot: number, focus: Unit | null, profile: CombatProfile): Scored | null {
   const a = u.abilities[slot];
   if (!a || a.level <= 0) return null;
@@ -463,16 +598,21 @@ function scoreAbility(sim: Sim, u: Unit, slot: number, focus: Unit | null, profi
   if (t === 'passive' || t === 'aura' || t === 'attack-modifier') return null;
   if (!u.abilityReady(slot, sim.time).ok) return null;
   const manaCost = u.manaCostOf(slot);
+  const intent = intentOf(a.def, a.level);
+  const finish = (score: number, order: Order, clusterCount = Infinity, isUlt = false): Scored => ({
+    score: comboAdjustedScore(u, a.def, sim.time, finalAbilityScore(u, score, intent, order, focus, manaCost, clusterCount, isUlt)),
+    order,
+    slot
+  });
 
   // toggle: switch on once enemies are close
   if (t === 'toggle') {
     if (a.toggled) return null;
     if (enemiesNear(sim, u, u.stats.attackRange + 320) === 0) return null;
     const order: Order = { kind: 'cast', slot };
-    return { score: finalAbilityScore(u, 0.7 * profile.weights.aggression, intentOf(a.def, a.level), order, focus, manaCost), order, slot };
+    return finish(0.7 * profile.weights.aggression, order);
   }
 
-  const intent = intentOf(a.def, a.level);
   const w = profile.weights;
   const range = castRangeOf(a.def, u, a.level) * 1.1;
 
@@ -484,14 +624,14 @@ function scoreAbility(sim: Sim, u: Unit, slot: number, focus: Unit | null, profi
     let s = w.saveAllies * (0.5 + need);
     if (sim.time - ally.lastEnemyDamageAt < 1.5) s += 0.4; // actively under fire
     const order: Order = t === 'no-target' ? { kind: 'cast', slot } : { kind: 'cast', slot, uid: ally.uid };
-    return { score: finalAbilityScore(u, s, intent, order, focus, manaCost), order, slot };
+    return finish(s, order);
   }
 
   // self / no-target steroid (BKB-style, Warcry): cast when a fight is on
   if (t === 'no-target' && intent.buff && !intent.offensive) {
     if (enemiesNear(sim, u, u.stats.attackRange + 320) === 0) return null;
     const order: Order = { kind: 'cast', slot };
-    return { score: finalAbilityScore(u, 0.75 * w.aggression, intent, order, focus, manaCost), order, slot };
+    return finish(0.75 * w.aggression, order);
   }
 
   if (!intent.offensive && !intent.hardControl && !intent.softControl) return null;
@@ -505,7 +645,7 @@ function scoreAbility(sim: Sim, u: Unit, slot: number, focus: Unit | null, profi
       if (count === 0) return null;
       const s = (w.aoe * (0.4 + count)) + controlW * 0.4 * count;
       const order: Order = { kind: 'cast', slot };
-      return { score: finalAbilityScore(u, s, intent, order, focus, manaCost, count, !!a.def.ult), order, slot };
+      return finish(s, order, count, !!a.def.ult);
     }
     const cluster = bestCluster(sim, u, range, intent.radius || 300);
     if (!cluster || cluster.count === 0) return null;
@@ -514,10 +654,10 @@ function scoreAbility(sim: Sim, u: Unit, slot: number, focus: Unit | null, profi
       const tgt = bestOffensiveTarget(sim, u, focus, range);
       if (!tgt) return null;
       const order: Order = { kind: 'cast', slot, uid: tgt.uid };
-      return { score: finalAbilityScore(u, s, intent, order, focus, manaCost, cluster.count, !!a.def.ult), order, slot };
+      return finish(s, order, cluster.count, !!a.def.ult);
     }
     const order: Order = { kind: 'cast', slot, point: cluster.point };
-    return { score: finalAbilityScore(u, s, intent, order, focus, manaCost, cluster.count, !!a.def.ult), order, slot };
+    return finish(s, order, cluster.count, !!a.def.ult);
   }
 
   // single-target nuke / disable
@@ -530,10 +670,10 @@ function scoreAbility(sim: Sim, u: Unit, slot: number, focus: Unit | null, profi
   if (interrupting) s += 0.8;
   if (t === 'unit-target') {
     const order: Order = { kind: 'cast', slot, uid: target.uid };
-    return { score: finalAbilityScore(u, s, intent, order, focus, manaCost), order, slot };
+    return finish(s, order);
   }
   const order: Order = { kind: 'cast', slot, point: { ...target.pos } };
-  return { score: finalAbilityScore(u, s, intent, order, focus, manaCost), order, slot };
+  return finish(s, order);
 }
 
 // ---------- item actives (AI_OVERHAUL §2) ----------

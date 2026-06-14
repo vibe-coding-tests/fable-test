@@ -338,6 +338,23 @@ export function raidSetupFromDef(def: RaidDef, party: MacroHeroSetup[], tier: Di
   };
 }
 
+export function bossFightSetupFromDef(def: BossDef, party: MacroHeroSetup[], tier: DifficultyTier, seed: number): { seed: number; party: MacroHeroSetup[]; boss: MacroHeroSetup & { hpScale: number; damageScale: number; armorScale: number; aiDepth: number } } {
+  const scale = tierScale(tier);
+  return {
+    seed,
+    party,
+    boss: {
+      heroId: def.heroId,
+      level: def.rank === 'boss' ? 28 : 24,
+      items: ['black-king-bar', 'assault-cuirass'],
+      hpScale: TUNING.raidBossHpScale * TUNING.regionalBossHpScale * scale.hp,
+      damageScale: TUNING.raidBossDamageScale * scale.damage,
+      armorScale: scale.armor,
+      aiDepth: TUNING.bossTierAiDepth[tier]
+    }
+  };
+}
+
 export function raidMechanicTimeline(def: RaidDef): { atHpPct: number; kind: 'add-wave' | 'zone' | 'enrage' | 'signature'; id: string }[] {
   const out: { atHpPct: number; kind: 'add-wave' | 'zone' | 'enrage' | 'signature'; id: string }[] = [
     ...def.addWaves.map((w) => ({ atHpPct: w.atHpPct, kind: 'add-wave' as const, id: w.summon.id })),

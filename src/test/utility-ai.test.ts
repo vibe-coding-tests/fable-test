@@ -4,8 +4,9 @@ import { setupMacroSim } from '../core/macro';
 import { chooseUtilityOrder, pickUtilityFocus } from '../core/utility';
 import { combatProfile } from '../core/combat-profile';
 import { thinkGambit } from '../core/controllers';
+import { TUNING } from '../data/tuning';
 import type { EffectCtx } from '../core/effects';
-import type { MacroHeroSetup } from '../core/types';
+import type { AbilityDef, MacroHeroSetup } from '../core/types';
 import type { Unit } from '../core/unit';
 
 // ============================================================
@@ -23,6 +24,48 @@ function sim1v1(aHero: string, bHeroes: string[], level = 18) {
   const hero = sim.unitsArr.find((u) => u.team === 0 && u.heroId === aHero)!;
   const enemies = sim.unitsArr.filter((u) => u.team === 1);
   return { sim, hero, enemies };
+}
+
+const TEST_CHEAP_NUKE: AbilityDef = {
+  id: 'test-cheap-nuke',
+  name: 'Cheap Nuke',
+  targeting: 'unit-target',
+  affects: 'enemy',
+  castRange: 700,
+  manaCost: [0],
+  cooldown: [1],
+  values: { damage: [100] },
+  effects: [{ kind: 'damage', dtype: 'magical', amount: 'damage', target: 'target' }],
+  vfx: { archetype: 'projectile', color: '#b89fff', scale: 0.8 },
+  anim: 'staff-cast',
+  sound: 'void'
+};
+
+const TEST_AOE_ULT: AbilityDef = {
+  id: 'test-aoe-ult',
+  name: 'AoE Ult',
+  targeting: 'ground-aoe',
+  ult: true,
+  castRange: 800,
+  manaCost: [300],
+  cooldown: [100],
+  values: { damage: [260], radius: [420] },
+  effects: [{ kind: 'damage', dtype: 'magical', amount: 'damage', target: 'enemies-in-radius', radius: 'radius' }],
+  vfx: { archetype: 'ground-aoe', color: '#b89fff', scale: 1.2 },
+  anim: 'staff-cast',
+  sound: 'void'
+};
+
+function installAbilities(u: Unit, defs: AbilityDef[]): void {
+  u.abilities = defs.map((def) => ({
+    def,
+    level: 1,
+    cooldownUntil: 0,
+    charges: -1,
+    nextChargeAt: 0,
+    toggled: false,
+    nextToggleTickAt: 0
+  }));
 }
 
 describe('combatProfile derives character from data', () => {
@@ -71,6 +114,27 @@ describe('utility scorer picks actions by value, not slot order', () => {
     expect(order?.kind === 'cast').toBe(false);
   });
 
+  it('prefers a combo finisher shortly after its setup spell', () => {
+    const { sim, hero, enemies } = sim1v1('earthshaker', ['sniper', 'lich']);
+    hero.pos = { x: 2000, y: 2000 };
+    enemies[0].pos = { x: 2180, y: 2000 };
+    enemies[1].pos = { x: 2220, y: 2080 };
+    sim.rebuildSpatial();
+
+    const setup = hero.abilities.findIndex((a) => a.def.id === 'es-fissure');
+    const finisher = hero.abilities.findIndex((a) => a.def.id === 'es-echo-slam');
+    expect(setup).toBeGreaterThanOrEqual(0);
+    expect(finisher).toBeGreaterThanOrEqual(0);
+
+    const first = chooseUtilityOrder(sim, hero, enemies[0]);
+    expect(first).toMatchObject({ kind: 'cast', slot: setup });
+
+    hero.lastAbilityCastId = 'es-fissure';
+    hero.lastAbilityCastAt = sim.time;
+    const afterSetup = chooseUtilityOrder(sim, hero, enemies[0]);
+    expect(afterSetup).toMatchObject({ kind: 'cast', slot: finisher });
+  });
+
   it('heals the most wounded ally in range', () => {
     const teamA: MacroHeroSetup[] = [{ heroId: 'omniknight', level: 18 }, { heroId: 'sven', level: 18 }];
     const sim = setupMacroSim({ seed: 7, teamA, teamB: [{ heroId: 'lich', level: 18 }], maxSec: 30 });
@@ -87,6 +151,53 @@ describe('utility scorer picks actions by value, not slot order', () => {
     const order = chooseUtilityOrder(sim, omni, enemy);
     expect(order?.kind).toBe('cast');
     if (order?.kind === 'cast') expect(order.uid).toBe(ally.uid);
+  });
+
+  it('conserves scarce mana instead of dumping an expensive ult for low value', () => {
+    const { sim, hero, enemies } = sim1v1('crystal-maiden', ['sniper', 'lich', 'sven'], 30);
+    installAbilities(hero, [TEST_CHEAP_NUKE, TEST_AOE_ULT]);
+    hero.pos = { x: 2000, y: 2000 };
+    enemies[0].pos = { x: 2300, y: 2000 };
+    enemies[1].pos = { x: 2360, y: 2040 };
+    enemies[2].pos = { x: 2280, y: 2100 };
+    hero.mana = hero.stats.maxMana;
+    sim.rebuildSpatial();
+
+    const fullPool = chooseUtilityOrder(sim, hero, enemies[0]);
+    expect(fullPool).toMatchObject({ kind: 'cast', slot: 1 });
+
+    const prevFloor = TUNING.ai.manaFloorPct;
+    const prevWeight = TUNING.ai.manaConservationWeight;
+    try {
+      TUNING.ai.manaFloorPct = 0.95;
+      TUNING.ai.manaConservationWeight = 1;
+      hero.mana = hero.manaCostOf(1);
+      const scarce = chooseUtilityOrder(sim, hero, enemies[0]);
+      expect(scarce).toMatchObject({ kind: 'cast', slot: 0 });
+    } finally {
+      TUNING.ai.manaFloorPct = prevFloor;
+      TUNING.ai.manaConservationWeight = prevWeight;
+    }
+  });
+
+  it('holds an AoE ult for a cluster at high ai depth', () => {
+    const { sim, hero, enemies } = sim1v1('earthshaker', ['sniper', 'lich', 'crystal-maiden'], 30);
+    installAbilities(hero, [TEST_CHEAP_NUKE, TEST_AOE_ULT]);
+    hero.ctrl.aiDepth = TUNING.bossTierAiDepth.hell;
+    hero.pos = { x: 2000, y: 2000 };
+    enemies[0].pos = { x: 2300, y: 2000 };
+    enemies[1].pos = { x: 3800, y: 2000 };
+    enemies[2].pos = { x: 3900, y: 2100 };
+    sim.rebuildSpatial();
+
+    const single = chooseUtilityOrder(sim, hero, enemies[0]);
+    expect(single).toMatchObject({ kind: 'cast', slot: 0 });
+
+    enemies[1].pos = { x: 2320, y: 2040 };
+    enemies[2].pos = { x: 2260, y: 2090 };
+    sim.rebuildSpatial();
+    const cluster = chooseUtilityOrder(sim, hero, enemies[0]);
+    expect(cluster).toMatchObject({ kind: 'cast', slot: 1 });
   });
 });
 

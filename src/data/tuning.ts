@@ -250,6 +250,7 @@ export const TUNING = {
   raidAssembledDropPct: { normal: 0.10, nightmare: 0.20, hell: 0.35 },
   raidBadLuckPity: 8,
   raidBossHpScale: 5,
+  regionalBossHpScale: 1.25,
   raidBossDamageScale: 1.25,
   raidBossRadiusScale: 1.7,
   // Roshan (§3.9): respawn timer in playtime-seconds, and the clear at which repeat

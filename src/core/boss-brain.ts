@@ -84,27 +84,42 @@ function ensureBossPlan(sim: Sim, boss: Unit): { phase: BossPhase; pref: BossTar
   return { phase, pref: cfg.pref };
 }
 
-/** Nearest enemy support: the healer the boss wants to cut off. */
+/** Wounded, low-threat support: the healer the boss wants to cut off. */
 function reachableHealer(sim: Sim, boss: Unit): Unit | null {
   let best: Unit | null = null;
-  let bestD = Infinity;
+  let bestScore = -Infinity;
   for (const o of sim.unitsArr) {
     if (!enemyOf(sim, boss, o) || o.kind !== 'hero' || !o.heroId) continue;
     if (combatProfile(o).role !== 'support') continue;
     const d = dist2(o.pos, boss.pos);
-    if (d < bestD || (d === bestD && best !== null && o.uid < best.uid)) { bestD = d; best = o; }
+    const hpNeed = 1 - o.hp / Math.max(1, o.stats.maxHp);
+    const threat = boss.ctrl.threat?.[o.uid] ?? 0;
+    const lowThreat = 1 / (1 + threat / 600);
+    const reach = 1 / (1 + d / (900 * 900));
+    const score = hpNeed * 2.2 + lowThreat * 0.9 + reach * 0.45;
+    if (score > bestScore || (score === bestScore && best !== null && o.uid < best.uid)) {
+      bestScore = score;
+      best = o;
+    }
   }
   return best;
 }
 
 /** Enemy whose neighborhood packs the most bodies: the AoE anchor. */
+function nearbyEnemyCount(sim: Sim, boss: Unit, center: Unit): number {
+  let n = 0;
+  sim.forEachNearbyUnit(center.pos, CLUSTER_RADIUS + 80, (o) => {
+    if (enemyOf(sim, boss, o) && dist2(o.pos, center.pos) <= CLUSTER_RADIUS * CLUSTER_RADIUS) n++;
+  });
+  return n;
+}
+
 function clusterTarget(sim: Sim, boss: Unit): Unit | null {
   const enemies = sim.unitsArr.filter((o) => enemyOf(sim, boss, o));
   let best: Unit | null = null;
   let bestCount = -1;
   for (const c of enemies) {
-    let n = 0;
-    for (const o of enemies) if (dist2(o.pos, c.pos) <= CLUSTER_RADIUS * CLUSTER_RADIUS) n++;
+    const n = nearbyEnemyCount(sim, boss, c);
     if (n > bestCount || (n === bestCount && best !== null && c.uid < best.uid)) { bestCount = n; best = c; }
   }
   return best;
@@ -155,8 +170,7 @@ function partyClusterCount(sim: Sim, boss: Unit): number {
   const enemies = sim.unitsArr.filter((o) => enemyOf(sim, boss, o));
   let best = 0;
   for (const c of enemies) {
-    let n = 0;
-    for (const o of enemies) if (dist2(o.pos, c.pos) <= CLUSTER_RADIUS * CLUSTER_RADIUS) n++;
+    const n = nearbyEnemyCount(sim, boss, c);
     if (n > best) best = n;
   }
   return best;

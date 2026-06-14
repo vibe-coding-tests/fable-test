@@ -5,6 +5,7 @@ import { ALL_RAIDS } from '../data/raids';
 import { ELITE_DRAFT } from '../data/drafts';
 import { REG } from '../core/registry';
 import {
+  bossFightSetupFromDef,
   bossLootSeed,
   bossTierUnlocked,
   buybackCost,
@@ -105,6 +106,19 @@ describe('Phase 3 difficulty, loot, and reward economy', () => {
     expect(bossTierUnlocked({ tier: 'normal', dryClears: 2 }, 'nightmare', true)).toBe(true);
     expect(bossTierUnlocked({ tier: 'normal', dryClears: 0 }, 'hell', true)).toBe(false);
     expect(bossTierUnlocked({ tier: 'nightmare', dryClears: 0 }, 'hell', true)).toBe(true);
+  });
+
+  it('applies tier armor and ai-depth to regional boss rerun setup', () => {
+    const boss = REG.boss('boss-phantom-assassin');
+    const party = [{ heroId: 'juggernaut', level: 30 }];
+    const normal = bossFightSetupFromDef(boss, party, 'normal', 1).boss;
+    const hell = bossFightSetupFromDef(boss, party, 'hell', 1).boss;
+
+    expect(normal.armorScale).toBe(TUNING.bossTierScale.normal.armor);
+    expect(normal.hpScale).toBe(TUNING.raidBossHpScale * TUNING.regionalBossHpScale * TUNING.bossTierScale.normal.hp);
+    expect(hell.armorScale).toBe(TUNING.bossTierScale.hell.armor);
+    expect(hell.armorScale).toBeGreaterThan(normal.armorScale);
+    expect(hell.aiDepth).toBe(TUNING.bossTierAiDepth.hell);
   });
 
   it('keeps neutral item drops tiered and Tinker Bench operations in rule', () => {

@@ -11,6 +11,7 @@ import { TrialRunner, trialGateOpen, type TrialGateCtx, type TrialOutcome } from
 import { freshEchoProgress, normalizeEchoProgress, recordOwnedHeroEchoKill } from '../core/echo';
 import { computeKillReward, overflowXpToGold, recruitLevelCap } from '../core/progression';
 import {
+  bossFightSetupFromDef,
   bossLootSeed,
   bossTierUnlocked,
   buybackCost,
@@ -28,7 +29,6 @@ import {
   rollNeutralDrop,
   scaledBounty,
   stableContentSeed,
-  tierScale,
   tomePurchase,
   type LootRoll
 } from '../core/phase3';
@@ -1222,19 +1222,12 @@ export class Game {
       this.msg(`${REG.hero(boss.heroId).name} (${tier}) is locked`, 'bad');
       return { won: false };
     }
-    const scale = tierScale(tier);
-    const bossLevel = boss.rank === 'boss' ? 28 : 24;
-    const result = runRaidBattle({
-      seed: this.region.seed + Math.round(this.playtime) + bossId.length,
-      party: this.gymPlayerTeam(),
-      boss: {
-        heroId: boss.heroId,
-        level: bossLevel,
-        items: ['black-king-bar', 'assault-cuirass'],
-        hpScale: TUNING.raidBossHpScale * scale.hp,
-        damageScale: TUNING.raidBossDamageScale * scale.damage
-      }
-    });
+    const result = runRaidBattle(bossFightSetupFromDef(
+      boss,
+      this.gymPlayerTeam(),
+      tier,
+      this.region.seed + Math.round(this.playtime) + bossId.length
+    ));
     if (result.winner !== 0) {
       this.msg(`${REG.hero(boss.heroId).name} (${tier}) survived — regroup and retry`, 'bad');
       return { won: false };

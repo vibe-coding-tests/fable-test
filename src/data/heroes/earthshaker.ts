@@ -22,6 +22,7 @@ export const EARTHSHAKER: HeroDef = {
     manaRegen: 0.9
   },
   skillOrder: [0, 2, 1],
+  combo: [{ before: 'es-fissure', after: 'es-echo-slam', windowSec: 4, weight: 1.55 }],
   abilities: [
     {
       id: 'es-fissure',

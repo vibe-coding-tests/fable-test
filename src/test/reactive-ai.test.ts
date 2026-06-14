@@ -48,7 +48,7 @@ describe('reactive reads', () => {
     expect(enemyCastSeen(sim, hero, 'blink')).toBe(false);
   });
 
-  it('incoming-disable detects an enemy mid-cast of a hard disable', () => {
+  it('incoming-disable detects an enemy mid-cast of a hard disable aimed at the unit', () => {
     const sim = macro([{ heroId: 'sniper', level: 18 }], [{ heroId: 'crystal-maiden', level: 18 }]);
     const hero = sim.unitsArr.find((u) => u.team === 0)!;
     const enemy = sim.unitsArr.find((u) => u.team === 1)!;
@@ -60,8 +60,26 @@ describe('reactive reads', () => {
     expect(slot).toBeGreaterThanOrEqual(0);
     expect(incomingDisable(sim, hero)).toBe(false);
 
-    enemy.cast = { source: 'ability', slot, fireAt: sim.time + 0.4 };
+    enemy.cast = { source: 'ability', slot, fireAt: sim.time + 0.4, targetUid: hero.uid };
     expect(incomingDisable(sim, hero)).toBe(true);
+  });
+
+  it('incoming-disable ignores targeted hard disables cast at somebody else', () => {
+    const sim = macro([{ heroId: 'sniper', level: 18 }, { heroId: 'sven', level: 18 }], [{ heroId: 'crystal-maiden', level: 18 }]);
+    const hero = sim.unitsArr.find((u) => u.team === 0 && u.heroId === 'sniper')!;
+    const ally = sim.unitsArr.find((u) => u.team === 0 && u.heroId === 'sven')!;
+    const enemy = sim.unitsArr.find((u) => u.team === 1)!;
+    hero.pos = { x: 2000, y: 2000 };
+    ally.pos = { x: 2100, y: 2000 };
+    enemy.pos = { x: 2300, y: 2000 };
+    sim.rebuildSpatial();
+
+    const slot = controlSlot(enemy);
+    expect(slot).toBeGreaterThanOrEqual(0);
+    enemy.cast = { source: 'ability', slot, fireAt: sim.time + 0.4, targetUid: ally.uid };
+
+    expect(incomingDisable(sim, hero)).toBe(false);
+    expect(incomingDisable(sim, ally)).toBe(true);
   });
 
   it('the self-disabled condition fires its rule only while disabled', () => {

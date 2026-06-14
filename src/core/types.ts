@@ -381,6 +381,14 @@ export interface AghanimDef {
   implemented: boolean;       // ≥15 implemented by Phase 3
 }
 
+export interface HeroComboRule {
+  /** Prefer `after` shortly after `before` lands (e.g. setup stun -> burst). */
+  before: string;
+  after: string;
+  windowSec?: number;
+  weight?: number;
+}
+
 export interface EchoProgress {
   kills: number;                   // owned hero echo kills
   facetSwapUnlocked: boolean;      // first echo kill opens facet swapping
@@ -468,6 +476,7 @@ export interface HeroDef {
   talents: TalentTier[];       // exactly 4 tiers x 2 options
   facets: FacetDef[];          // >= 1
   aghanim?: AghanimDef;
+  combo?: HeroComboRule[];
   silhouette: SilhouetteSpec;
   palette: [string, string, string];
   barks: string[];             // ~6 original lines, Dota voice, never Valve text

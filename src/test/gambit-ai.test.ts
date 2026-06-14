@@ -78,4 +78,25 @@ describe('gambit AI positioning and targeting', () => {
       expect(after).toBeGreaterThan(0);
     }
   });
+
+  it('fight-time-gt is relative to the current encounter, not absolute sim time', () => {
+    const { sim, hero, enemies } = simWithRules([
+      { if: [{ k: 'fight-time-gt', sec: 5 }], then: { k: 'hold' } },
+      { if: [{ k: 'always' }], then: { k: 'attack-focus' } }
+    ]);
+    const enemy = enemies[0];
+    hero.pos = { x: 1000, y: 1000 };
+    enemy.pos = { x: 1300, y: 1000 };
+    hero.ctrl.focusUid = enemy.uid;
+    sim.time = 100;
+    sim.rebuildSpatial();
+
+    thinkGambit(sim, hero);
+    expect(hero.order.kind).toBe('attack-unit');
+    expect(hero.ctrl.encounterStartAt).toBe(100);
+
+    sim.time = 106;
+    thinkGambit(sim, hero);
+    expect(hero.order.kind).toBe('hold');
+  });
 });

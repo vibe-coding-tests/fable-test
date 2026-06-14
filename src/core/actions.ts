@@ -347,6 +347,8 @@ export function fireCast(sim: Sim, u: Unit, source: 'ability' | 'item', slot: nu
     }
 
     const ctx = abilityCtx(def, a.level);
+    u.lastAbilityCastId = def.id;
+    u.lastAbilityCastAt = sim.time;
     sim.events.emit({ t: 'cast', uid: u.uid, abilityId: def.id, vfx: def.vfx, target: target?.uid, point, sound: soundForAbility(def), timbre: u.animProfile?.voiceTimbre });
     // Signature (ult) casts speak in-character, rate-limited so they flavor rather than spam (§3.13).
     if (def.ult) emitBark(sim, u);

@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { rollItemDrops } from '../core/phase3';
+import { lootTableToDropTable, rollItemDrops } from '../core/phase3';
 import { Rng } from '../core/rng';
 import { REG } from '../core/registry';
 import type { DifficultyTier, ItemDropTable, ItemRarity, LootBand } from '../core/types';
@@ -130,6 +130,48 @@ describe('Gameplay 2.0 loot pacing', () => {
       const floor = 1 / TUNING.loot.egCadenceMinByBand[plan.band];
       expect(rate).toBeGreaterThanOrEqual(floor);
       expect(rate).toBeLessThanOrEqual(floor * 1.6);
+    }
+  });
+
+  it('keeps boss, raid, and dungeon EG faucets wired into the late-band matrix', () => {
+    const minutes = 60_000;
+    const floor = 1 / TUNING.loot.egCadenceMinByBand.late;
+    const sources = [
+      {
+        name: 'regional boss',
+        table: lootTableToDropTable(REG.boss('boss-phantom-assassin').loot),
+        clearMin: 5,
+        min: floor * 0.45,
+        max: floor * 1.15,
+        seedSalt: 6_000_000
+      },
+      {
+        name: 'raid',
+        table: lootTableToDropTable(REG.raid('lord-of-terror').loot),
+        clearMin: 8,
+        min: floor * 0.35,
+        max: floor * 1.1,
+        seedSalt: 7_000_000
+      },
+      {
+        name: 'dungeon guardian',
+        table: REG.dungeon('frost-hollow').loot.boss,
+        clearMin: 16,
+        min: floor * 0.2,
+        max: floor * 0.85,
+        seedSalt: 8_000_000
+      }
+    ];
+
+    for (const source of sources) {
+      const rate = simulateDrops({
+        minutes,
+        band: 'late',
+        tier: 'hell',
+        sources: [{ table: source.table, clearMin: source.clearMin, seedSalt: source.seedSalt }]
+      }) / minutes;
+      expect(rate, source.name).toBeGreaterThanOrEqual(source.min);
+      expect(rate, source.name).toBeLessThanOrEqual(source.max);
     }
   });
 });

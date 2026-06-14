@@ -73,6 +73,22 @@ describe('boss phase-FSM', () => {
     expect((pickBossFocus(sim, boss) as Unit).uid).toBe(sniper.uid);
   });
 
+  it('healer posture prefers wounded low-threat supports over the nearest support', () => {
+    const { sim, boss, get } = raid(['crystal-maiden', 'omniknight', 'sniper']);
+    const cm = get('crystal-maiden');
+    const omni = get('omniknight');
+    const phase = bossPhaseOf(sim, boss);
+
+    cm.pos = { x: boss.pos.x - 180, y: boss.pos.y };
+    cm.hp = cm.stats.maxHp;
+    omni.pos = { x: boss.pos.x - 760, y: boss.pos.y };
+    omni.hp = omni.stats.maxHp * 0.25;
+    boss.ctrl.threat = { [cm.uid]: 1200, [omni.uid]: 20 };
+    boss.ctrl.boss = { depth: 1, phase, pref: 'healer' };
+
+    expect((pickBossFocus(sim, boss) as Unit).uid).toBe(omni.uid);
+  });
+
   it('depth 0 never leaves the threat target', () => {
     const { sim, boss, get } = raid(['sniper', 'crystal-maiden']);
     const sniper = get('sniper');

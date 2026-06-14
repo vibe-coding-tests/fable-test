@@ -110,6 +110,8 @@ export interface ControllerRef {
   leashRadius?: number;
   /** Raid-party reactivity depth; higher tiers react earlier and coordinate tighter. */
   aiDepth?: number;
+  /** Sim-time when this controller first found its current fight, for relative gambit timers. */
+  encounterStartAt?: number;
   /** Boss phase-FSM state (AI_OVERHAUL §5); set on raid bosses. */
   boss?: BossState;
 }
@@ -194,6 +196,8 @@ export class Unit {
   lastEnemyDamageAt = -999;  // for blink lockout + save combat lock
   lastDealtDamageAt = -999;
   recentDamagers: { uid: number; at: number }[] = [];
+  lastAbilityCastId: string | null = null;
+  lastAbilityCastAt = -999;
 
   // caches (recomputed each tick)
   summary: StatusSummary;
@@ -577,6 +581,23 @@ export function creepToBase(def: CreepDef, star: 1 | 2 | 3, opts: CreepCombatSca
   };
 }
 
+const CREEP_ABILITY_DAMAGE_KEYS = new Set(['damage', 'dps', 'dotDps']);
+
+function scaleCreepAbility(def: AbilityDef, damageScale: number): AbilityDef {
+  if (damageScale === 1 || !def.values) return def;
+  const values: Record<string, number[]> = {};
+  let changed = false;
+  for (const [key, arr] of Object.entries(def.values)) {
+    if (!CREEP_ABILITY_DAMAGE_KEYS.has(key)) {
+      values[key] = arr;
+      continue;
+    }
+    values[key] = arr.map((v) => v * damageScale);
+    changed = true;
+  }
+  return changed ? { ...def, values } : def;
+}
+
 export function makeCreepUnit(def: CreepDef, opts: { team: Team; pos: Vec2; star?: 1 | 2 | 3; wild?: boolean } & CreepCombatScaleOpts): Unit {
   const star = opts.star ?? 1;
   const sm = TUNING.starStatMult[star - 1];
@@ -612,7 +633,7 @@ export function makeCreepUnit(def: CreepDef, opts: { team: Team; pos: Vec2; star
     magicResistPct: def.stats.magicResistPct - TUNING.baseMagicResist
   };
   u.abilities = def.abilities.map((a) => ({
-    def: a,
+    def: scaleCreepAbility(a, scale.damage),
     level: Math.min(star, abilityMaxLevel(a)),
     cooldownUntil: 0,
     charges: -1,

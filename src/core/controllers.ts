@@ -168,6 +168,8 @@ export function thinkGambit(sim: Sim, u: Unit): void {
     }
   }
   c.focusUid = focus?.uid;
+  if (focus) c.encounterStartAt ??= sim.time;
+  else c.encounterStartAt = undefined;
 
   for (const rule of rules) {
     if (!rule.if.every((cond) => evalCondition(sim, u, cond, focus))) continue;
@@ -257,7 +259,7 @@ function evalCondition(sim: Sim, u: Unit, cond: GambitCondition, focus: Unit | u
     case 'ability-ready':
       return u.abilityReady(cond.slot, sim.time).ok;
     case 'fight-time-gt':
-      return sim.time > cond.sec;
+      return sim.time - (u.ctrl.encounterStartAt ?? sim.time) > cond.sec;
     case 'standing-in-zone':
       return hostileZoneContaining(sim, u) !== undefined;
     case 'focus-is-role':
@@ -354,7 +356,7 @@ function resolveGambitTarget(sim: Sim, u: Unit, mode: GambitTargetMode, focus: U
       let bestUnit: Unit | undefined;
       for (const o of sim.unitsArr) {
         if (!enemyCandidate(sim, u, o)) continue;
-        const count = sim.unitsInRadius(o.pos, 360, (x) => x.team !== u.team && x.kind !== 'npc').length;
+        const count = sim.unitsInRadius(o.pos, 360, (x) => enemyCandidate(sim, u, x)).length;
         if (count > bestCount) {
           bestCount = count;
           bestPoint = { ...o.pos };
