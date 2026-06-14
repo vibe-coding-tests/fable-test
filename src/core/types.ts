@@ -394,10 +394,22 @@ export interface FacetDef {
   mods?: StatModMap;
   abilityValueOverride?: { abilityId: string; valueKey: string; mode: 'add' | 'mul' | 'set'; amount: number };
 }
+export interface HeroAbilityPatch {
+  abilityId: string;
+  patch: Partial<Pick<AbilityDef, 'name' | 'lore' | 'targeting' | 'affects' | 'castRange' | 'manaCost' | 'cooldown' | 'values' | 'effects' | 'channel' | 'attackMod' | 'aura' | 'triggers' | 'vfx' | 'anim' | 'sound'>>;
+}
+export interface AghanimPayload {
+  mods?: StatModMap;
+  abilityValueOverrides?: { abilityId: string; valueKey: string; mode: 'add' | 'mul' | 'set'; amount: number }[];
+  cooldownAdds?: { abilityId: string; amount: number }[];
+  abilityPatches?: HeroAbilityPatch[];
+}
 export interface AghanimDef {
   name: string;
   description: string;
   implemented: boolean;       // ≥15 implemented by Phase 3
+  scepter?: AghanimPayload;
+  shard?: AghanimPayload;
 }
 
 export interface HeroComboRule {
@@ -1240,6 +1252,7 @@ export type SimEvent =
   | { t: 'summon'; uid: number; pos: Vec2 }
   | { t: 'revive'; uid: number; pos: Vec2 }   // Aegis / Reincarnation: stand once
   | { t: 'item-used'; uid: number; itemId: string }
+  | { t: 'loot-drop'; pos: Vec2; color: string; grade?: ItemGrade; signature?: boolean }
   | { t: 'gold'; amount: number; reason: string; pos?: Vec2 }
   | { t: 'xp'; uid: number; amount: number }
   | { t: 'bark'; uid: number; line: string }

@@ -157,7 +157,25 @@ export const SVEN: HeroDef = {
       abilityValueOverride: { abilityId: 'sven-gods-strength', valueKey: 'damagePct', mode: 'add', amount: 20 }
     }
   ],
-  aghanim: { name: 'Storm Ride', description: 'Storm Hammer carries Sven to the target.', implemented: false },
+  aghanim: {
+    name: 'Storm Ride',
+    description: 'Storm Hammer hits harder and more often; Shard strengthens Warcry and cleave.',
+    implemented: true,
+    scepter: {
+      abilityValueOverrides: [
+        { abilityId: 'sven-storm-hammer', valueKey: 'damage', mode: 'add', amount: 90 },
+        { abilityId: 'sven-storm-hammer', valueKey: 'stun', mode: 'add', amount: 0.4 }
+      ],
+      cooldownAdds: [{ abilityId: 'sven-storm-hammer', amount: -5 }]
+    },
+    shard: {
+      abilityValueOverrides: [
+        { abilityId: 'sven-great-cleave', valueKey: 'cleave', mode: 'add', amount: 20 },
+        { abilityId: 'sven-warcry', valueKey: 'armor', mode: 'add', amount: 6 }
+      ],
+      cooldownAdds: [{ abilityId: 'sven-warcry', amount: -3 }]
+    }
+  },
   silhouette: { build: 'biped', scale: 1.15, bodyShape: 'bulky', head: 'helm', weapon: 'sword', extras: ['cape', 'shoulderpads', 'belt'] },
   palette: ['#3c5f94', '#d9dde6', '#ff8a3d'],
   barks: [

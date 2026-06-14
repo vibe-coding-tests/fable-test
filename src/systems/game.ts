@@ -1340,6 +1340,15 @@ export class Game {
   }
 
   private lootMoment(items: ItemSave[]): void {
+    if (items.length === 0) return;
+    let best = items[0];
+    for (const item of items) {
+      const gradeRank = ITEM_GRADES.indexOf(item.grade ?? 'standard');
+      const bestGradeRank = ITEM_GRADES.indexOf(best.grade ?? 'standard');
+      const rarityRank = RARITY_RANK[this.itemRarity(item.id)];
+      const bestRarityRank = RARITY_RANK[this.itemRarity(best.id)];
+      if (gradeRank > bestGradeRank || (gradeRank === bestGradeRank && rarityRank > bestRarityRank)) best = item;
+    }
     const loud = items.some((it) => {
       const gradeRank = ITEM_GRADES.indexOf(it.grade ?? 'standard');
       const rarity = this.itemRarity(it.id);
@@ -1352,7 +1361,21 @@ export class Game {
           affix.affixId === 'ancient-mind'
         );
     });
-    if (loud) this.playPresentationStinger('loot');
+    if (!loud) return;
+    const signature = items.some((it) => (it.affixes ?? []).some((affix) =>
+      affix.affixId === 'stormcallers' ||
+      affix.affixId === 'glassbreaker' ||
+      affix.affixId === 'vampiric-surge' ||
+      affix.affixId === 'ancient-mind'
+    ));
+    this.playPresentationStinger('loot');
+    this.emitPresentationEvent({
+      t: 'loot-drop',
+      pos: this.activeUnit()?.pos ?? this.region.town.pos,
+      color: this.dropAccent(items) ?? rarityColor(this.itemRarity(best.id)),
+      grade: best.grade,
+      signature
+    });
   }
 
   /** Warm the renderer behind a loading screen: build the first unit views and
@@ -4180,7 +4203,7 @@ export class Game {
   // ---------- hero spawn/serialize ----------
 
   private spawnHeroFromRecord(rec: RosterEntry, pos: Vec2): Unit {
-    const build = buildHero(REG.hero(rec.heroId), rec.talentPicks, rec.facetIdx, rec.echo);
+    const build = buildHero(REG.hero(rec.heroId), rec.talentPicks, rec.facetIdx, rec.echo, rec.augments);
     const u = this.sim.spawnHero(build.def, {
       team: 0,
       pos: { ...pos },

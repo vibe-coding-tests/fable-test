@@ -187,7 +187,26 @@ export const EARTHSHAKER: HeroDef = {
       abilityValueOverride: { abilityId: 'es-fissure', valueKey: 'wallDur', mode: 'add', amount: 2 }
     }
   ],
-  aghanim: { name: 'Echo of Echoes', description: 'Echo Slam echoes a second time off each Fissure wall in range.', implemented: false },
+  aghanim: {
+    name: 'Echo of Echoes',
+    description: 'Echo Slam echoes harder; Shard makes Fissure and Aftershock more punishing.',
+    implemented: true,
+    scepter: {
+      abilityValueOverrides: [
+        { abilityId: 'es-echo-slam', valueKey: 'base', mode: 'add', amount: 90 },
+        { abilityId: 'es-echo-slam', valueKey: 'echo', mode: 'add', amount: 45 },
+        { abilityId: 'es-echo-slam', valueKey: 'radius', mode: 'add', amount: 120 }
+      ],
+      cooldownAdds: [{ abilityId: 'es-echo-slam', amount: -22 }]
+    },
+    shard: {
+      abilityValueOverrides: [
+        { abilityId: 'es-fissure', valueKey: 'wallDur', mode: 'add', amount: 2 },
+        { abilityId: 'es-aftershock', valueKey: 'radius', mode: 'add', amount: 80 },
+        { abilityId: 'es-aftershock', valueKey: 'damage', mode: 'add', amount: 35 }
+      ]
+    }
+  },
   silhouette: { build: 'brute', scale: 1.15, bodyShape: 'bulky', head: 'horned', weapon: 'totem', extras: ['shoulderpads'] },
   palette: ['#5b8cc8', '#a9743c', '#e8b15c'],
   barks: [

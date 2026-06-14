@@ -401,6 +401,14 @@ export class VfxManager {
         if (p) this.pillar(p.x, p.y, '#ffe27d', 1.2);
         break;
       }
+      case 'loot-drop': {
+        const gradeScale = ev.grade === 'pristine' ? 1.55 : ev.grade === 'refined' ? 1.25 : 1.0;
+        const scale = ev.signature ? gradeScale * 1.2 : gradeScale;
+        this.pillar(ev.pos.x, ev.pos.y, ev.color, scale);
+        this.burst(ev.pos.x, ev.pos.y, ev.color, 1.2 * scale, 0.7, ev.signature ? '#ffd86a' : '#ffffff', ev.signature ? 'shard' : 'soft');
+        this.impactDecal(ev.pos.x, ev.pos.y, ev.color, 0.8 * scale, 0.75);
+        break;
+      }
       default:
         break;
     }

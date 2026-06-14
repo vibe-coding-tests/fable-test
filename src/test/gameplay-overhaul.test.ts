@@ -4,9 +4,10 @@ import { TUNING } from '../data/tuning';
 import { REG } from '../core/registry';
 import { applyDamage } from '../core/combat';
 import { itemStateFromSave } from '../core/items';
+import { buildHero } from '../core/hero-setup';
 import { Game, newGameSave } from '../systems/game';
 import type { Unit } from '../core/unit';
-import type { Vec2 } from '../core/types';
+import type { ItemSave, Vec2 } from '../core/types';
 
 beforeAll(() => registerAllContent());
 
@@ -65,6 +66,28 @@ describe('gameplay overhaul: locomotion and discovery', () => {
     const baseCd = game.settings.resonance ? TUNING.resonanceSwapCooldownSec : TUNING.swapCooldownSec;
     expect(game.swapReadyAt - game.sim.time).toBeLessThan(baseCd);
     expect(axe.statuses.some((s) => s.tag === 'swap-in-burst')).toBe(true);
+  });
+
+  it('Aghanim augments patch real hero ability payloads', () => {
+    const base = buildHero(REG.hero('juggernaut'));
+    const upgraded = buildHero(REG.hero('juggernaut'), [null, null, null, null], 0, undefined, { scepter: true, shard: true });
+    const baseOmni = base.def.abilities.find((a) => a.id === 'jug-omnislash')!;
+    const upOmni = upgraded.def.abilities.find((a) => a.id === 'jug-omnislash')!;
+    const baseBladeFury = base.def.abilities.find((a) => a.id === 'jug-blade-fury')!;
+    const upBladeFury = upgraded.def.abilities.find((a) => a.id === 'jug-blade-fury')!;
+
+    expect(upOmni.values!.slashes[0]).toBeGreaterThan(baseOmni.values!.slashes[0]);
+    expect(upOmni.cooldown![0]).toBeLessThan(baseOmni.cooldown![0]);
+    expect(upBladeFury.values!.radius[0]).toBeGreaterThan(baseBladeFury.values!.radius[0]);
+    expect(upgraded.externalMods.moveSpeed).toBeGreaterThan(0);
+  });
+
+  it('high rolled loot emits a loot-drop presentation event', () => {
+    const game = Game.headless(newGameSave('juggernaut'));
+    const presenter = game as unknown as { lootMoment(items: ItemSave[]): void };
+    presenter.lootMoment([{ id: 'daedalus', grade: 'pristine', gradeRoll: 1, bound: true }]);
+    game.update(0.05);
+    expect(game.frameEvents.some((ev) => ev.t === 'loot-drop')).toBe(true);
   });
 
   it('dash is root-stopped and does not disjoint homing projectiles', () => {

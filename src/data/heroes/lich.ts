@@ -203,7 +203,25 @@ export const LICH: HeroDef = {
       abilityValueOverride: { abilityId: 'lich-frost-shield', valueKey: 'duration', mode: 'add', amount: 2 }
     }
   ],
-  aghanim: { name: 'Ice Spire', description: 'Plants a frost spire that slows enemies and lets Chain Frost bounce off it.', implemented: false },
+  aghanim: {
+    name: 'Ice Spire',
+    description: 'Chain Frost bounces harder while Shard makes Frost Shield bite.',
+    implemented: true,
+    scepter: {
+      abilityValueOverrides: [
+        { abilityId: 'lich-chain-frost', valueKey: 'damage', mode: 'add', amount: 120 },
+        { abilityId: 'lich-chain-frost', valueKey: 'bounces', mode: 'add', amount: 5 },
+        { abilityId: 'lich-chain-frost', valueKey: 'radius', mode: 'add', amount: 120 }
+      ],
+      cooldownAdds: [{ abilityId: 'lich-chain-frost', amount: -18 }]
+    },
+    shard: {
+      abilityValueOverrides: [
+        { abilityId: 'lich-frost-shield', valueKey: 'pulse', mode: 'add', amount: 24 },
+        { abilityId: 'lich-frost-shield', valueKey: 'reduction', mode: 'add', amount: 8 }
+      ]
+    }
+  },
   silhouette: { build: 'biped', scale: 1.05, bodyShape: 'robed', head: 'skull', weapon: 'staff', extras: ['cape', 'crown'] },
   palette: ['#7ec8f2', '#2c4a78', '#d8f4ff'],
   barks: [

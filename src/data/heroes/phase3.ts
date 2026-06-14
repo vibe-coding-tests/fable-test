@@ -195,8 +195,29 @@ function hero(seed: HeroSeed): HeroDef {
     ],
     aghanim: {
       name: `${seed.name}'s Scepter`,
-      description: AGHS_IMPLEMENTED.has(seed.id) ? `Improves ${seed.abilities[3]} through the generic talent/value path.` : 'A future Scepter variant is logged but not implemented.',
-      implemented: AGHS_IMPLEMENTED.has(seed.id)
+      description: AGHS_IMPLEMENTED.has(seed.id) ? `Improves ${seed.abilities[3]} and adds a shard tune-up to ${seed.abilities[0]}.` : 'A future Scepter variant is logged but not implemented.',
+      implemented: AGHS_IMPLEMENTED.has(seed.id),
+      scepter: AGHS_IMPLEMENTED.has(seed.id)
+        ? {
+            abilityValueOverrides: [
+              { abilityId: `${seed.id}-ult`, valueKey: 'damage', mode: 'add', amount: 140 },
+              { abilityId: `${seed.id}-ult`, valueKey: 'radius', mode: 'add', amount: 120 },
+              { abilityId: `${seed.id}-ult`, valueKey: 'disable', mode: 'add', amount: 0.4 }
+            ],
+            cooldownAdds: [{ abilityId: `${seed.id}-ult`, amount: -18 }]
+          }
+        : undefined,
+      shard: AGHS_IMPLEMENTED.has(seed.id)
+        ? {
+            mods: seed.attribute === 'str'
+              ? { damageTakenReductionPct: 4 }
+              : seed.attribute === 'agi'
+                ? { attackSpeed: 18 }
+                : { spellAmpPct: 6 },
+            abilityValueOverrides: [{ abilityId: `${seed.id}-strike`, valueKey: 'damage', mode: 'add', amount: 45 }],
+            cooldownAdds: [{ abilityId: `${seed.id}-strike`, amount: -2 }]
+          }
+        : undefined
     },
     silhouette: {
       build: seed.roles.includes('durable') ? 'brute' : seed.summon ? 'biped' : 'biped',

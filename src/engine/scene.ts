@@ -884,6 +884,10 @@ export class GameScene {
       this.accentGrade(ev.vfx.color, strong ? 0.5 : a === 'storm' || a === 'global-mark' || a === 'beam' ? 0.38 : 0.22);
       if (strong) this.addShake(0.3);
     }
+    if (ev.t === 'loot-drop') {
+      this.accentGrade(ev.color, ev.signature || ev.grade === 'pristine' ? 0.45 : 0.28);
+      if (ev.signature || ev.grade === 'pristine') this.addShake(0.18);
+    }
     this.vfx.handleEvent(ev, (uid) => {
       const u = sim.unit(uid);
       return u ? { x: u.pos.x, y: u.pos.y, h: 0 } : null;

@@ -178,7 +178,25 @@ export const PUDGE: HeroDef = {
       abilityValueOverride: { abilityId: 'pudge-meat-hook', valueKey: 'range', mode: 'add', amount: 200 }
     }
   ],
-  aghanim: { name: 'Meat Shield', description: 'Dismember can target allies, shielding them while Pudge eats incoming damage.', implemented: false },
+  aghanim: {
+    name: 'Meat Shield',
+    description: 'Dismember and Rot become stronger front-line tools.',
+    implemented: true,
+    scepter: {
+      mods: { damageTakenReductionPct: 8 },
+      abilityValueOverrides: [
+        { abilityId: 'pudge-dismember', valueKey: 'duration', mode: 'add', amount: 1 },
+        { abilityId: 'pudge-dismember', valueKey: 'dpsTick', mode: 'add', amount: 30 }
+      ],
+      cooldownAdds: [{ abilityId: 'pudge-dismember', amount: -15 }]
+    },
+    shard: {
+      abilityValueOverrides: [
+        { abilityId: 'pudge-meat-hook', valueKey: 'range', mode: 'add', amount: 250 },
+        { abilityId: 'pudge-rot', valueKey: 'slow', mode: 'add', amount: 8 }
+      ]
+    }
+  },
   silhouette: { build: 'brute', scale: 1.25, bodyShape: 'bulky', head: 'bare', weapon: 'hook', extras: ['belt'] },
   palette: ['#7a9b3a', '#d8a39b', '#8a4b2f'],
   barks: [

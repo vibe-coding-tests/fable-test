@@ -177,7 +177,25 @@ export const SNIPER: HeroDef = {
       abilityValueOverride: { abilityId: 'sniper-assassinate', valueKey: 'castRangeVal', mode: 'add', amount: 400 }
     }
   ],
-  aghanim: { name: 'Concussive Grenade', description: 'Adds a self-peel knockback grenade.', implemented: false },
+  aghanim: {
+    name: 'Concussive Grenade',
+    description: 'Assassinate becomes a faster, louder finisher; Shard improves Shrapnel control.',
+    implemented: true,
+    scepter: {
+      abilityValueOverrides: [
+        { abilityId: 'sniper-assassinate', valueKey: 'damage', mode: 'add', amount: 220 },
+        { abilityId: 'sniper-assassinate', valueKey: 'ministun', mode: 'add', amount: 0.5 }
+      ],
+      cooldownAdds: [{ abilityId: 'sniper-assassinate', amount: -18 }]
+    },
+    shard: {
+      mods: { moveSpeed: 20 },
+      abilityValueOverrides: [
+        { abilityId: 'sniper-shrapnel', valueKey: 'dps', mode: 'add', amount: 18 },
+        { abilityId: 'sniper-shrapnel', valueKey: 'slow', mode: 'add', amount: 12 }
+      ]
+    }
+  },
   silhouette: { build: 'biped', scale: 0.85, bodyShape: 'slim', head: 'helm', weapon: 'rifle', extras: ['belt'] },
   palette: ['#c8a05c', '#5c4a32', '#ffd27f'],
   barks: [

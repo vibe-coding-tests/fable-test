@@ -183,7 +183,27 @@ export const CRYSTAL_MAIDEN: HeroDef = {
       abilityValueOverride: { abilityId: 'cm-frostbite', valueKey: 'dps', mode: 'mul', amount: 1.2 }
     }
   ],
-  aghanim: { name: "Winter's Grasp", description: 'Frostbite becomes castable on allies, freezing and healing them.', implemented: false },
+  aghanim: {
+    name: "Winter's Grasp",
+    description: 'Frostbite and Freezing Field gain longer, harsher lockdown.',
+    implemented: true,
+    scepter: {
+      abilityValueOverrides: [
+        { abilityId: 'cm-freezing-field', valueKey: 'explosion', mode: 'add', amount: 55 },
+        { abilityId: 'cm-freezing-field', valueKey: 'fieldRadius', mode: 'add', amount: 150 },
+        { abilityId: 'cm-freezing-field', valueKey: 'slowMs', mode: 'add', amount: 20 },
+        { abilityId: 'cm-freezing-field', valueKey: 'slowAs', mode: 'add', amount: 30 }
+      ],
+      cooldownAdds: [{ abilityId: 'cm-freezing-field', amount: -20 }]
+    },
+    shard: {
+      mods: { castRange: 100 },
+      abilityValueOverrides: [
+        { abilityId: 'cm-frostbite', valueKey: 'duration', mode: 'add', amount: 0.8 },
+        { abilityId: 'cm-frostbite', valueKey: 'dps', mode: 'add', amount: 22 }
+      ]
+    }
+  },
   silhouette: { build: 'biped', scale: 0.95, bodyShape: 'robed', head: 'hood', weapon: 'staff', extras: ['cape'] },
   palette: ['#7ec8f2', '#f4fbff', '#b8c4d8'],
   barks: [

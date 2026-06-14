@@ -1,5 +1,5 @@
 import { activeTalentOptionsForTier } from './echo';
-import type { EchoProgress, HeroDef, TalentDef } from './types';
+import type { AghanimPayload, EchoProgress, HeroAugments, HeroDef, HeroAbilityPatch, TalentDef } from './types';
 
 // ------------------------------------------------------------------
 // Talents & facets are data (SPEC §5): stat mods merge into the
@@ -30,6 +30,20 @@ function applyCooldownAdd(def: HeroDef, ca: { abilityId: string; amount: number 
   ab.cooldown = ab.cooldown.map((c) => Math.max(0.5, c + ca.amount));
 }
 
+function mergeAbilityPatch(def: HeroDef, p: HeroAbilityPatch): void {
+  const ab = def.abilities.find((a) => a.id === p.abilityId);
+  if (!ab) return;
+  Object.assign(ab, structuredClone(p.patch));
+}
+
+function applyAghanimPayload(def: HeroDef, payload: AghanimPayload | undefined, addMods: (mods?: Record<string, number>) => void): void {
+  if (!payload) return;
+  addMods(payload.mods as Record<string, number> | undefined);
+  for (const ov of payload.abilityValueOverrides ?? []) applyOverride(def, ov);
+  for (const ca of payload.cooldownAdds ?? []) applyCooldownAdd(def, ca);
+  for (const patch of payload.abilityPatches ?? []) mergeAbilityPatch(def, patch);
+}
+
 /**
  * Produce a patched hero def + stat mods for a given talent/facet selection.
  * picks[i] selects option 0/1 of talent tier i (null = unpicked);
@@ -39,7 +53,8 @@ export function buildHero(
   base: HeroDef,
   picks: (0 | 1 | null)[] = [null, null, null, null],
   facetIdx = 0,
-  echo?: EchoProgress
+  echo?: EchoProgress,
+  augments?: HeroAugments
 ): HeroBuild {
   const def: HeroDef = structuredClone(base);
   const externalMods: Record<string, number> = {};
@@ -62,6 +77,9 @@ export function buildHero(
     addMods(facet.mods as Record<string, number> | undefined);
     if (facet.abilityValueOverride) applyOverride(def, facet.abilityValueOverride);
   }
+
+  if (augments?.scepter) applyAghanimPayload(def, base.aghanim?.scepter, addMods);
+  if (augments?.shard) applyAghanimPayload(def, base.aghanim?.shard, addMods);
 
   return { def, externalMods };
 }

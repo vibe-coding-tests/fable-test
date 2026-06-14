@@ -157,7 +157,26 @@ export const AXE: HeroDef = {
       abilityValueOverride: { abilityId: 'axe-berserkers-call', valueKey: 'radius', mode: 'add', amount: 45 }
     }
   ],
-  aghanim: { name: 'One Man Army', description: 'Battle Hunger and Counter Helix become stronger in crowds.', implemented: false },
+  aghanim: {
+    name: 'One Man Army',
+    description: 'Battle Hunger and Counter Helix become stronger in crowds.',
+    implemented: true,
+    scepter: {
+      abilityValueOverrides: [
+        { abilityId: 'axe-battle-hunger', valueKey: 'dps', mode: 'add', amount: 18 },
+        { abilityId: 'axe-counter-helix', valueKey: 'damage', mode: 'add', amount: 45 },
+        { abilityId: 'axe-counter-helix', valueKey: 'radius', mode: 'add', amount: 80 }
+      ],
+      cooldownAdds: [{ abilityId: 'axe-berserkers-call', amount: -3 }]
+    },
+    shard: {
+      mods: { damageTakenReductionPct: 6 },
+      abilityValueOverrides: [
+        { abilityId: 'axe-berserkers-call', valueKey: 'armor', mode: 'add', amount: 6 },
+        { abilityId: 'axe-battle-hunger', valueKey: 'slow', mode: 'add', amount: 10 }
+      ]
+    }
+  },
   silhouette: { build: 'brute', scale: 1.12, bodyShape: 'bulky', head: 'horned', weapon: 'cleaver', extras: ['shoulderpads', 'belt', 'horns'] },
   palette: ['#b32621', '#5b2a22', '#ffb34d'],
   barks: [

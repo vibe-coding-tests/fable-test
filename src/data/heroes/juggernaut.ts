@@ -193,7 +193,27 @@ export const JUGGERNAUT: HeroDef = {
       abilityValueOverride: { abilityId: 'jug-omnislash', valueKey: 'slashes', mode: 'add', amount: -1 }
     }
   ],
-  aghanim: { name: 'Swiftslash', description: 'Adds a short mini-Omnislash on a separate cooldown.', implemented: false },
+  aghanim: {
+    name: 'Swiftslash',
+    description: 'Omnislash gains more jumps; Shard turns Blade Fury into a larger chase tool.',
+    implemented: true,
+    scepter: {
+      abilityValueOverrides: [
+        { abilityId: 'jug-omnislash', valueKey: 'slashes', mode: 'add', amount: 4 },
+        { abilityId: 'jug-omnislash', valueKey: 'bonus', mode: 'add', amount: 25 },
+        { abilityId: 'jug-omnislash', valueKey: 'jumpRadius', mode: 'add', amount: 100 }
+      ],
+      cooldownAdds: [{ abilityId: 'jug-omnislash', amount: -25 }]
+    },
+    shard: {
+      mods: { moveSpeed: 18 },
+      abilityValueOverrides: [
+        { abilityId: 'jug-blade-fury', valueKey: 'dpsTick', mode: 'add', amount: 12 },
+        { abilityId: 'jug-blade-fury', valueKey: 'radius', mode: 'add', amount: 80 }
+      ],
+      cooldownAdds: [{ abilityId: 'jug-blade-fury', amount: -4 }]
+    }
+  },
   silhouette: { build: 'biped', scale: 1, bodyShape: 'slim', head: 'mask', weapon: 'sword', extras: ['shoulderpads', 'belt'] },
   palette: ['#c8742c', '#f3e3c2', '#7adfc4'],
   barks: [

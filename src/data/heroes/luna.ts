@@ -151,7 +151,24 @@ export const LUNA: HeroDef = {
       abilityValueOverride: { abilityId: 'luna-moon-glaives', valueKey: 'bouncePct', mode: 'add', amount: 10 }
     }
   ],
-  aghanim: { name: 'Moonfall', description: 'Eclipse can be placed at a target point.', implemented: false },
+  aghanim: {
+    name: 'Moonfall',
+    description: 'Eclipse rains more beams and Shard sharpens Lucent Beam.',
+    implemented: true,
+    scepter: {
+      abilityValueOverrides: [
+        { abilityId: 'luna-eclipse', valueKey: 'beams', mode: 'add', amount: 5 },
+        { abilityId: 'luna-eclipse', valueKey: 'radius', mode: 'add', amount: 140 }
+      ],
+      cooldownAdds: [{ abilityId: 'luna-eclipse', amount: -20 }]
+    },
+    shard: {
+      abilityValueOverrides: [
+        { abilityId: 'luna-lucent-beam', valueKey: 'damage', mode: 'add', amount: 70 },
+        { abilityId: 'luna-lucent-beam', valueKey: 'ministun', mode: 'add', amount: 0.2 }
+      ]
+    }
+  },
   silhouette: { build: 'quad', scale: 1.08, bodyShape: 'slim', head: 'helm', weapon: 'sword', extras: ['cape', 'crown'] },
   palette: ['#2e3f78', '#d8e5ff', '#b9b0ff'],
   barks: [
