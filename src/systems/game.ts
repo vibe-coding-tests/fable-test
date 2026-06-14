@@ -1,7 +1,7 @@
 import { TUNING } from '../data/tuning';
 import { DEFAULT_CREEP_DROP_TABLES, qualityOddsByTier } from '../data/creep-drops';
-import { GRADE_UP_COSTS, IMPRINT_COSTS, MASTERWORK_COSTS, REFORGE_COSTS, REROLL_AFFIX_COSTS, addSocket, disenchant, gradeUp, imprintAffix, masterwork, reforge, refreshResolvedMods, socketAddCost } from '../data/forge';
-import { affixDef, rollAffixForKind, rollAffixesFor } from '../data/affixes';
+import { GRADE_UP_COSTS, IMPRINT_COSTS, MASTERWORK_COSTS, REFORGE_COSTS, REROLL_AFFIX_COSTS, addSocket, disenchant, gradeUp, imprintAffix, masterwork, reforge, refreshResolvedMods, socketAddCost, socketUnsocketCost } from '../data/forge';
+import { affixDef, affixPoolForItem, rollAffixForKind, rollAffixesFor } from '../data/affixes';
 import { fuseGems, gemDef, isGemId, socketsForDrop } from '../data/gems';
 import { setBonusEffects } from '../data/sets';
 import { ITEM_GRADES, levelReq, percentileForGrade, rollGrade, statMultiplier, type GradeFloorSource } from '../data/grade';
@@ -94,6 +94,8 @@ const RARITY_RANK: Record<ItemRarity, number> = {
 const MAIN_ITEM_TIERS = new Set(['t1', 't2', 't3', 't4']);
 const MERCHANT_GRADES = ['worn', 'standard', 'sharp', 'refined'] as const;
 type MerchantGrade = typeof MERCHANT_GRADES[number];
+const GAMBLE_SLOTS = ['any', 'weapon', 'armor', 'caster', 'mobility'] as const;
+type GambleSlot = typeof GAMBLE_SLOTS[number];
 
 function isMainItemTier(tier: string): boolean {
   return MAIN_ITEM_TIERS.has(tier);
@@ -357,6 +359,7 @@ export function newGameSave(starterHeroId: string): GameSave {
     ...defaultPhase4SaveFields(),
     ...phase5,
     explorationPct: { [region.id]: 0 },
+    regionVisits: { [region.id]: 1 },
     discovered: ['tv-waypoint-dawnshade'],
     settings: { quickcast: true, resonance: true, minimap: true, audio: defaultAudioSettings(), graphics: defaultGraphicsSettings(), cutscene: defaultCutsceneSettings() }
   };
@@ -483,6 +486,7 @@ export class Game {
   solvedPuzzles = new Set<string>();
   shardsTurnedIn: Record<string, number> = {};
   explorationPct: Record<string, number> = {};
+  regionVisits: Record<string, number> = {};
   resin = TUNING.resin.max;
   resinUpdatedAt = 0;
   sprintHeld = false;
@@ -600,6 +604,8 @@ export class Game {
     this.solvedPuzzles = new Set(save.solvedPuzzles ?? []);
     this.shardsTurnedIn = { ...(save.shardsTurnedIn ?? {}) };
     this.explorationPct = { ...(save.explorationPct ?? {}) };
+    this.regionVisits = { ...(save.regionVisits ?? {}) };
+    this.regionVisits[this.region.id] = Math.max(1, this.regionVisits[this.region.id] ?? 1);
     this.resin = Math.max(0, Math.min(TUNING.resin.max, save.resin ?? TUNING.resin.max));
     this.resinUpdatedAt = save.resinUpdatedAt ?? save.playtimeSec;
     this.regenResinToPlaytime();
@@ -1389,7 +1395,8 @@ export class Game {
         RARITY_RANK[rarity] >= RARITY_RANK.immortal ||
         hasSignatureAffix(it);
     });
-    if (!loud) return;
+    const meaningful = loud || items.some((it) => REG.item(it.id).tier !== 'consumable');
+    if (!meaningful) return;
     const signature = items.some((it) => hasSignatureAffix(it));
     // The biggest drops (a signature or a Pristine copy) get a brief slow-motion
     // micro-pause plus a dedicated stinger, the Diablo-unique / Borderlands-legendary
@@ -1571,7 +1578,9 @@ export class Game {
         undefined,
         source,
         this.regionalGradeFloorBump(),
-        this.endgameAffixUnlocked()
+        this.endgameAffixUnlocked(),
+        this.regionalGradeFloorMin(this.region.id, source),
+        this.region.id
       );
     });
     const drops = chestItems.length > 0 ? this.addDroppedItems(chestItems) : [];
@@ -1643,6 +1652,7 @@ export class Game {
     save.playerPos = { ...gate.toPos };
     save.campRespawn = {};
     save.echoRespawn = {};
+    save.regionVisits = { ...(save.regionVisits ?? {}), [target.id]: (save.regionVisits?.[target.id] ?? 0) + 1 };
     save.savedAt = Date.now();
     this.msg(`Traveling to ${target.name}...`, 'info');
     window.dispatchEvent(new CustomEvent('ancients:load', { detail: save }));
@@ -1794,7 +1804,20 @@ export class Game {
   }
 
   private regionalGradeFloorBump(regionId = this.region.id): number {
-    return this.badgeClearedFor(regionId) ? 1 : 0;
+    void regionId;
+    return 0;
+  }
+
+  private regionalMasteryCount(regionId = this.region.id): number {
+    return this.badgeClearedFor(regionId) ? this.badges.size : 0;
+  }
+
+  private regionalGradeFloorMin(regionId = this.region.id, source?: GradeFloorSource): ItemGrade | undefined {
+    const mastery = this.regionalMasteryCount(regionId);
+    if (source === 'boss' && mastery >= 6) return 'refined';
+    if (source === 'raid' && REG.gyms.size > 0 && this.badges.size >= REG.gyms.size) return 'standard';
+    if (mastery >= 3) return 'sharp';
+    return undefined;
   }
 
   /**
@@ -1840,7 +1863,12 @@ export class Game {
       return { won: false };
     }
     const dryStreak = this.difficulty[bossId]?.dryClears ?? 0;
-    const loot = rollLoot(boss.loot, tier, dryStreak, bossLootSeed(boss, tier, dryStreak), this.lootBandForRegion(boss.region), 'boss', { gradeFloorBump: this.regionalGradeFloorBump(boss.region), endgameUnlocked: this.endgameAffixUnlocked(tier) });
+    const loot = rollLoot(boss.loot, tier, dryStreak, bossLootSeed(boss, tier, dryStreak), this.lootBandForRegion(boss.region), 'boss', {
+      gradeFloorBump: this.regionalGradeFloorBump(boss.region),
+      gradeFloorMin: this.regionalGradeFloorMin(boss.region, 'boss'),
+      regionId: boss.region,
+      endgameUnlocked: this.endgameAffixUnlocked(tier)
+    });
     const fullLoot = this.spendResinForLoot(TUNING.resin.bossCost);
     if (fullLoot) {
       this.deliverLoot(loot);
@@ -2229,7 +2257,13 @@ export class Game {
       dryStreaks,
       new Rng(stableContentSeed(`${def.id}:room-reward:${tier}:${room.index}${modSalt}`, Math.round(this.playtime))),
       this.lootBandForRegion(def.regionId),
-      { source: reward.kind === 'guardian' ? 'boss' : undefined, gradeFloorBump: this.regionalGradeFloorBump(def.regionId), endgameUnlocked: this.endgameAffixUnlocked(tier) }
+      {
+        source: reward.kind === 'guardian' ? 'boss' : undefined,
+        gradeFloorBump: this.regionalGradeFloorBump(def.regionId),
+        gradeFloorMin: this.regionalGradeFloorMin(def.regionId, reward.kind === 'guardian' ? 'boss' : undefined),
+        regionId: def.regionId,
+        endgameUnlocked: this.endgameAffixUnlocked(tier)
+      }
     );
     this.dungeonProgress[def.id] = { ...(prev ?? { clears: 0, wipes: 0, bestDepth: 0, bestTier: 'normal' as DifficultyTier }), dryStreaks: roll.dryStreaks };
     if (roll.items.length === 0) return;
@@ -2290,7 +2324,12 @@ export class Game {
       this.msg('Title earned: True Champion — you held the Pit at its hardest.', 'good');
     }
     const dryStreak = this.raidProgress[raidId]?.dryStreak ?? 0;
-    const loot = rollLoot(def.loot, tier, dryStreak, stableContentSeed(`${raidId}:loot:${tier}`, clears), this.currentLootBand(), 'raid', { gradeFloorBump: this.regionalGradeFloorBump(), endgameUnlocked: this.endgameAffixUnlocked(tier) });
+    const loot = rollLoot(def.loot, tier, dryStreak, stableContentSeed(`${raidId}:loot:${tier}`, clears), this.currentLootBand(), 'raid', {
+      gradeFloorBump: this.regionalGradeFloorBump(),
+      gradeFloorMin: this.regionalGradeFloorMin(this.region.id, 'raid'),
+      regionId: this.region.id,
+      endgameUnlocked: this.endgameAffixUnlocked(tier)
+    });
     const next = { ...(this.raidProgress[raidId] ?? { clears: 0, dryStreak: 0 }) };
     next.clears = clears + 1;
     next.dryStreak = loot.dryStreak;
@@ -2788,7 +2827,12 @@ export class Game {
   private rollItemDropsForCreep(creepId: string | undefined, tier: CreepTier, salt: number, difficulty: DifficultyTier = 'normal'): void {
     const table = (creepId ? REG.creep(creepId).drops : undefined) ?? DEFAULT_CREEP_DROP_TABLES[tier];
     const seed = stableContentSeed(`${this.region.id}:creep-drops:${tier}:${difficulty}`, Math.round(this.sim.time * 1000) + salt);
-    const roll = rollItemDrops(table, difficulty, {}, new Rng(seed), this.currentLootBand(), { gradeFloorBump: this.regionalGradeFloorBump(), endgameUnlocked: this.endgameAffixUnlocked(difficulty) });
+    const roll = rollItemDrops(table, difficulty, {}, new Rng(seed), this.currentLootBand(), {
+      gradeFloorBump: this.regionalGradeFloorBump(),
+      gradeFloorMin: this.regionalGradeFloorMin(this.region.id),
+      regionId: this.region.id,
+      endgameUnlocked: this.endgameAffixUnlocked(difficulty)
+    });
     if (roll.items.length === 0) return;
     this.addDroppedItems(roll.items);
     const names = roll.items.map((it) => REG.item(it.id).name).join(', ');
@@ -2806,8 +2850,20 @@ export class Game {
       .map((item) => item.id);
     const id = this.rollMarketItem(candidates, `elite-creep:${tier}:${salt}`);
     if (!id) return;
-    const item = instantiateDroppedItem(id, difficulty, new Rng(stableContentSeed(`elite-creep-copy:${id}`, salt)), undefined, 'elite', this.regionalGradeFloorBump(), this.endgameAffixUnlocked(difficulty));
-    const drops = this.addDroppedItems([item]);
+    const floorMin = this.regionalGradeFloorMin(this.region.id, 'elite');
+    const item = instantiateDroppedItem(id, difficulty, new Rng(stableContentSeed(`elite-creep-copy:${id}`, salt)), undefined, 'elite', this.regionalGradeFloorBump(), this.endgameAffixUnlocked(difficulty), floorMin, this.region.id);
+    const items = [item];
+    const secondChance = tier === 'large'
+      ? { normal: 0.4, nightmare: 0.55, hell: 0.7 }[difficulty]
+      : tier === 'ancient'
+        ? { normal: 0.55, nightmare: 0.7, hell: 0.85 }[difficulty]
+        : 0;
+    const secondRng = new Rng(stableContentSeed(`elite-creep-second:${tier}:${salt}`, this.inventoryStash.length));
+    if (secondChance > 0 && secondRng.chance(secondChance)) {
+      const secondId = this.rollMarketItem(candidates.filter((candidate) => candidate !== id), `elite-creep-second:${tier}:${salt}`) ?? id;
+      items.push(instantiateDroppedItem(secondId, difficulty, new Rng(stableContentSeed(`elite-creep-second-copy:${secondId}`, salt)), undefined, 'elite', this.regionalGradeFloorBump(), this.endgameAffixUnlocked(difficulty), floorMin, this.region.id));
+    }
+    const drops = this.addDroppedItems(items);
     if (drops.length > 0) this.msg(`Elite drop: ${REG.item(id).name} (→ Armory)`, 'good', this.dropAccent(drops));
   }
 
@@ -2823,6 +2879,11 @@ export class Game {
       this.inventoryStash.push(drop);
       this.codexUnlock('item:' + drop.id);
       drops.push(drop);
+    }
+    for (const it of filtered.suppressed) {
+      const drop = bindIfNeeded(it);
+      this.inventoryStash.push(drop);
+      this.codexUnlock('item:' + drop.id);
     }
     if (filtered.disenchanted.length > 0) {
       const essence = filtered.disenchanted.reduce((sum, junk) => sum + junk.essence, 0);
@@ -2898,7 +2959,12 @@ export class Game {
   private rollEchoComponentDrop(heroId: string): ItemSave[] {
     const difficulty = creepCombatTier(this.region.id);
     const seed = stableContentSeed(`${heroId}:echo-drop:${difficulty}`, this.party.find((r) => r.heroId === heroId)?.echo.kills ?? 0);
-    const roll = rollItemDrops(this.echoComponentTable(heroId), difficulty, {}, new Rng(seed), this.currentLootBand(), { gradeFloorBump: this.regionalGradeFloorBump(), endgameUnlocked: this.endgameAffixUnlocked(difficulty) });
+    const roll = rollItemDrops(this.echoComponentTable(heroId), difficulty, {}, new Rng(seed), this.currentLootBand(), {
+      gradeFloorBump: this.regionalGradeFloorBump(),
+      gradeFloorMin: this.regionalGradeFloorMin(this.region.id),
+      regionId: this.region.id,
+      endgameUnlocked: this.endgameAffixUnlocked(difficulty)
+    });
     if (roll.items.length === 0) return [];
     const drops = this.addDroppedItems(roll.items);
     this.msg(`Echo drop: ${roll.items.map((it) => REG.item(it.id).name).join(', ')} (→ Armory)`, 'good', this.dropAccent(roll.items));
@@ -3215,13 +3281,15 @@ export class Game {
   }
 
   private roamingMerchantStock(): ItemDef[] {
+    const visitCount = Math.max(1, this.regionVisits[this.region.id] ?? 1);
+    const refreshIndex = Math.floor((visitCount - 1) / Math.max(1, TUNING.merchantRefreshPerVisits));
     const seeded = [...REG.items.values()]
       .filter((item) => isMainItemTier(item.tier))
       .filter((item) => itemAllowedFromSource(item.id, 'shop'))
       .filter((item) => !GATED_TOP_TIER.has(item.id))
       .map((item) => ({
         item,
-        key: stableContentSeed(`roaming-merchant:${this.region.id}:${item.id}`, Math.floor(this.playtime / 600))
+        key: stableContentSeed(`roaming-merchant:${this.region.id}:${item.id}`, refreshIndex)
       }));
     return seeded.sort((a, b) => a.key - b.key).slice(0, 6).map((entry) => entry.item);
   }
@@ -3247,7 +3315,7 @@ export class Game {
       rarity: ItemRarity;
       grades: { grade: MerchantGrade; price: number; canBuy: boolean }[];
     }[];
-    gambleVendor: { tier: Extract<ItemTier, 't1' | 't2' | 't3' | 't4'>; price: number; canRoll: boolean }[];
+    gambleVendor: { tier: Extract<ItemTier, 't1' | 't2' | 't3' | 't4'>; slot: GambleSlot; price: number; canRoll: boolean; pity: boolean }[];
   } {
     const bands: LootBand[] = ['early', 'mid', 'late'];
     const gambleTiers = ['t1', 't2', 't3', 't4'] as const;
@@ -3275,11 +3343,13 @@ export class Game {
           return { grade, price, canBuy: this.inTown() && this.gold >= price };
         })
       })),
-      gambleVendor: gambleTiers.map((tier) => ({
+      gambleVendor: gambleTiers.flatMap((tier) => GAMBLE_SLOTS.map((slot) => ({
         tier,
+        slot,
         price: TUNING.gambleVendor.tierPrice[tier],
-        canRoll: this.inTown() && this.gold >= TUNING.gambleVendor.tierPrice[tier]
-      }))
+        canRoll: this.inTown() && this.gold >= TUNING.gambleVendor.tierPrice[tier],
+        pity: this.gambleVendorPityReady()
+      })))
     };
   }
 
@@ -3323,7 +3393,20 @@ export class Game {
     return weighted[weighted.length - 1].id;
   }
 
-  private instantiateMarketItem(id: string, source: DropSource | GradeFloorSource, salt: string, opts: { bound?: boolean; quality?: ItemQuality } = {}): ItemSave {
+  private gambleVendorPityReady(): boolean {
+    return TUNING.gambleVendor.pity > 0 && (this.goldSinks.gambleRolls + 1) % TUNING.gambleVendor.pity === 0;
+  }
+
+  private gambleSlotMatches(item: ItemDef, slot: GambleSlot): boolean {
+    if (slot === 'any') return true;
+    const pools = affixPoolForItem(item);
+    if (slot === 'weapon') return pools.includes('weapon-like');
+    if (slot === 'armor') return pools.includes('armor-like');
+    if (slot === 'caster') return pools.includes('caster-like');
+    return pools.includes('mobility');
+  }
+
+  private instantiateMarketItem(id: string, source: DropSource | GradeFloorSource, salt: string, opts: { bound?: boolean; quality?: ItemQuality; gradeFloorMin?: ItemGrade } = {}): ItemSave {
     const item = instantiateDroppedItem(
       id,
       creepCombatTier(this.region.id),
@@ -3331,7 +3414,9 @@ export class Game {
       opts.quality,
       source,
       this.regionalGradeFloorBump(),
-      this.endgameAffixUnlocked()
+      this.endgameAffixUnlocked(),
+      opts.gradeFloorMin ?? this.regionalGradeFloorMin(this.region.id, source as GradeFloorSource),
+      this.region.id
     );
     if (opts.bound) item.bound = true;
     return item;
@@ -3342,7 +3427,7 @@ export class Game {
     const difficulty = creepCombatTier(this.region.id);
     const rng = new Rng(stableContentSeed(`merchant-copy:${this.region.id}:${salt}:${id}:${grade}`, Math.round(this.playtime)));
     const gradeRoll = rng.next();
-    const affixes = rollAffixesFor(def, grade, difficulty, rng, this.endgameAffixUnlocked(difficulty));
+    const affixes = rollAffixesFor(def, grade, difficulty, rng, this.endgameAffixUnlocked(difficulty), this.region.id);
     const sockets = socketsForDrop(grade, def.socketCap ?? 0, rng.next());
     return refreshResolvedMods({ id, grade, gradeRoll, affixes, sockets, bound: true }, def);
   }
@@ -3475,9 +3560,13 @@ export class Game {
     return item;
   }
 
-  gambleVendorRoll(tier: Extract<ItemTier, 't1' | 't2' | 't3' | 't4'>): ItemSave | null {
+  gambleVendorRoll(tier: Extract<ItemTier, 't1' | 't2' | 't3' | 't4'>, slot: GambleSlot = 'any'): ItemSave | null {
     if (!this.inTown()) {
       this.msg('The Gamble Vendor trades from town', 'bad');
+      return null;
+    }
+    if (!GAMBLE_SLOTS.includes(slot)) {
+      this.msg('Choose a valid gamble slot', 'bad');
       return null;
     }
     const cost = TUNING.gambleVendor.tierPrice[tier];
@@ -3487,19 +3576,21 @@ export class Game {
     }
     const candidates = [...REG.items.values()]
       .filter((item) => item.tier === tier)
+      .filter((item) => this.gambleSlotMatches(item, slot))
       .filter((item) => itemAllowedFromSource(item.id, 'gamble'))
       .filter((item) => !GATED_TOP_TIER.has(item.id))
       .map((item) => item.id);
-    const id = this.rollMarketItem(candidates, `vendor:${tier}:${this.goldSinks.gambleRolls}`);
+    const id = this.rollMarketItem(candidates, `vendor:${tier}:${slot}:${this.goldSinks.gambleRolls}`);
     if (!id) {
-      this.msg(`No ${tier.toUpperCase()} gamble stock is available`, 'bad');
+      this.msg(`No ${tier.toUpperCase()} ${slot} gamble stock is available`, 'bad');
       return null;
     }
+    const pity = this.gambleVendorPityReady();
     this.gold -= cost;
     this.goldSinks.gambleRolls += 1;
-    const item = this.instantiateMarketItem(id, 'gamble', `vendor:${tier}:${this.goldSinks.gambleRolls}`, { bound: true });
+    const item = this.instantiateMarketItem(id, 'gamble', `vendor:${tier}:${slot}:${this.goldSinks.gambleRolls}`, { bound: true, gradeFloorMin: pity ? 'sharp' : this.regionalGradeFloorMin(this.region.id) });
     this.addDroppedItems([item], { awardMarks: false });
-    this.msg(`Gamble vendor: ${REG.item(id).name} (bound, → Armory)`, 'good', this.dropAccent([item]));
+    this.msg(`Gamble vendor: ${REG.item(id).name}${pity ? ' (pity Sharp+)' : ''} (bound, → Armory)`, 'good', this.dropAccent([item]));
     return item;
   }
 
@@ -3680,11 +3771,22 @@ export class Game {
       this.msg('That socket is empty', 'bad');
       return false;
     }
+    const cost = socketUnsocketCost(target.def);
+    if (this.essence < cost.essence) {
+      this.msg(`Need ${cost.essence} essence to unsocket ${gem.name}`, 'bad');
+      return false;
+    }
+    this.essence -= cost.essence;
     sockets[socketIdx] = null;
     this.inventoryStash[stashIdx] = refreshResolvedMods({ ...target.item, sockets }, target.def);
     this.inventoryStash.push({ id: gemId });
-    this.msg(`Returned ${gem.name} to the Armory`, 'info');
+    this.msg(`Returned ${gem.name} to the Armory (-${cost.essence} essence)`, 'info');
     return true;
+  }
+
+  unsocketArmoryGemQuote(stashIdx: number): { essence: number } | null {
+    const target = this.forgeableArmoryItem(stashIdx);
+    return target ? socketUnsocketCost(target.def) : null;
   }
 
   addArmorySocketQuote(stashIdx: number): { gold: number; essence: number; sockets: number; cap: number } | null {
@@ -3793,7 +3895,7 @@ export class Game {
     this.essence -= quote.essence;
     this.goldSinks.gambleRolls += 1;
     const seed = stableContentSeed(`forge:grade:${target.item.id}:${quote.to}:${this.goldSinks.gambleRolls}`, Math.round(this.playtime));
-    const result = gradeUp(target.item, target.def, new Rng(seed), { deterministic, difficulty: creepCombatTier(this.region.id), endgameUnlocked: this.endgameAffixUnlocked() });
+    const result = gradeUp(target.item, target.def, new Rng(seed), { deterministic, difficulty: creepCombatTier(this.region.id), endgameUnlocked: this.endgameAffixUnlocked(), regionId: this.region.id });
     this.inventoryStash[stashIdx] = result.item;
     this.msg(
       result.changed
@@ -3831,7 +3933,7 @@ export class Game {
     this.essence -= quote.essence;
     this.goldSinks.gambleRolls += 1;
     const seed = stableContentSeed(`forge:reforge:${target.item.id}:${quote.grade}:${this.goldSinks.gambleRolls}`, Math.round(this.playtime));
-    this.inventoryStash[stashIdx] = reforge(target.item, target.def, new Rng(seed), creepCombatTier(this.region.id), undefined, this.endgameAffixUnlocked());
+    this.inventoryStash[stashIdx] = reforge(target.item, target.def, new Rng(seed), creepCombatTier(this.region.id), undefined, this.endgameAffixUnlocked(), this.region.id);
     const locked = target.item.imprintedAffixId ? ' (imprint preserved)' : '';
     this.msg(`Reforged ${target.def.name}'s affixes${locked}`, 'good');
     return true;
@@ -3881,7 +3983,7 @@ export class Game {
     const kind = affixDef(affix.affixId).kind;
     const exclude = (target.item.affixes ?? []).map((a, i) => (i === affixIdx ? '' : a.affixId)).filter(Boolean);
     const seed = stableContentSeed(`forge:reroll-affix:${target.item.id}:${affixIdx}:${this.goldSinks.gambleRolls}`, Math.round(this.playtime));
-    const candidate = rollAffixForKind(target.def, kind, target.item.grade ?? 'standard', creepCombatTier(this.region.id), new Rng(seed), exclude, this.endgameAffixUnlocked());
+    const candidate = rollAffixForKind(target.def, kind, target.item.grade ?? 'standard', creepCombatTier(this.region.id), new Rng(seed), exclude, this.endgameAffixUnlocked(), this.region.id);
     if (!candidate) {
       this.msg('No alternative affix could be rolled', 'bad');
       return false;
@@ -4086,6 +4188,73 @@ export class Game {
     this.addNeutralCopy(this.instantiateNeutralCopy(next.id, creepCombatTier(this.region.id), this.region.seed + Math.round(this.playtime * 11) + this.goldSinks.respecs));
     this.msg(`Enchant: 3× ${REG.neutralItem(neutralId).name} → ${next.name} (-${cost}g)`, 'good');
     return next;
+  }
+
+  neutralGradeUpQuote(neutralId: string, deterministic = true): { from: ItemGrade; to: Exclude<ItemGrade, 'broken'>; gold: number; essence: number; chance: number; deterministic: boolean } | null {
+    const slot = this.neutralStash.find((s) => s.id === neutralId && s.count > 0);
+    if (!slot) return null;
+    const copy = slot.copies?.[0] ?? { id: neutralId };
+    const from = copy.grade ?? 'standard';
+    const to = this.nextItemGrade(copy);
+    if (!to) return null;
+    const cost = GRADE_UP_COSTS[to];
+    return deterministic
+      ? { from, to, gold: 0, essence: cost.deterministicEssence, chance: 1, deterministic }
+      : { from, to, gold: cost.gambleGold, essence: cost.gambleEssence, chance: cost.chance, deterministic };
+  }
+
+  tinkerNeutralGradeUp(neutralId: string, deterministic = true): boolean {
+    if (!this.inTown()) {
+      this.msg('The Tinker\u2019s Bench is in town', 'bad');
+      return false;
+    }
+    const quote = this.neutralGradeUpQuote(neutralId, deterministic);
+    if (!quote) {
+      this.msg('No upgradeable neutral copy in the stash', 'bad');
+      return false;
+    }
+    if (this.gold < quote.gold) {
+      this.msg(`Need ${quote.gold}g to grade up ${REG.neutralItem(neutralId).name}`, 'bad');
+      return false;
+    }
+    if (this.essence < quote.essence) {
+      this.msg(`Need ${quote.essence} essence to grade up ${REG.neutralItem(neutralId).name}`, 'bad');
+      return false;
+    }
+    const copy = this.takeNeutral(neutralId);
+    if (!copy) return false;
+    this.gold -= quote.gold;
+    this.essence -= quote.essence;
+    this.goldSinks.gambleRolls += 1;
+    const rng = new Rng(stableContentSeed(`neutral-grade:${neutralId}:${quote.to}:${this.goldSinks.gambleRolls}`, Math.round(this.playtime)));
+    const changed = deterministic || rng.chance(GRADE_UP_COSTS[quote.to].chance);
+    if (!changed) {
+      this.addNeutralCopy(copy);
+      this.msg(`${REG.neutralItem(neutralId).name} grade-up failed; the neutral is unchanged`, 'info');
+      return false;
+    }
+    const def = REG.neutralItem(neutralId);
+    const gradeRoll = rng.next();
+    this.addNeutralCopy({ ...copy, grade: quote.to, gradeRoll, resolvedMods: neutralGradeMods(def, quote.to, gradeRoll) });
+    this.msg(`${def.name} graded up: ${quote.from} → ${quote.to}`, 'good');
+    return true;
+  }
+
+  disenchantNeutral(neutralId: string): number {
+    if (!this.inTown()) {
+      this.msg('The Tinker\u2019s Bench is in town', 'bad');
+      return 0;
+    }
+    const copy = this.takeNeutral(neutralId);
+    if (!copy) {
+      this.msg('No such neutral in the stash', 'bad');
+      return 0;
+    }
+    const amount = disenchant(copy);
+    this.essence += amount;
+    this.goldSinks.salvages += 1;
+    this.msg(`Disenchanted ${REG.neutralItem(neutralId).name} (+${amount} essence)`, 'info');
+    return amount;
   }
 
   // ---------- gold sinks (§3.8): buyback / Tome / respec / heal ----------
@@ -5171,6 +5340,7 @@ export class Game {
       solvedPuzzles: [...this.solvedPuzzles],
       shardsTurnedIn: { ...this.shardsTurnedIn },
       explorationPct: { ...this.explorationPct },
+      regionVisits: { ...this.regionVisits },
       resin: this.resin,
       resinUpdatedAt: this.resinUpdatedAt,
       settings: { ...this.settings, audio: { ...this.settings.audio }, graphics: { ...defaultGraphicsSettings(), ...this.settings.graphics }, cutscene: { ...defaultCutsceneSettings(), ...this.settings.cutscene } }
@@ -5320,6 +5490,12 @@ export class Game {
       for (const slots of Object.values(byName)) {
         if (!Array.isArray(slots) || slots.length !== TUNING.itemSlots) return false;
         if (!slots.every((id) => id === null || (typeof id === 'string' && REG.items.has(id)))) return false;
+      }
+    }
+    if (v.regionVisits !== undefined) {
+      if (!v.regionVisits || typeof v.regionVisits !== 'object') return false;
+      for (const [regionId, visits] of Object.entries(v.regionVisits)) {
+        if (!REG.regions.has(regionId) || typeof visits !== 'number' || visits < 0) return false;
       }
     }
     if (typeof v.reputation !== 'number') return false;

@@ -74,4 +74,52 @@ test.describe('items & loot', () => {
     });
     expect(sells.every((v) => v === false)).toBe(true);
   });
+
+  test('forge, loot filter, sockets, and gamble vendor work from the live game', async ({ page }) => {
+    await boot(page, { hero: 'juggernaut', seed: 14 });
+
+    const result = await page.evaluate(() => {
+      const g = (window as any).__game;
+      g.gold = 100000;
+      g.essence = 100;
+      g.inventoryStash.push({ id: 'daedalus', bound: true, grade: 'standard', gradeRoll: 0.4, affixes: [], sockets: [] });
+      const itemIdx = g.inventoryStash.length - 1;
+      const graded = g.forgeArmoryItemGrade(itemIdx, true);
+      const addedSocket = g.addArmorySocket(itemIdx);
+      g.inventoryStash.push({ id: 'chipped-topaz' });
+      const gemIdx = g.inventoryStash.length - 1;
+      const socketed = g.socketArmoryGem(itemIdx, 0, gemIdx);
+      const unsocketed = g.unsocketArmoryGem(itemIdx, 0);
+
+      g.setLootFilter({ minGrade: 'pristine', minRarity: 'arcana' });
+      const stashBeforeFilter = g.inventoryStash.length;
+      const visible = g.addDroppedItems([{ id: 'crystalys', bound: true, grade: 'standard', gradeRoll: 0.5, affixes: [], sockets: [] }]);
+      const hiddenFilterStashed = g.inventoryStash.length === stashBeforeFilter + 1;
+
+      g.goldSinks.gambleRolls = 7;
+      const gambled = g.gambleVendorRoll('t2', 'weapon');
+
+      return {
+        graded,
+        grade: g.inventoryStash[itemIdx]?.grade,
+        addedSocket,
+        socketed,
+        unsocketed,
+        hiddenFilterVisible: visible.length,
+        hiddenFilterStashed,
+        gambledId: gambled?.id ?? null,
+        gambledGrade: gambled?.grade ?? null
+      };
+    });
+
+    expect(result.graded).toBe(true);
+    expect(result.grade).toBe('sharp');
+    expect(result.addedSocket).toBe(true);
+    expect(result.socketed).toBe(true);
+    expect(result.unsocketed).toBe(true);
+    expect(result.hiddenFilterVisible).toBe(0);
+    expect(result.hiddenFilterStashed).toBe(true);
+    expect(result.gambledId).toBeTruthy();
+    expect(['sharp', 'refined', 'pristine']).toContain(result.gambledGrade);
+  });
 });

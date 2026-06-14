@@ -313,6 +313,33 @@ describe('neutral-items-live (test 11)', () => {
     expect(copy?.grade).toBe('sharp');
     expect(copy?.resolvedMods?.maxHp).toBe(12);
   });
+
+  it('grades up and disenchants neutral copies at the Tinker\u2019s Bench', () => {
+    const save = soloSave('juggernaut', 20);
+    save.gold = 5000;
+    save.essence = 100;
+    save.neutralStash = [{
+      id: 'trusty-shovel',
+      count: 2,
+      copies: [
+        { id: 'trusty-shovel', grade: 'standard', gradeRoll: 0.4, resolvedMods: {} },
+        { id: 'trusty-shovel', grade: 'worn', gradeRoll: 0.3, resolvedMods: {} }
+      ]
+    }];
+    const g = Game.headless(save);
+    g.activeUnit()!.pos = { ...g.region.town.pos };
+
+    const quote = g.neutralGradeUpQuote('trusty-shovel', true)!;
+    expect(quote.to).toBe('sharp');
+    expect(g.tinkerNeutralGradeUp('trusty-shovel', true)).toBe(true);
+    expect(g.neutralStash.find((s) => s.id === 'trusty-shovel')?.copies?.some((copy) => copy.grade === 'sharp')).toBe(true);
+    expect(g.essence).toBe(100 - GRADE_UP_COSTS.sharp.deterministicEssence);
+
+    const beforeEssence = g.essence;
+    const gained = g.disenchantNeutral('trusty-shovel');
+    expect(gained).toBeGreaterThan(0);
+    expect(g.essence).toBe(beforeEssence + gained);
+  });
 });
 
 describe('Armory and bound loot', () => {
@@ -376,6 +403,19 @@ describe('Armory and bound loot', () => {
     expect(gambled?.bound).toBe(true);
     expect(gambled?.grade).toBeDefined();
     expect(gambled?.affixes).toBeDefined();
+  });
+
+  it('gamble vendor supports slot-family rolls and pity forces Sharp+', () => {
+    const save = soloSave('juggernaut', 30);
+    save.gold = 100000;
+    save.goldSinks.gambleRolls = TUNING.gambleVendor.pity - 1;
+    const g = Game.headless(save);
+    g.activeUnit()!.pos = { ...g.region.town.pos };
+
+    const item = g.gambleVendorRoll('t2', 'weapon');
+    expect(item).not.toBeNull();
+    expect(['sharp', 'refined', 'pristine']).toContain(item?.grade);
+    expect(REG.item(item!.id).tier).toBe('t2');
   });
 
   it('still sells liquid components for gold', () => {
@@ -747,6 +787,7 @@ describe('loot overhaul curated chase and black-market sinks', () => {
 
   it('sockets and unsockets Armory gems on bound items', () => {
     const save = soloSave('juggernaut', 20);
+    save.essence = 10;
     save.inventoryStash = [
       { id: 'daedalus', bound: true, grade: 'refined', gradeRoll: 0.5, affixes: [], sockets: [null], resolvedMods: {} },
       { id: 'chipped-topaz' }
@@ -762,10 +803,12 @@ describe('loot overhaul curated chase and black-market sinks', () => {
     const damageWithGem = g.inventoryStash[0].resolvedMods?.damage ?? 0;
     expect(damageWithGem).toBeGreaterThan(gem.mods.damage ?? 0);
 
+    const pullCost = g.unsocketArmoryGemQuote(0)!.essence;
     expect(g.unsocketArmoryGem(0, 0)).toBe(true);
     expect(g.inventoryStash[0].sockets).toEqual([null]);
     expect(g.inventoryStash[0].resolvedMods?.damage ?? 0).toBeLessThan(damageWithGem);
     expect(g.inventoryStash[1]).toEqual({ id: 'chipped-topaz' });
+    expect(g.essence).toBe(10 - pullCost);
   });
 
   it('rerolls, imprints, and preserves an affix through reforge', () => {
@@ -840,6 +883,21 @@ describe('loot overhaul curated chase and black-market sinks', () => {
     expect(rebuilt.lootFilter?.autoDisenchantBelowGrade).toBe('standard');
   });
 
+  it('suppresses filtered pickup toasts without deleting non-auto-disenchanted loot', () => {
+    const save = soloSave('juggernaut', 20);
+    const g = Game.headless(save);
+    g.setLootFilter({ minGrade: 'pristine', minRarity: 'arcana' });
+
+    const before = g.inventoryStash.length;
+    const visible = (g as unknown as { addDroppedItems(items: GameSave['inventoryStash']): GameSave['inventoryStash'] }).addDroppedItems([
+      { id: 'crystalys', bound: true, grade: 'standard', gradeRoll: 0.5, affixes: [], sockets: [] }
+    ]);
+
+    expect(visible).toHaveLength(0);
+    expect(g.inventoryStash).toHaveLength(before + 1);
+    expect(g.inventoryStash.at(-1)?.id).toBe('crystalys');
+  });
+
   it('exposes live Black Market wheel costs through the view-model', () => {
     const save = soloSave('juggernaut', 20);
     save.gold = 5000;
@@ -853,6 +911,23 @@ describe('loot overhaul curated chase and black-market sinks', () => {
     expect(view.relicCost).toBe(TUNING.blackMarket.relicWheelBaseCost);
     expect(view.relicCeiling).toBe('legendary');
     expect(view.recipeRarities).toContain('rare');
+  });
+
+  it('refreshes roaming merchant stock by region visits instead of playtime', () => {
+    const save = soloSave('juggernaut', 20);
+    save.gold = 5000;
+    save.regionVisits = { [save.regionId]: 1 };
+    const first = Game.headless(save).blackMarketView().roamingMerchant.map((item) => item.id);
+
+    save.regionVisits = { [save.regionId]: TUNING.merchantRefreshPerVisits };
+    save.playtimeSec = 99999;
+    const sameVisitWindow = Game.headless(save).blackMarketView().roamingMerchant.map((item) => item.id);
+
+    save.regionVisits = { [save.regionId]: TUNING.merchantRefreshPerVisits + 1 };
+    const refreshed = Game.headless(save).blackMarketView().roamingMerchant.map((item) => item.id);
+
+    expect(sameVisitWindow).toEqual(first);
+    expect(refreshed).not.toEqual(first);
   });
 
   it('relic-wheel copies can come pre-upgraded but never above the collectible grades', () => {

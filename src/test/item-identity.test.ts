@@ -302,6 +302,27 @@ describe('rolled item identity', () => {
     expect(roll.items[0].id).toBe('broadsword');
     expect(roll.items[0].grade).not.toBe('broken');
   });
+
+  it('applies regional mastery minimum floors directly', () => {
+    const roll = rollItemDrops({
+      guaranteed: ['broadsword'],
+      slots: []
+    }, 'normal', {}, new Rng(3), 'early', { gradeFloorMin: 'sharp' });
+
+    expect(['sharp', 'refined', 'pristine']).toContain(roll.items[0].grade);
+  });
+
+  it('weights regional affixes toward local flavor', () => {
+    const def = REG.item('octarine-core');
+    let normalFrost = 0;
+    let icewrackFrost = 0;
+    for (let seed = 1; seed <= 300; seed++) {
+      if (rollAffixesFor(def, 'sharp', 'nightmare', new Rng(seed), false).some((a) => a.affixId === 'frost-veined')) normalFrost += 1;
+      if (rollAffixesFor(def, 'sharp', 'nightmare', new Rng(seed), false, 'icewrack').some((a) => a.affixId === 'frost-veined')) icewrackFrost += 1;
+    }
+
+    expect(icewrackFrost).toBeGreaterThan(normalFrost);
+  });
 });
 
 describe('endgame T5 affix gating (§14)', () => {

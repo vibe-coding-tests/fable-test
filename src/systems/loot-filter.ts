@@ -6,6 +6,7 @@ export interface LootFilterRule extends LootFilterSave {}
 
 export interface LootFilterResult {
   kept: ItemSave[];
+  suppressed: ItemSave[];
   disenchanted: { item: ItemSave; essence: number }[];
 }
 
@@ -32,6 +33,7 @@ export function passesLootFilter(item: ItemSave, rarity: ItemRarity | undefined,
 
 export function applyLootFilter(items: ItemSave[], rarityFor: (item: ItemSave) => ItemRarity | undefined, rule: LootFilterRule = DEFAULT_LOOT_FILTER): LootFilterResult {
   const kept: ItemSave[] = [];
+  const suppressed: ItemSave[] = [];
   const disenchanted: { item: ItemSave; essence: number }[] = [];
   for (const item of items) {
     if (item.locked) {
@@ -45,7 +47,9 @@ export function applyLootFilter(items: ItemSave[], rarityFor: (item: ItemSave) =
       disenchanted.push({ item, essence: disenchant(item) });
     } else if (passesLootFilter(item, rarity, rule)) {
       kept.push(item);
+    } else {
+      suppressed.push(item);
     }
   }
-  return { kept, disenchanted };
+  return { kept, suppressed, disenchanted };
 }

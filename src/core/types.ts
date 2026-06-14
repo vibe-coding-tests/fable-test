@@ -557,6 +557,7 @@ export interface ItemAffixDef {
   tier: 1 | 2 | 3 | 4 | 5;
   pools: AffixPoolId[];
   weight: number;
+  regionWeights?: Partial<Record<string, number>>;
   statRanges?: Partial<Record<keyof StatMods, [number, number]>>;
   attack?: Partial<AttackModSpec>;
   trigger?: TriggerSpec;
@@ -1362,6 +1363,7 @@ export interface GameSave {
   solvedPuzzles?: string[];
   shardsTurnedIn?: Record<string, number>;
   explorationPct?: Record<string, number>;
+  regionVisits?: Record<string, number>;
   resin?: number;
   resinUpdatedAt?: number;
   settings: { quickcast: boolean; resonance?: boolean; minimap?: boolean; audio: AudioSettings; graphics?: GraphicsSettings; cutscene?: CutsceneSettings };

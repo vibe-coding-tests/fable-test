@@ -59,17 +59,32 @@ export const IMPRINT_COSTS: Record<ItemGrade, { gold: number; essence: number }>
 
 const SOCKET_ADD_COSTS: Record<ItemTier, { gold: number; essence: number }> = {
   consumable: { gold: 0, essence: 0 },
-  component: { gold: 250, essence: 1 },
-  basic: { gold: 300, essence: 1 },
-  t1: { gold: 450, essence: 1 },
-  t2: { gold: 750, essence: 2 },
-  t3: { gold: 1200, essence: 4 },
-  t4: { gold: 1800, essence: 7 },
+  component: { gold: 250, essence: 0 },
+  basic: { gold: 300, essence: 0 },
+  t1: { gold: 450, essence: 0 },
+  t2: { gold: 750, essence: 0 },
+  t3: { gold: 1200, essence: 0 },
+  t4: { gold: 1800, essence: 0 },
   special: { gold: 0, essence: 0 }
+};
+
+const SOCKET_UNSOCKET_COSTS: Record<ItemTier, { essence: number }> = {
+  consumable: { essence: 0 },
+  component: { essence: 1 },
+  basic: { essence: 1 },
+  t1: { essence: 1 },
+  t2: { essence: 2 },
+  t3: { essence: 3 },
+  t4: { essence: 4 },
+  special: { essence: 0 }
 };
 
 export function socketAddCost(def: ItemDef): { gold: number; essence: number } {
   return SOCKET_ADD_COSTS[def.tier];
+}
+
+export function socketUnsocketCost(def: ItemDef): { essence: number } {
+  return SOCKET_UNSOCKET_COSTS[def.tier];
 }
 
 function mergeMods(...parts: (StatModMap | undefined)[]): StatModMap {
@@ -107,7 +122,7 @@ export function disenchant(item: ItemSave): number {
   return base + signatureBonus;
 }
 
-export function gradeUp(item: ItemSave, def: ItemDef, rng: Rng, opts: { deterministic?: boolean; difficulty?: DifficultyTier; endgameUnlocked?: boolean } = {}): { item: ItemSave; changed: boolean } {
+export function gradeUp(item: ItemSave, def: ItemDef, rng: Rng, opts: { deterministic?: boolean; difficulty?: DifficultyTier; endgameUnlocked?: boolean; regionId?: string } = {}): { item: ItemSave; changed: boolean } {
   const from = item.grade ?? 'standard';
   const to = nextGrade(from);
   if (!to) return { item, changed: false };
@@ -117,17 +132,17 @@ export function gradeUp(item: ItemSave, def: ItemDef, rng: Rng, opts: { determin
   const affixes = [...(item.affixes ?? [])];
   const slotsNeeded = GRADE_DEFS[to].affixSlots - affixes.filter((affix) => !affix.affixId.includes('signature')).length;
   if (slotsNeeded > 0) {
-    affixes.push(...rollAffixesFor(def, to, opts.difficulty ?? 'normal', rng, opts.endgameUnlocked).slice(0, slotsNeeded));
+    affixes.push(...rollAffixesFor(def, to, opts.difficulty ?? 'normal', rng, opts.endgameUnlocked, opts.regionId).slice(0, slotsNeeded));
   }
   const nextItem = { ...item, grade: to, gradeRoll, affixes };
   return { item: refreshResolvedMods(nextItem, def), changed: true };
 }
 
-export function reforge(item: ItemSave, def: ItemDef, rng: Rng, difficulty: DifficultyTier, imprintedAffixId?: string, endgameUnlocked = false): ItemSave {
+export function reforge(item: ItemSave, def: ItemDef, rng: Rng, difficulty: DifficultyTier, imprintedAffixId?: string, endgameUnlocked = false, regionId?: string): ItemSave {
   const grade = item.grade ?? 'standard';
   const imprint = imprintedAffixId ?? item.imprintedAffixId;
   const imprinted = item.affixes?.find((affix) => affix.affixId === imprint);
-  const rerolled = rollAffixesFor(def, grade, difficulty, rng, endgameUnlocked);
+  const rerolled = rollAffixesFor(def, grade, difficulty, rng, endgameUnlocked, regionId);
   const affixes = imprinted ? [imprinted, ...rerolled.filter((affix) => affix.affixId !== imprinted.affixId)] : rerolled;
   return refreshResolvedMods({ ...item, affixes: affixes.slice(0, GRADE_DEFS[grade].affixSlots + 1), imprintedAffixId: imprinted?.affixId }, def);
 }
@@ -137,7 +152,7 @@ export function masterwork(item: ItemSave, def: ItemDef, amount = 0.12): ItemSav
   return refreshResolvedMods({ ...item, gradeRoll }, def);
 }
 
-export function rerollAffix(item: ItemSave, def: ItemDef, affixIdx: number, rng: Rng, difficulty: DifficultyTier, endgameUnlocked = false): ItemSave {
+export function rerollAffix(item: ItemSave, def: ItemDef, affixIdx: number, rng: Rng, difficulty: DifficultyTier, endgameUnlocked = false, regionId?: string): ItemSave {
   const affixes = [...(item.affixes ?? [])];
   const current = affixes[affixIdx];
   if (!current || current.affixId === item.imprintedAffixId) return refreshResolvedMods(item, def);
@@ -149,7 +164,8 @@ export function rerollAffix(item: ItemSave, def: ItemDef, affixIdx: number, rng:
     difficulty,
     rng,
     affixes.map((affix, i) => (i === affixIdx ? '' : affix.affixId)).filter(Boolean),
-    endgameUnlocked
+    endgameUnlocked,
+    regionId
   );
   if (!replacement) return refreshResolvedMods(item, def);
   affixes[affixIdx] = replacement;

@@ -154,6 +154,11 @@ function compareItems(candidate: ItemSave, equipped: ItemSave | null): { verdict
     .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
     .slice(0, 4)
     .map(([key, value]) => `${fmtStatValue(key, value)} ${statLabel(key)}`);
+  const candAffixes = new Set((candidate.affixes ?? []).map((affix) => affixDef(affix.affixId).name));
+  const eqAffixes = new Set((equipped.affixes ?? []).map((affix) => affixDef(affix.affixId).name));
+  const gained = [...candAffixes].filter((name) => !eqAffixes.has(name)).slice(0, 2);
+  const lost = [...eqAffixes].filter((name) => !candAffixes.has(name)).slice(0, 2);
+  lines.push(...gained.map((name) => `+ ${name}`), ...lost.map((name) => `- ${name}`));
   return { verdict, cls, delta, lines };
 }
 
@@ -1506,12 +1511,17 @@ export class Hud {
     for (const s of g.neutralStash) {
       const def = REG.neutralItem(s.id);
       const canEnchant = !!def.enchantsInto && s.count >= 3;
+      const gradeDet = g.neutralGradeUpQuote(s.id, true);
+      const gradeGamble = g.neutralGradeUpQuote(s.id, false);
       stashHtml += `<div class="svc-row">
         <div class="svc-main"><b>${def.name}</b> <em>T${def.tier} ·×${s.count}</em><div class="rr-sub">${def.lore}</div></div>
         <div class="svc-actions">
           <button class="btn small" data-neq="${s.id}">Equip → ${activeName}</button>
           <button class="btn small" data-nrr="${s.id}">Reroll ${TUNING.tinkersBench.rerollCost}g</button>
           <button class="btn small" data-nen="${s.id}" ${canEnchant ? '' : 'disabled'}>Enchant ${TUNING.tinkersBench.enchantCost}g</button>
+          ${gradeDet ? `<button class="btn small" data-ngd="${s.id}">Grade ${gradeDet.to} (${gradeDet.essence}e)</button>` : ''}
+          ${gradeGamble ? `<button class="btn small" data-ngg="${s.id}">Gamble ${gradeGamble.to} (${gradeGamble.gold}g/${gradeGamble.essence}e · ${Math.round(gradeGamble.chance * 100)}%)</button>` : ''}
+          <button class="btn small" data-ndis="${s.id}">Disenchant</button>
         </div>
       </div>`;
     }
@@ -1632,8 +1642,9 @@ export class Hud {
           const socketControls = !gem && it.bound && (it.sockets ?? []).length > 0
             ? (it.sockets ?? []).map((socketed, socketIdx) => {
                 const socketedGem = socketed ? gemDef(socketed) : null;
+                const unsocket = socketedGem ? g.unsocketArmoryGemQuote(i) : null;
                 return socketedGem
-                  ? `<button class="btn small" data-arm-unsocket="${i}:${socketIdx}">Unsocket ${socketedGem.name}</button>`
+                  ? `<button class="btn small" data-arm-unsocket="${i}:${socketIdx}" ${unsocket && g.essence >= unsocket.essence ? '' : 'disabled'}>Unsocket ${socketedGem.name}${unsocket ? ` (${unsocket.essence}e)` : ''}</button>`
                   : gemOptions
                     ? `<select class="small-select" data-arm-gem-pick="${i}:${socketIdx}">${gemOptions}</select><button class="btn small" data-arm-socket="${i}:${socketIdx}">Socket</button>`
                     : `<span class="rr-sub">empty socket</span>`;
@@ -1716,7 +1727,7 @@ export class Hud {
       .map((m) => `<button class="btn small" data-bm-mark="${m.band}" ${m.canRedeem ? '' : 'disabled'}>${cap(m.band)} ${m.marks}/${m.quota}</button>`)
       .join('');
     const gambleBtns = bm.gambleVendor
-      .map((gbl) => `<button class="btn small" data-bm-gamble="${gbl.tier}" ${gbl.canRoll ? '' : 'disabled'}>${gbl.tier.toUpperCase()} ${gbl.price}g</button>`)
+      .map((gbl) => `<button class="btn small" data-bm-gamble="${gbl.tier}:${gbl.slot}" ${gbl.canRoll ? '' : 'disabled'}>${gbl.tier.toUpperCase()} ${cap(gbl.slot)} ${gbl.price}g${gbl.pity ? ' · pity' : ''}</button>`)
       .join('');
     const merchantHtml = bm.roamingMerchant.map((offer) => {
       const gradeBtns = offer.grades
@@ -1750,7 +1761,7 @@ export class Hud {
       </div>
       <div class="svc-row">
         <div class="svc-main"><b>Gamble Vendor</b>
-          <div class="rr-sub">Pick a core tier; receive one random bound rolled copy with grade, affixes, and sockets.</div>
+          <div class="rr-sub">Pick a core tier and slot family; every ${TUNING.gambleVendor.pity}th spin is Sharp+.</div>
         </div>
         <div class="svc-actions">${gambleBtns}</div>
       </div>
@@ -1870,6 +1881,9 @@ export class Hud {
     this.modal.querySelectorAll<HTMLElement>('[data-neq]').forEach((el) => el.addEventListener('click', () => { g.equipNeutral(g.activeIdx, el.dataset.neq!); rerender(); }));
     this.modal.querySelectorAll<HTMLElement>('[data-nrr]').forEach((el) => el.addEventListener('click', () => { g.tinkerReroll(el.dataset.nrr!); rerender(); }));
     this.modal.querySelectorAll<HTMLElement>('[data-nen]').forEach((el) => el.addEventListener('click', () => { g.tinkerEnchant(el.dataset.nen!); rerender(); }));
+    this.modal.querySelectorAll<HTMLElement>('[data-ngd]').forEach((el) => el.addEventListener('click', () => { g.tinkerNeutralGradeUp(el.dataset.ngd!, true); rerender(); }));
+    this.modal.querySelectorAll<HTMLElement>('[data-ngg]').forEach((el) => el.addEventListener('click', () => { g.tinkerNeutralGradeUp(el.dataset.ngg!, false); rerender(); }));
+    this.modal.querySelectorAll<HTMLElement>('[data-ndis]').forEach((el) => el.addEventListener('click', () => { g.disenchantNeutral(el.dataset.ndis!); rerender(); }));
     this.modal.querySelectorAll<HTMLElement>('[data-nrec]').forEach((el) => el.addEventListener('click', () => { g.reclaimNeutral(Number(el.dataset.nrec)); rerender(); }));
     this.modal.querySelectorAll<HTMLElement>('[data-arm-hero-eq]').forEach((el) => el.addEventListener('click', () => {
       const idx = Number(el.dataset.armHeroEq);
@@ -1951,7 +1965,11 @@ export class Hud {
     this.modal.querySelectorAll<HTMLElement>('[data-bm-recipe]').forEach((el) => el.addEventListener('click', () => { g.blackMarketRecipeWheel(el.dataset.bmRecipe as ItemRarity); rerender(); }));
     this.modal.querySelector<HTMLElement>('[data-bm-relic]')?.addEventListener('click', () => { g.blackMarketRelicWheel(); rerender(); });
     this.modal.querySelectorAll<HTMLElement>('[data-bm-mark]').forEach((el) => el.addEventListener('click', () => { g.blackMarketRedeemLootMark(el.dataset.bmMark as 'early' | 'mid' | 'late'); rerender(); }));
-    this.modal.querySelectorAll<HTMLElement>('[data-bm-gamble]').forEach((el) => el.addEventListener('click', () => { g.gambleVendorRoll(el.dataset.bmGamble as 't1' | 't2' | 't3' | 't4'); rerender(); }));
+    this.modal.querySelectorAll<HTMLElement>('[data-bm-gamble]').forEach((el) => el.addEventListener('click', () => {
+      const [tier, slot] = el.dataset.bmGamble!.split(':');
+      g.gambleVendorRoll(tier as 't1' | 't2' | 't3' | 't4', slot as 'any' | 'weapon' | 'armor' | 'caster' | 'mobility');
+      rerender();
+    }));
     this.modal.querySelectorAll<HTMLElement>('[data-bm-merchant]').forEach((el) => el.addEventListener('click', () => {
       const [itemId, grade] = el.dataset.bmMerchant!.split(':');
       g.roamingMerchantBuy(itemId, grade as 'worn' | 'standard' | 'sharp' | 'refined');
