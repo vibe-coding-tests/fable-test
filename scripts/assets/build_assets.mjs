@@ -73,6 +73,7 @@ function assetGroup(rel) {
   if (rel.startsWith('heroes/')) return 'hero';
   if (rel.startsWith('env/')) return 'env';
   if (rel.startsWith('ui/')) return 'ui';
+  if (rel.startsWith('vfx/')) return 'vfx';
   if (rel.startsWith('props/town/')) return 'town';
   if (rel.startsWith('props/') || rel.startsWith('textures/terrain/')) return 'terrain';
   if (rel.startsWith('textures/')) return 'terrain';
@@ -249,9 +250,18 @@ function processCopy(item) {
 }
 
 function buildManifest(sourceByOut) {
+  const previousByPath = new Map();
+  if (fs.existsSync(MANIFEST_PATH)) {
+    try {
+      const previous = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'));
+      for (const file of previous.files ?? []) previousByPath.set(file.path, file);
+    } catch {
+      previousByPath.clear();
+    }
+  }
   const files = walkAssets().map((rel) => {
     const abs = path.join(PUBLIC_ASSETS, rel);
-    const meta = sourceByOut.get(rel) ?? {};
+    const meta = sourceByOut.get(rel) ?? previousByPath.get(rel) ?? {};
     const bytes = fs.statSync(abs).size;
     const group = meta.group ?? meta.preloadGroup ?? assetGroup(rel);
     return {

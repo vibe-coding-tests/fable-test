@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { applyHeroLikeness, buildUnitRig, modelGeometryCacheSize, mountHeroModel } from '../engine/models';
+import { applyHeroLikeness, applyItemAppearances, buildUnitRig, modelGeometryCacheSize, mountHeroModel } from '../engine/models';
 import { ENABLED_HERO_MODELS, heroAssetEntry, PHASE5_STARTER_ASSETS } from '../engine/assets';
 import { ALL_HEROES } from '../data/index';
 
@@ -25,6 +25,13 @@ describe('procedural model cache', () => {
       // The likeness overlay should add at least one detail mesh to the body.
       expect(rig.body.children.length, `${hero.id} likeness parts`).toBeGreaterThan(basePartCount);
     }
+  });
+
+  it('builds D2 item parts without external assets', () => {
+    const rig = buildUnitRig({ build: 'biped', scale: 1 }, ['#88aaff', '#446688', '#ffffff']);
+    applyItemAppearances(rig, [{ parts: ['cloak', 'halo'], tint: '#b89fff' }]);
+
+    expect(rig.itemLayer.children.length).toBeGreaterThanOrEqual(3);
   });
 });
 

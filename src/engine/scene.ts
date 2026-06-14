@@ -7,7 +7,7 @@ import { buildTerrain, type TerrainInfo } from './terrain';
 import { applyHeroLikeness, applyItemAppearances, buildUnitRig, buildSelectionRing, mountHeroModel, type UnitRig } from './models';
 import { HeroAssetLoader, heroAssetEntry, creepCreatureUrl } from './assets';
 import { animateRig, newAnimState, type AnimState } from './animator';
-import { VfxManager } from './vfx';
+import { loadVfxTextureAtlas, VfxManager } from './vfx';
 import { lodForDistance, shouldAnimateAtLod } from './lod';
 import { WORLD_SCALE } from './scale';
 import { TUNING } from '../data/tuning';
@@ -367,6 +367,7 @@ export class GameScene {
 
     this.vfx = new VfxManager((x, y) => this.terrain.heightAt(x, y), qualityCfg.transientVfxCap);
     this.scene.add(this.vfx.group);
+    if (qualityCfg.tier !== 'low') void loadVfxTextureAtlas();
 
     this.createMapMarkers(region);
 

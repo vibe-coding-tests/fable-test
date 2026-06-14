@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { AttackVisualSpec, SimEvent, Vec2, VfxSpec } from '../core/types';
 import { WORLD_SCALE } from './scale';
 import { PERFORMANCE_BUDGET } from './performance';
+import { loadTex } from './asset-loaders';
 
 // ------------------------------------------------------------------
 // Procedural VFX (SPEC §3): ~12 archetypes parameterized by color,
@@ -50,8 +51,72 @@ export function vfxGeometryCacheSize(): number {
 // or GL context, so the headless VFX/perf tests keep working. WS-H adds a small
 // family so fire/frost/storm bursts throw shaped particles (ember/snow/shard)
 // instead of all sharing one round dot. White luminance; the material tints it.
-type SpriteKind = 'soft' | 'ember' | 'snow' | 'shard';
-const SPRITE_TEX: Partial<Record<SpriteKind, THREE.DataTexture>> = {};
+export type SpriteKind = 'soft' | 'ember' | 'snow' | 'shard';
+export type TelegraphKind = 'ring' | 'spiked' | 'hatched' | 'dotted';
+
+interface AtlasRegion { x: number; y: number; w: number; h: number }
+
+export const VFX_ATLAS_URL = '/assets/vfx/vfx_atlas.webp';
+export const VFX_ATLAS_REGIONS: {
+  sprites: Record<SpriteKind, AtlasRegion>;
+  telegraphs: Record<TelegraphKind, AtlasRegion>;
+} = {
+  sprites: {
+    soft: { x: 0, y: 0.5, w: 0.25, h: 0.5 },
+    ember: { x: 0.25, y: 0.5, w: 0.25, h: 0.5 },
+    snow: { x: 0.5, y: 0.5, w: 0.25, h: 0.5 },
+    shard: { x: 0.75, y: 0.5, w: 0.25, h: 0.5 }
+  },
+  telegraphs: {
+    ring: { x: 0, y: 0, w: 0.25, h: 0.5 },
+    spiked: { x: 0.25, y: 0, w: 0.25, h: 0.5 },
+    hatched: { x: 0.5, y: 0, w: 0.25, h: 0.5 },
+    dotted: { x: 0.75, y: 0, w: 0.25, h: 0.5 }
+  }
+};
+
+const SPRITE_TEX: Partial<Record<SpriteKind, THREE.Texture>> = {};
+const TELEGRAPH_TEX: Partial<Record<TelegraphKind, THREE.Texture>> = {};
+const SPRITE_ASSET_TEX: Partial<Record<SpriteKind, THREE.Texture>> = {};
+const TELEGRAPH_ASSET_TEX: Partial<Record<TelegraphKind, THREE.Texture>> = {};
+
+function atlasFrame(base: THREE.Texture, region: AtlasRegion): THREE.Texture {
+  const tex = base.clone();
+  tex.offset.set(region.x, region.y);
+  tex.repeat.set(region.w, region.h);
+  tex.wrapS = tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.needsUpdate = true;
+  return tex;
+}
+
+/** Install a loaded VFX atlas. Procedural DataTextures remain the fallback if absent. */
+export function installVfxTextureAtlas(texture: THREE.Texture): void {
+  texture.colorSpace = THREE.NoColorSpace;
+  for (const kind of Object.keys(VFX_ATLAS_REGIONS.sprites) as SpriteKind[]) {
+    SPRITE_ASSET_TEX[kind] = atlasFrame(texture, VFX_ATLAS_REGIONS.sprites[kind]);
+  }
+  for (const kind of Object.keys(VFX_ATLAS_REGIONS.telegraphs) as TelegraphKind[]) {
+    TELEGRAPH_ASSET_TEX[kind] = atlasFrame(texture, VFX_ATLAS_REGIONS.telegraphs[kind]);
+  }
+}
+
+/** Best-effort medium+ enhancement. Resolves false when assets are absent/headless. */
+export async function loadVfxTextureAtlas(url = VFX_ATLAS_URL): Promise<boolean> {
+  const texture = await loadTex(url, { srgb: false, anisotropy: 2 });
+  if (!texture) return false;
+  installVfxTextureAtlas(texture);
+  return true;
+}
+
+export function vfxTextureAssetState(): { sprites: number; telegraphs: number; proceduralSprites: number; proceduralTelegraphs: number } {
+  return {
+    sprites: Object.keys(SPRITE_ASSET_TEX).length,
+    telegraphs: Object.keys(TELEGRAPH_ASSET_TEX).length,
+    proceduralSprites: Object.keys(SPRITE_TEX).length,
+    proceduralTelegraphs: Object.keys(TELEGRAPH_TEX).length
+  };
+}
+
 function spriteAlpha(kind: SpriteKind, nx: number, ny: number): number {
   const d = Math.hypot(nx, ny); // 0 at center, 1 at edge
   switch (kind) {
@@ -77,7 +142,9 @@ function spriteAlpha(kind: SpriteKind, nx: number, ny: number): number {
     }
   }
 }
-function particleSprite(kind: SpriteKind = 'soft'): THREE.DataTexture {
+function particleSprite(kind: SpriteKind = 'soft'): THREE.Texture {
+  const asset = SPRITE_ASSET_TEX[kind];
+  if (asset) return asset;
   const hit = SPRITE_TEX[kind];
   if (hit) return hit;
   const s = 32;
@@ -99,8 +166,6 @@ function particleSprite(kind: SpriteKind = 'soft'): THREE.DataTexture {
 // Ground telegraph decals: a small family selected by archetype so a stun ring,
 // a wall line, and a mine field each read differently on the ground instead of
 // sharing one disc (VFX_OVERHAUL WS-H). White luminance; the material tints it.
-type TelegraphKind = 'ring' | 'spiked' | 'hatched' | 'dotted';
-const TELEGRAPH_TEX: Partial<Record<TelegraphKind, THREE.DataTexture>> = {};
 function telegraphAlpha(kind: TelegraphKind, d: number, ang: number): number {
   if (d >= 1) return 0;
   const fill = 0.16 * (1 - d * 0.6);
@@ -130,7 +195,9 @@ function telegraphAlpha(kind: TelegraphKind, d: number, ang: number): number {
     }
   }
 }
-function telegraphTexture(kind: TelegraphKind = 'ring'): THREE.DataTexture {
+function telegraphTexture(kind: TelegraphKind = 'ring'): THREE.Texture {
+  const asset = TELEGRAPH_ASSET_TEX[kind];
+  if (asset) return asset;
   const hit = TELEGRAPH_TEX[kind];
   if (hit) return hit;
   const s = 64;
@@ -194,6 +261,9 @@ export class VfxManager {
         break;
       case 'crit-lunge':
         this.critSlash(from, to, visual);
+        break;
+      case 'armor-shred-flash':
+        this.armorShredFlash(from, to, visual);
         break;
     }
   }
@@ -739,6 +809,42 @@ export class VfxManager {
       mat.opacity = 0.7 * (1 - lifeT);
     });
     this.burst(to.x, to.y, visual.color2 ?? visual.color, 0.5 * (visual.scale ?? 1), 0.18, visual.color);
+  }
+
+  private armorShredFlash(from: Vec2, to: Vec2, visual: AttackVisualSpec): void {
+    const scale = visual.scale ?? 1;
+    const center = this.w(to.x, to.y, 1.05);
+    const ring = new THREE.Mesh(
+      sharedGeometry(new THREE.RingGeometry(0.28 * scale, 0.82 * scale, 28)),
+      new THREE.MeshBasicMaterial({ color: visual.color, transparent: true, opacity: 0.72, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending })
+    );
+    ring.position.copy(center);
+    ring.rotation.x = -Math.PI / 2;
+    const mat = ring.material as THREE.MeshBasicMaterial;
+    this.push(ring, 0.24, (_t, lifeT) => {
+      ring.scale.setScalar(0.75 + lifeT * 0.7);
+      mat.opacity = 0.72 * (1 - lifeT);
+    });
+
+    const a = this.attackAngle(from, to);
+    for (let i = 0; i < 5; i++) {
+      const chip = new THREE.Mesh(
+        sharedGeometry(new THREE.BoxGeometry(0.08 * scale, 0.34 * scale, 0.04 * scale)),
+        new THREE.MeshBasicMaterial({ color: visual.color2 ?? visual.color, transparent: true, opacity: 0.82, depthWrite: false, blending: THREE.AdditiveBlending })
+      );
+      const off = (i - 2) * 0.18 * scale;
+      chip.position.copy(center);
+      chip.position.x += Math.cos(a + Math.PI / 2) * off;
+      chip.position.z += Math.sin(a + Math.PI / 2) * off;
+      chip.rotation.z = -a + (i - 2) * 0.18;
+      const chipMat = chip.material as THREE.MeshBasicMaterial;
+      this.push(chip, 0.26, (_t, lifeT) => {
+        chip.position.y = center.y + lifeT * 0.45;
+        chip.scale.y = 1 + lifeT * 0.9;
+        chipMat.opacity = 0.82 * (1 - lifeT);
+      });
+    }
+    this.burst(to.x, to.y, visual.color, 0.42 * scale, 0.18, visual.color2, 'shard');
   }
 
   private bindingBeam(a: { x: number; y: number; h: number }, b: { x: number; y: number; h: number }, dur: number): void {

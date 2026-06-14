@@ -1,18 +1,19 @@
-# VFX & Asset Completion Plan
+# VFX & Theme Completion Plan
 
-This is the **asset ceiling** plan. Its sibling `VFX_OVERHAUL.md` raised the
-**procedural floor** and is essentially done: every hero has a hand-authored
-primitive likeness (122/122 profiles), every ability has authored VFX
-(0/488 ride pure archetype defaults), attacks are weapon-driven, icons and
-portraits are derived, and the scene runs the full post stack. This plan covers
-what procedural cannot finish on its own: real model/texture/audio assets and
-the remaining data coverage, **across all 122 heroes and 145 items**, plus the
-animation, VFX, and audio work each needs.
+This is the **graphics and theme completion plan**. Its sibling
+`VFX_OVERHAUL.md` raised the procedural floor and is essentially done: every hero
+has a hand-authored primitive likeness (122/122 profiles), every ability has
+authored VFX (0/488 ride pure archetype defaults), attacks are weapon-driven,
+icons and portraits are derived, and the scene runs the full post stack. This
+plan covers the part that now matters most: making the whole game look like one
+world.
 
-The boot floor never moves: the game plays with `public/assets/` empty, every
-hero keeps its procedural rig, and `/src/core/` never imports `three` or reads
-renderer-only fields. Assets are an enhancement layered on top, tier-gated and
-budgeted.
+Storage is no longer the design constraint. The target is a consistent stylized
+fantasy RPG: readable Dota-like hero silhouettes, Pokemon-like region identity,
+warm low-poly props, painterly VFX, and UI that feels carved into the same world.
+The procedural boot floor still exists for reliability: the game plays with
+`public/assets/` empty, every hero keeps its procedural rig, and `/src/core/`
+never imports `three` or reads renderer-only fields.
 
 ---
 
@@ -25,28 +26,30 @@ budgeted.
 | Ability VFX coverage | **488 / 488** authored; archetypes incl. `vortex`/`dome`/`mine` |
 | Attack animation | weapon-driven (`attackStyleFor`): 8 styles incl. `bird-dive`, `creature-lunge` |
 | Cast/anim gestures | `AnimGesture` ×9, auto-resolved + hand-set on signatures |
-| Item visuals | **47 / 145** items have `appearance`/`attackVisual`; **98** do not |
+| Item visuals | **81 / 145** items have `appearance`/`attackVisual`; **64** do not |
 | Creature GLBs | 20 Quaternius creatures vendored, mounted on creeps (static pose) |
 | Env assets | terrain PBR (ambientCG), 2 HDRIs (Poly Haven), foliage + town (Quaternius) |
-| VFX textures | procedural `DataTexture` sprites (soft/ember/snow/shard) + telegraphs (ring/spiked/hatched/dotted) — no PNG assets |
+| VFX textures | original `/assets/vfx/vfx_atlas.webp` for sprites/telegraphs, with procedural `DataTexture` fallback |
 | Audio | synth-only (`SoundArchetype` ×11), no sampled SFX, no music beds |
 | Pipeline | `build_assets.mjs` (resample/prune/dedup/meshopt/webp + **palette recolor**), `assets.ts` loader + fallback, `ASSETS.md` ledger, `manifest.json` |
-
-Asset budget used: **18.4 MB / 90 MB** (hero group 8 MB / 45 MB).
+| Visual target | coherent stylized fantasy theme across heroes, regions, VFX, items, UI, and audio |
 
 ---
 
 ## 1. Principles & constraints
 
-- **Procedural is the floor, assets are the ceiling.** Every hero keeps its
+- **Procedural is the floor, assets are the finish pass.** Every hero keeps its
   procedural rig as the live fallback (`mountHeroModel` hides, never disposes).
   A missing or slow asset never blocks play (scene-token guard in `scene.ts`).
-- **CC0 / original only.** Never Valve or Blizzard files. Heroes resemble their
-  archetype through CC0 base meshes we retexture, or generated/bespoke pieces,
-  or procedural. Every shipped file gets an `ASSETS.md` row or it fails review.
-- **Tier-gated + budgeted.** Low tier stays procedural; medium loads local;
-  high/ultra may pull remote upgrades. Committed assets stay within the
-  ~60–90 MB tier-gated ceiling (`build_assets.mjs` `--check-budgets`).
+- **Theme wins.** Pick assets because they belong together. Storage cost is
+  secondary to silhouette, palette, material style, animation fit, and scene mood.
+- **CC0 / original only.** Never Valve or Blizzard files. Heroes read through
+  CC0 base meshes we retexture, generated pieces, bespoke pieces, or procedural
+  overlays. Every shipped file still gets an `ASSETS.md` row.
+- **Performance gates, not storage gates.** Low tier can stay procedural or use
+  reduced assets. Medium and high tiers should load the art that makes the game
+  feel complete. Use streaming, preloading, LOD, and cache policy to make that
+  practical.
 - **Closed vocabularies stay disciplined.** Item/spell visuals are pure data
   picked from existing kinds. A new enum value costs enum + renderer branch +
   lint entry + coverage test, landed only when nothing existing fits.
@@ -55,23 +58,50 @@ Asset budget used: **18.4 MB / 90 MB** (hero group 8 MB / 45 MB).
 
 ---
 
-## 2. Architecture pivot — shared bases + runtime recolor + sockets
+## 2. Art direction pivot: one world, many readable heroes
 
-The 6 starters each ship a full ~1.3 MB GLB. Repeating that per hero is
-**~160 MB for 122 heroes** — far over the 45 MB hero budget. So the roster does
-**not** get one baked file each. Instead:
+The game should read as one stylized fantasy RPG, not a bag of unrelated asset
+packs. Shared bases still help, but the reason is visual consistency. A Knight,
+Mage, Barbarian, Rogue, demon, wolf, golem, and spider can cover most of the
+roster if they share the same proportions, material response, palette rules, and
+animation language.
 
-1. **Ship a small set of shared base meshes** (4 KayKit humanoids + ~10
-   Quaternius creatures, ~20 MB total), each once.
-2. **Recolor at runtime, not at build.** The loader clones a base per hero and
+Theme rules:
+
+1. **Stylized proportions.** Big heads, clear weapons, chunky shoulders, readable
+   hands, and simple shapes. Avoid realistic scans and high-detail assets that
+   fight the low-poly world.
+2. **Shared material language.** Matte cloth, soft metal, readable emissive
+   accents, and simple outlines through shape and lighting. Keep roughness and
+   saturation in the same family across heroes, creeps, props, and items.
+3. **Palette discipline.** Each hero gets one dominant identity color, one shadow
+   color, and one accent color. Regions get their own palette beds, and local
+   props should borrow from those beds.
+4. **Readable silhouettes first.** At gameplay zoom, a hero should read by body
+   mass, weapon, head shape, and one signature feature. Fine texture detail is a
+   bonus.
+5. **VFX as paint, not noise.** Big spells get clear shapes: rings, beams,
+   domes, vortices, chains, mines, walls, and shields. Particles should support
+   the shape instead of covering it.
+6. **UI belongs to the world.** Icons, portraits, font, borders, and HUD accents
+   should use the same carved-metal, parchment, gem, and elemental language as
+   the scene.
+
+Implementation:
+
+1. **Ship shared base meshes** (KayKit humanoids + Quaternius creatures) and
+   allow bespoke upgrades whenever a hero needs one to read correctly.
+2. **Recolor at runtime.** The loader clones a base per hero and
    sets `baseColorFactor` on the cloned material from the hero's three-color
    `palette` (the same luminance/keyword mapping the build `recolorToPalette`
-   uses, moved to a tiny runtime helper). One base serves dozens of heroes, each
-   tinted to its signature color, at near-zero extra bytes.
+   uses, moved to a tiny runtime helper).
 3. **Differentiate by weapon + likeness sockets.** A Knight-base and a
    Mage-base diverge by the weapon GLB attached to the hand socket and the
    procedural likeness overlay (eyes/horns/crest) re-parented to head/shoulder
-   sockets. This is what makes 4 bases read as 80+ distinct humanoids.
+   sockets.
+4. **Use bespoke assets freely when theme demands it.** Raid bosses, Elite Five
+   anchors, gym leaders, and abstract heroes can get custom GLBs, textures,
+   portraits, and audio beds.
 
 Implications for `assets.ts`:
 - Replace the per-hero `modelUrl` manifest with a `HERO_BASE: Record<heroId,
@@ -79,8 +109,8 @@ Implications for `assets.ts`:
   registration, or duplicated like the starter spec).
 - `heroAssetEntry` resolves base + weapon URLs; `loadHero` caches **per base**,
   not per hero, so 122 heroes trigger ~14 loads total.
-- Keep the build-time recolor for the rare hero that earns a **bespoke** texture
-  (marquee/raid leaders); those ship as their own file.
+- Keep build-time recolor for heroes that earn a **bespoke** texture, especially
+  raid leaders, iconic heroes, and region anchors.
 
 The 6 starter files can stay as-is initially and migrate to the shared path in
 Batch A0, or be rebuilt as the first shared-base consumers.
@@ -150,7 +180,7 @@ bespoke generated GLB is a later, optional upgrade per hero.
 - **A0 — migrate to shared base + runtime recolor.** Convert the 6 starters from
   baked files to the shared-base path; ship the 4 KayKit base files; add the
   `HERO_BASE` map + runtime tint helper. Gate: model-cache + data-lint, no-asset
-  boot, budget.
+  boot, theme smoke.
 - **A1 — Knight + Mage cohorts** (the two biggest, 47 heroes) on shared bases.
 - **A2 — Barbarian + Rogue cohorts** (33 heroes).
 - **A3 — creature cohort** (31 heroes) reusing the vendored creature GLBs +
@@ -206,7 +236,7 @@ Gate: `movement`, `kit-smoke`, anim coverage, mixer smoke.
 
 ## 6. WS-D — Item visuals (all 145)
 
-Today 47/145 carry visuals. The remaining **98** split by intent:
+Today 81/145 carry visuals. The remaining **64** split by intent:
 
 ### 6.1 Intentionally invisible (no work) — ~52
 - **Consumables (9):** tango, salve, clarity, dust, wards, smoke, refresher
@@ -215,8 +245,9 @@ Today 47/145 carry visuals. The remaining **98** split by intent:
   Policy: components never show; only **built** items change the hero. This is
   deliberate to avoid clutter and is the existing convention.
 
-### 6.2 Core / build-defining items missing visuals — author these (~29)
-Pure data using existing `appearance` parts / `attackVisual` kinds / `aura`:
+### 6.2 Core / build-defining items — D1 shipped
+Pure data using existing `appearance` parts / `attackVisual` kinds / `aura`;
+coverage is now enforced at **65+** appearances and **25+** attack visuals:
 
 | Item | Target appearance / attackVisual |
 |------|----------------------------------|
@@ -247,12 +278,14 @@ Pure data using existing `appearance` parts / `attackVisual` kinds / `aura`:
 ### 6.3 Small basics that should show (~6)
 bracer / wraith-band / null-talisman (small wrist geo), magic-wand (charge
 glow), arcane-boots (`boot-trail`, partly present), medallion-of-courage
-(`pauldrons`). Low priority.
+(`pauldrons`). **Shipped in D1/D2.**
 
 ### 6.4 New `ItemAppearancePart` / kind candidates (costed)
 `cloak` (Glimmer/Force), `halo` (Holy Locket/Guardian), `cyclone`
 (Eul's/Wind Waker), `armor-shred-flash` (`AttackVisualKind`, Desolator/Solar/
-Nullifier). Land only when `tinted-impact`/existing parts read poorly.
+Nullifier). **D2 shipped `cloak`, `halo`, and `armor-shred-flash`; `cyclone`
+stays unlanded because the existing `storm` archetype still carries Eul's/Wind
+Waker.**
 
 Gate: appearance/attack coverage lint widened, boundary, kit-smoke on actives.
 
@@ -270,26 +303,29 @@ sprite atlases raise fidelity on medium+ tiers:
   dotted (mine), plain ring — swap into `telegraphTexture(...)` by archetype.
 - **Trail/beam gradients** for projectiles and beams (1-D ramps).
 
-No new VFX archetypes needed (coverage is complete). All additive, tier-gated,
-off on low. Gate: perf budget + perf-harness, no-asset boot.
+Shipped: medium+ attempts `/assets/vfx/vfx_atlas.webp` and slices it into four
+sprite cells plus four telegraph cells. The atlas is original/generated in-repo
+and logged in `ASSETS.md`; missing files or headless tests keep using procedural
+`DataTexture`s. No new VFX archetypes needed (coverage is complete). All
+additive, tier-gated, off on low. Gate: perf harness, no-asset boot, theme fit.
 
 ---
 
 ## 8. WS-F — Audio
 
 Synth path is complete and stays (test-21 no-raw-import guard protects it). Add
-a **separate sampled-audio loader** so synth stays untouched:
+a **separate sampled-audio loader** so synth stays as the fallback:
 
 - **Music beds** per biome/region + town + boss/raid (CC0 / original loops),
   streamed and lazy, one bed at a time.
 - **Sampled SFX** for the highest-impact hits (crits, big stuns, ult casts)
-  layered over or replacing synth on medium+; synth remains the floor.
+  layered over or replacing synth on medium+.
 - **Signature `sound` reassignment (pure data):** `roar` for big STR ults,
   `void` for portal kits, `frost` for cryo, on the §14 signature column.
 - **New `SoundArchetype` `lightning`** (distinct from `storm`) only if a
   signature family earns it — costed per §1.
 
-Gate: voice-pool cap, no-raw-import on synth, audio-channel mix test, budget.
+Gate: voice-pool cap, no-raw-import on synth, audio-channel mix test, theme fit.
 
 ---
 
@@ -304,25 +340,28 @@ Mostly done (terrain PBR, 2 HDRIs, foliage, town). Remaining:
 - **Props / set dressing** expansion (rocks, banners, raid arena dressing),
   all `InstancedMesh`.
 
-Gate: perf budget, scene-token guard, budget.
+Gate: perf harness, scene-token guard, biome theme smoke.
 
 ---
 
-## 10. Asset budget & provenance
+## 10. Theme gate & provenance
 
-| Group | Ceiling | Now | After plan (est.) |
-|-------|---------|-----|-------------------|
-| hero | 45 MB | 8 MB | ~22 MB (4 KayKit + creatures shared + a few bespoke) |
-| creep | 35 MB | 2.9 MB | ~6 MB (clip-enabled creatures) |
-| terrain | 28 MB | 3.6 MB | ~6 MB (+ water normals) |
-| env | 32 MB | 3 MB | ~8 MB (+ HDRIs) |
-| vfx (textures) | — | 0 | ~2 MB (sprite + telegraph atlas) |
-| audio | (separate budget) | 0 | streamed, tracked separately |
-| ui | 5 MB | 0 | ~1 MB (font) |
-| **total committed** | **90 MB** | **18.4 MB** | **~45 MB** |
+The acceptance gate is visual consistency. A batch is ready when it makes the
+game feel more like one place.
 
-Every file: source + license (CC0 / original) + manifest entry in `ASSETS.md`.
-Remote (CDN) assets carry their own latency budget and a separate ledger note.
+| Surface | Theme target |
+|---------|--------------|
+| Heroes | Same stylized proportions, strong silhouette, one dominant identity color, one signature prop or body feature |
+| Creeps | Same creature family language as heroes: chunky forms, readable heads, simple attacks, region-appropriate tint |
+| Items | Visible built items should look enchanted, worn, or weaponized; components can stay invisible |
+| VFX | Shape first, particles second. Every large spell should leave a clear ring, beam, dome, wall, chain, vortex, mine, or shield read |
+| Regions | Each biome gets a palette bed, sky mood, terrain texture, prop kit, and music bed |
+| UI | Icons, portraits, font, border treatment, and HUD accents should match the carved fantasy world |
+| Audio | Synth remains the fallback. Sampled beds and hits should reinforce biome, boss, and element identity |
+
+Every shipped file still needs a source, license, and manifest entry in
+`ASSETS.md`. That ledger protects provenance, not storage limits. Remote assets
+are fine when they improve the theme and load safely.
 
 ---
 
@@ -334,9 +373,9 @@ Remote (CDN) assets carry their own latency budget and a separate ledger note.
 3. **A2** — Barbarian + Rogue cohorts (33).
 4. **C-creatures** — creature clip wiring (heroes + existing creeps off static).
 5. **A3** — creature-base heroes (31).
-6. **D1** — core item visuals (the ~29), widen coverage lint.
-7. **D2** — small basics + any costed new part/kind.
-8. **E**  — VFX sprite + telegraph texture atlas.
+6. **D1** — core item visuals (the ~29), widen coverage lint. **Shipped.**
+7. **D2** — small basics + any costed new part/kind. **Shipped.**
+8. **E**  — VFX sprite + telegraph texture atlas. **Shipped.**
 9. **F1** — sampled-audio loader + music beds (data + small engine).
 10. **F2** — signature `sound` reassignments (pure data).
 11. **G**  — water normals, HDRIs, font, prop dressing.
@@ -349,13 +388,14 @@ an asset landing.
 
 ## 12. Risks
 
-- **Budget blowout from per-hero files.** Mitigated by the shared-base + runtime
-  recolor pivot (§2). Per-hero baked GLBs are reserved for marquee bespoke only.
+- **Style drift from mixed asset packs.** Mitigated by the theme gate (§10).
+  Every imported asset should match the stylized proportions, palette, material
+  response, and region mood before it lands.
 - **Socket mismatch.** KayKit hand/back bone names must be resolved defensively;
   missing socket → attach to rig root (today's behavior), never throw.
 - **Single-atlas recolor reads flat.** Uniform tint suits casters and
-  differentiates shared bases by color; richer multi-tone needs per-region
-  texture work (bespoke batch A4), not the default path.
+  differentiates shared bases by color. Richer multi-tone heroes should get
+  bespoke texture work in A4.
 - **Creature clip pollution / determinism.** Clip wiring is renderer-side only;
   the sim/feel and macro/determinism tests must not move.
 - **Test isolation.** A pre-existing cross-file `REG`-state race can flake the

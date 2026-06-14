@@ -406,7 +406,7 @@ export const ASSEMBLED: ItemDef[] = [
     passiveMods: { int: 10, hpRegen: 2.5 },
     lore: 'It pushes. Friend, foe, self \u2014 physics does not take sides.',
     glyph: 'staff',
-    appearance: { parts: ['boot-trail'], tint: '#9fd0ec' },
+    appearance: { parts: ['boot-trail', 'cloak'], tint: '#9fd0ec' },
     active: {
       id: 'force-staff-active',
       name: 'Force',
@@ -426,7 +426,7 @@ export const ASSEMBLED: ItemDef[] = [
     passiveMods: { magicResistPct: 20 },
     lore: 'Woven from dusk. Wrap a friend in it and watch them stop existing.',
     glyph: 'cloak',
-    appearance: { tint: '#b89fff', aura: { archetype: 'shield', color: '#b89fff', color2: '#4a3a78' } },
+    appearance: { parts: ['cloak'], tint: '#b89fff', aura: { archetype: 'shield', color: '#b89fff', color2: '#4a3a78' } },
     active: {
       id: 'glimmer-active',
       name: 'Glimmer',
@@ -544,7 +544,8 @@ export const ASSEMBLED: ItemDef[] = [
     passiveMods: { hpRegen: 1.75, manaRegen: 1 },
     aura: { radius: 1200, affects: 'allies', mods: { lifestealPct: 15, damagePct: 12, armor: 3 } },
     lore: 'A fanged chalice that tithes every wound.',
-    glyph: 'fang'
+    glyph: 'fang',
+    appearance: { parts: ['heart-core'], tint: '#b01818', aura: { archetype: 'shield', color: '#b01818', color2: '#ffb08a' } }
   },
   {
     id: 'assault-cuirass', name: 'Assault Cuirass', tier: 'core', cost: 5500,
@@ -781,7 +782,7 @@ export const EXTENDED_ASSEMBLED: ItemDef[] = [
       ],
       vfx: { archetype: 'ground-aoe', color: '#7dffb5', color2: '#86c8ff', scale: 1.1 }
     },
-    appearance: { parts: ['boot-trail', 'pauldrons'], tint: '#7dffb5' }
+    appearance: { parts: ['boot-trail', 'pauldrons', 'halo'], tint: '#7dffb5' }
   },
   {
     id: 'vanguard', name: 'Vanguard', tier: 'core', cost: 1825,
@@ -924,7 +925,7 @@ export const EXTENDED_ASSEMBLED: ItemDef[] = [
     attackMod: { procChance: 100, procStatus: { status: 'buff', duration: 7, params: { mods: { armor: -6 }, tag: 'desolator-armor' } } },
     lore: 'It leaves armor as a memory.', glyph: 'blade',
     appearance: { weapon: { kind: 'glowing-blade', color: '#d92727', emissive: '#5a0808' } },
-    attackVisual: [{ kind: 'tinted-impact', color: '#d92727', color2: '#ffb0a0', scale: 1.05 }]
+    attackVisual: [{ kind: 'armor-shred-flash', color: '#d92727', color2: '#ffb0a0', scale: 1.05 }]
   },
   {
     id: 'daedalus', name: 'Daedalus', tier: 'core', cost: 5300,
@@ -1054,7 +1055,7 @@ export const EXTENDED_ASSEMBLED: ItemDef[] = [
       effects: [{ kind: 'purge', target: 'target' }, { kind: 'status', status: 'slow', duration: 4, target: 'target', params: { moveSlowPct: 35 } }],
       vfx: { archetype: 'beam', color: '#d8d8d8', scale: 0.75 }
     },
-    attackVisual: [{ kind: 'tinted-impact', color: '#d8d8d8', color2: '#ffffff', scale: 1 }]
+    attackVisual: [{ kind: 'armor-shred-flash', color: '#d8d8d8', color2: '#ffffff', scale: 1 }]
   },
   {
     id: 'radiance', name: 'Radiance', tier: 'core', cost: 4700,
@@ -1071,6 +1072,8 @@ export const EXTENDED_ASSEMBLED: ItemDef[] = [
     components: ['chainmail', 'sages-mask', 'ring-of-protection'], recipeCost: 175,
     passiveMods: { armor: 6, manaRegen: 1 },
     lore: 'Courage, lent out one armor swing at a time.', glyph: 'medal',
+    appearance: { parts: ['pauldrons'], tint: '#d8b45c' },
+    attackVisual: [{ kind: 'armor-shred-flash', color: '#d8b45c', color2: '#ffffff', scale: 0.8 }],
     active: {
       id: 'medallion-active', name: 'Valor', targeting: 'unit-target', affects: 'enemy', castRange: 900, castPoint: 0, cooldown: [12],
       effects: [{ kind: 'statmod', mods: { armor: -5 }, duration: 8, target: 'target' }],
@@ -1082,6 +1085,8 @@ export const EXTENDED_ASSEMBLED: ItemDef[] = [
     components: ['medallion-of-courage', 'crown', 'talisman-of-evasion'], recipeCost: 125,
     passiveMods: { str: 4, agi: 4, int: 4, armor: 6, manaRegen: 1, evasionPct: 16 },
     lore: 'A medallion promoted into a whole sun.', glyph: 'sun',
+    appearance: { parts: ['pauldrons'], tint: '#ffd66b', aura: { archetype: 'global-mark', color: '#ffd66b', color2: '#ffffff' } },
+    attackVisual: [{ kind: 'armor-shred-flash', color: '#ffd66b', color2: '#ffffff', scale: 0.85 }],
     active: {
       id: 'solar-active', name: 'Shine', targeting: 'unit-target', affects: 'any', castRange: 900, castPoint: 0, cooldown: [16],
       effects: [{ kind: 'statmod', mods: { armor: 6, attackSpeed: 45, moveSpeedPct: 10 }, duration: 8, target: 'target' }],
@@ -1095,6 +1100,7 @@ export const EXTENDED_ASSEMBLED: ItemDef[] = [
     charges: 0, maxCharges: 10,
     triggers: [{ on: 'on-nearby-death', radius: 1400, chargeGain: 1 }],
     lore: 'It keeps score for the dead.', glyph: 'urn',
+    appearance: { parts: ['mana-orb'], tint: '#8a5cff', aura: { archetype: 'shield', color: '#8a5cff', color2: '#ffffff' } },
     active: {
       id: 'urn-active', name: 'Soul Release', targeting: 'unit-target', affects: 'enemy', castRange: 750, castPoint: 0, cooldown: [7],
       effects: [{ kind: 'status', status: 'buff', duration: 8, target: 'target', params: { dotDps: 25, dotType: 'magical', tag: 'urn-burn' } }],
@@ -1108,6 +1114,7 @@ export const EXTENDED_ASSEMBLED: ItemDef[] = [
     charges: 0, maxCharges: 12,
     triggers: [{ on: 'on-nearby-death', radius: 1400, chargeGain: 1 }],
     lore: 'An urn with a sharper opinion about healing.', glyph: 'urn',
+    appearance: { parts: ['mana-orb'], tint: '#b08cff', aura: { archetype: 'shield', color: '#b08cff', color2: '#ffffff' } },
     active: {
       id: 'spirit-vessel-active', name: 'Soul Burn', targeting: 'unit-target', affects: 'enemy', castRange: 750, castPoint: 0, cooldown: [7],
       effects: [{ kind: 'status', status: 'buff', duration: 8, target: 'target', params: { dotDps: 45, dotType: 'magical', mods: { hpRegen: -20 }, tag: 'vessel-burn' } }],
@@ -1122,6 +1129,7 @@ export const EXTENDED_ASSEMBLED: ItemDef[] = [
     triggers: [{ on: 'on-nearby-enemy-cast', radius: 1200, chargeGain: 1 }],
     consumesAllCharges: true,
     lore: 'A wand that learned bedside manner.', glyph: 'locket',
+    appearance: { parts: ['mana-orb', 'halo'], tint: '#fff4b0', aura: { archetype: 'shield', color: '#fff4b0', color2: '#ffffff' } },
     active: {
       id: 'holy-locket-active', name: 'Blessed Charges', targeting: 'unit-target', affects: 'ally', castRange: 700, castPoint: 0, cooldown: [13],
       effects: [{ kind: 'heal', amount: 22, target: 'target', perCharge: true }, { kind: 'mana', op: 'restore', amount: 12, target: 'target', perCharge: true }],
@@ -1134,6 +1142,7 @@ export const EXTENDED_ASSEMBLED: ItemDef[] = [
     passiveMods: { armor: 5, hpRegen: 5, lifestealPct: 18 },
     aura: { radius: 1200, affects: 'allies', mods: { damagePct: 8 } },
     lore: 'Leadership, but with a very heavy helmet.', glyph: 'helm',
+    appearance: { parts: ['pauldrons'], tint: '#d8b080', aura: { archetype: 'summon-pop', color: '#d8b080', color2: '#ffffff' } },
     active: {
       id: 'dominator-active', name: 'Dominate', targeting: 'point-target', castRange: 700, castPoint: 0, cooldown: [45],
       effects: [{ kind: 'summon', at: 'point', summon: { id: 'dominated-creep', name: 'Dominated Creep', lifetime: 60, stats: { maxHp: 900, damage: 45, armor: 3, moveSpeed: 320, attackRange: 150, baseAttackTime: 1.6 }, silhouette: { build: 'quad', scale: 0.9, bodyShape: 'bulky', head: 'horned', weapon: 'none' }, palette: ['#8a5a36', '#d8b080', '#2a180f'] } }],
@@ -1146,6 +1155,7 @@ export const EXTENDED_ASSEMBLED: ItemDef[] = [
     passiveMods: { str: 15, agi: 15, int: 15, armor: 8, hpRegen: 6, lifestealPct: 20 },
     aura: { radius: 1200, affects: 'allies', mods: { damagePct: 15, armor: 3 } },
     lore: 'The dominated thing gets bigger. So does the problem.', glyph: 'helm',
+    appearance: { parts: ['pauldrons'], tint: '#d8c080', aura: { archetype: 'summon-pop', color: '#d8c080', color2: '#ffffff' } },
     active: {
       id: 'overlord-active', name: 'Dominate Ancient', targeting: 'point-target', castRange: 700, castPoint: 0, cooldown: [45],
       effects: [{ kind: 'summon', at: 'point', summon: { id: 'dominated-ancient', name: 'Dominated Ancient', lifetime: 75, stats: { maxHp: 1500, damage: 70, armor: 6, moveSpeed: 330, attackRange: 150, baseAttackTime: 1.5, magicResistPct: 30 }, silhouette: { build: 'quad', scale: 1.15, bodyShape: 'bulky', head: 'horned', weapon: 'none' }, palette: ['#5a3a2a', '#d8c080', '#1a1008'] } }],
@@ -1157,6 +1167,7 @@ export const EXTENDED_ASSEMBLED: ItemDef[] = [
     components: ['robe-of-the-magi', 'robe-of-the-magi', 'headdress'], recipeCost: 175,
     passiveMods: { int: 12, hpRegen: 2 },
     lore: 'A cheap argument that makes every spell louder.', glyph: 'veil',
+    appearance: { parts: ['mana-orb'], tint: '#c88cff', aura: { archetype: 'dome', color: '#c88cff', color2: '#ffffff' } },
     active: {
       id: 'veil-active', name: 'Magic Weakness', targeting: 'ground-aoe', castRange: 1000, castPoint: 0, cooldown: [22], manaCost: [50],
       effects: [{ kind: 'status', status: 'buff', duration: 12, target: 'enemies-in-radius', radius: 600, params: { mods: { magicResistPct: -18 }, tag: 'veil-discord' } }],
@@ -1168,10 +1179,11 @@ export const EXTENDED_ASSEMBLED: ItemDef[] = [
     components: ['staff-of-wizardry', 'crown', 'crown'], recipeCost: 850,
     passiveMods: { int: 18, str: 8, agi: 8 },
     lore: 'Point, root, punish.', glyph: 'staff',
+    appearance: { weapon: { kind: 'staff', color: '#d8a0ff', emissive: '#35185a' }, parts: ['mana-orb'] },
     active: {
       id: 'atos-active', name: 'Cripple', targeting: 'unit-target', affects: 'enemy', castRange: 1100, castPoint: 0, cooldown: [18], manaCost: [50],
       effects: [{ kind: 'status', status: 'root', duration: 2, target: 'target' }],
-      vfx: { archetype: 'beam', color: '#d8a0ff', scale: 0.75 }
+      vfx: { archetype: 'chain', color: '#d8a0ff', scale: 0.75 }
     }
   },
   {
@@ -1193,6 +1205,7 @@ export const EXTENDED_ASSEMBLED: ItemDef[] = [
     components: ['null-talisman', 'staff-of-wizardry'], recipeCost: 795,
     passiveMods: { int: 16, str: 2, agi: 2, maxMana: 60 },
     lore: 'A wand for people who think subtle damage is a waste of time.', glyph: 'wand',
+    appearance: { weapon: { kind: 'staff', color: '#ff4fd8', emissive: '#5f104a' }, aura: { archetype: 'beam', color: '#ff4fd8', color2: '#ffffff' } },
     active: {
       id: 'dagon-active', name: 'Energy Burst', targeting: 'unit-target', affects: 'enemy', castRange: 650, castPoint: 0, cooldown: [35], manaCost: [120],
       effects: [{ kind: 'damage', dtype: 'magical', amount: 400, target: 'target' }],
@@ -1230,6 +1243,7 @@ export const EXTENDED_ASSEMBLED: ItemDef[] = [
     components: ['euls-scepter', 'force-staff'], recipeCost: 1100,
     passiveMods: { int: 20, manaRegen: 4, moveSpeed: 40, hpRegen: 2.5 },
     lore: 'A cyclone with travel plans.', glyph: 'cyclone',
+    appearance: { weapon: { kind: 'staff', color: '#c8ffff', emissive: '#245a5a' }, aura: { archetype: 'storm', color: '#c8ffff', color2: '#ffffff' } },
     active: {
       id: 'wind-waker-active', name: 'Cyclone Drift', targeting: 'unit-target', affects: 'ally', castRange: 700, castPoint: 0, cooldown: [18], manaCost: [175],
       effects: [{ kind: 'status', status: 'cyclone', duration: 2.5, target: 'target' }, { kind: 'statmod', mods: { moveSpeedPct: 40 }, duration: 2.5, target: 'target' }],
@@ -1241,10 +1255,11 @@ export const EXTENDED_ASSEMBLED: ItemDef[] = [
     components: ['gloves-of-haste'], recipeCost: 1750,
     passiveMods: { attackSpeed: 35 },
     lore: 'A gold sink that dreams of becoming a gold faucet.', glyph: 'hand',
+    appearance: { tint: '#ffd45c', aura: { archetype: 'summon-pop', color: '#ffd45c', color2: '#ffffff' } },
     active: {
       id: 'midas-active', name: 'Transmute', targeting: 'unit-target', affects: 'enemy', castRange: 600, castPoint: 0, cooldown: [90],
       effects: [{ kind: 'damage', dtype: 'pure', amount: 999, target: 'target' }],
-      vfx: { archetype: 'beam', color: '#ffd45c', color2: '#ffffff', scale: 0.8 }
+      vfx: { archetype: 'summon-pop', color: '#ffd45c', color2: '#ffffff', scale: 0.8 }
     }
   },
   {
@@ -1258,7 +1273,8 @@ export const EXTENDED_ASSEMBLED: ItemDef[] = [
     id: 'aether-lens', name: 'Aether Lens', tier: 'core', cost: 2250,
     components: ['energy-booster', 'void-stone'], recipeCost: 650,
     passiveMods: { maxMana: 250, manaRegen: 2.25, castRange: 225 },
-    lore: 'Stand farther away from your decisions.', glyph: 'lens'
+    lore: 'Stand farther away from your decisions.', glyph: 'lens',
+    appearance: { parts: ['mana-orb'], tint: '#9fd8ff', aura: { archetype: 'global-mark', color: '#9fd8ff', color2: '#ffffff' } }
   },
   {
     id: 'meteor-hammer', name: 'Meteor Hammer', tier: 'core', cost: 2850,
@@ -1331,6 +1347,16 @@ const RARITY_OVERRIDES: Record<string, ItemRarity> = {
   eaglesong: 'mythical',
   'mystic-staff': 'mythical',
   'ultimate-orb': 'rare',
+  // Overworld EG cores. These appear in split-aware endgame drop pools, so
+  // registry rarity must match the drop-entry rarity used by pacing tests.
+  'black-king-bar': 'legendary',
+  'guardian-greaves': 'legendary',
+  'manta-style': 'legendary',
+  daedalus: 'legendary',
+  'monkey-king-bar': 'legendary',
+  'ethereal-blade': 'legendary',
+  mjollnir: 'legendary',
+  'wind-waker': 'legendary',
   // Boss/raid anchors.
   'assault-cuirass': 'legendary',
   'divine-rapier': 'immortal',

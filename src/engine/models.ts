@@ -2401,6 +2401,27 @@ function addPart(rig: UnitRig, part: NonNullable<ItemAppearanceSpec['parts']>[nu
       rig.itemLayer.add(sigil);
       break;
     }
+    case 'cloak': {
+      const mat = new THREE.MeshBasicMaterial({ color: '#8b78c8', transparent: true, opacity: 0.56, depthWrite: false, side: THREE.DoubleSide });
+      for (const side of [1, -1] as const) {
+        const panel = mesh(new THREE.PlaneGeometry(0.5 * s, 1.05 * s), mat);
+        panel.position.set(-0.42 * s, 0.94 * s, side * 0.24 * s);
+        panel.rotation.y = side * 0.28;
+        panel.rotation.z = side * 0.08;
+        rig.itemLayer.add(panel);
+      }
+      break;
+    }
+    case 'halo': {
+      const halo = mesh(
+        new THREE.TorusGeometry(0.34 * s, 0.025 * s, 6, 28),
+        new THREE.MeshBasicMaterial({ color: '#fff4b0', transparent: true, opacity: 0.72, depthWrite: false })
+      );
+      halo.position.set(0, 1.9 * s, 0);
+      halo.rotation.x = Math.PI / 2;
+      rig.itemLayer.add(halo);
+      break;
+    }
   }
 }
 

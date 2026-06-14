@@ -41,8 +41,8 @@ const ANIM_GESTURES: AnimGesture[] = ['melee-swing', 'ranged-shot', 'staff-cast'
 const SOUND_ARCHETYPES: SoundArchetype[] = ['blade', 'bow', 'impact', 'frost', 'fire', 'storm', 'void', 'heal', 'summon', 'item', 'roar'];
 const GATED_TOP_TIER = ['divine-rapier', 'butterfly', 'scythe-of-vyse', 'heart-of-tarrasque', 'eye-of-skadi', 'refresher-orb', 'aghanims-scepter', 'abyssal-blade', 'bloodthorn', 'radiance', 'satanic', 'octarine-core', 'aghanims-blessing', 'aghanims-shard', 'aegis-of-the-immortal', 'refresher-shard', 'cheese'];
 const ITEM_WEAPON_VISUALS: ItemWeaponVisualKind[] = ['none', 'sword', 'staff', 'hook', 'totem', 'rifle', 'cleaver', 'broad-cleaver', 'glowing-blade', 'long-pole', 'storm-haft'];
-const ITEM_APPEARANCE_PARTS: ItemAppearancePart[] = ['pauldrons', 'heart-core', 'frost-shards', 'boot-trail', 'wing-blades', 'crystal-edge', 'mana-orb', 'hex-sigil'];
-const ATTACK_VISUALS: AttackVisualKind[] = ['cleave-sweep', 'ranged-conversion', 'lightning-bounce', 'tinted-impact', 'crit-lunge'];
+const ITEM_APPEARANCE_PARTS: ItemAppearancePart[] = ['pauldrons', 'heart-core', 'frost-shards', 'boot-trail', 'wing-blades', 'crystal-edge', 'mana-orb', 'hex-sigil', 'cloak', 'halo'];
+const ATTACK_VISUALS: AttackVisualKind[] = ['cleave-sweep', 'ranged-conversion', 'lightning-bounce', 'tinted-impact', 'crit-lunge', 'armor-shred-flash'];
 
 function expectHex(color: string, where: string): void {
   expect(color, where).toMatch(/^#[0-9a-fA-F]{6}$/);
@@ -283,15 +283,23 @@ describe('data lint: items', () => {
     for (const id of GATED_TOP_TIER) expect(normalShopItems.has(id), `${id} should not be purchasable`).toBe(false);
   });
 
-  it('has Phase 4 item appearance and attack override coverage', () => {
-    expect(ALL_ITEMS.filter((i) => i.appearance).length).toBeGreaterThanOrEqual(30);
-    expect(ALL_ITEMS.filter((i) => (i.attackVisual?.length ?? 0) > 0).length).toBeGreaterThanOrEqual(20);
+  it('has asset-plan item appearance and attack override coverage', () => {
+    expect(ALL_ITEMS.filter((i) => i.appearance).length).toBeGreaterThanOrEqual(65);
+    expect(ALL_ITEMS.filter((i) => (i.attackVisual?.length ?? 0) > 0).length).toBeGreaterThanOrEqual(25);
     expect(REG.item('battlefury').appearance?.weapon?.kind).toBe('broad-cleaver');
+    expect(REG.item('black-king-bar').appearance?.aura?.archetype).toBe('shield');
+    expect(REG.item('blink-dagger').appearance?.weapon?.kind).toBe('sword');
     expect(REG.item('divine-rapier').appearance?.weapon?.kind).toBe('glowing-blade');
     expect(REG.item('assault-cuirass').appearance?.parts).toContain('pauldrons');
     expect(REG.item('crystalys').appearance?.parts).toContain('crystal-edge');
+    expect(REG.item('diffusal-blade').attackVisual?.[0]?.kind).toBe('tinted-impact');
+    expect(REG.item('glimmer-cape').appearance?.parts).toContain('cloak');
+    expect(REG.item('holy-locket').appearance?.parts).toContain('halo');
+    expect(REG.item('desolator').attackVisual?.[0]?.kind).toBe('armor-shred-flash');
     expect(REG.item('scythe-of-vyse').appearance?.parts).toContain('hex-sigil');
     expect(REG.item('aghanims-scepter').appearance?.parts).toContain('mana-orb');
+    expect(REG.item('aether-lens').appearance?.parts).toContain('mana-orb');
+    expect(REG.item('rod-of-atos').active?.vfx?.archetype).toBe('chain');
   });
 
   it('has Phase 5 item element hooks for attack-visual enablers', () => {

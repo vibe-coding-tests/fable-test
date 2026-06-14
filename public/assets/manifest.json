@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "hash": "ed9a5c70cf7f",
-  "generatedAt": "2026-06-14T02:00:27.203Z",
+  "hash": "1c6c60140089",
+  "generatedAt": "2026-06-14T02:32:43.237Z",
   "assetRoot": "/assets/",
-  "totalBytes": 19316310,
+  "totalBytes": 19396144,
   "groups": {
     "creep": {
       "count": 20,
@@ -24,6 +24,10 @@
     "town": {
       "count": 9,
       "bytes": 822752
+    },
+    "vfx": {
+      "count": 1,
+      "bytes": 79834
     }
   },
   "files": [
@@ -255,7 +259,7 @@
       "group": "hero",
       "preloadGroup": "hero",
       "sourceSpec": "scripts/assets/specs/heroes.json",
-      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0"
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us - CC0"
     },
     {
       "path": "heroes/earthshaker.glb",
@@ -265,7 +269,7 @@
       "group": "hero",
       "preloadGroup": "hero",
       "sourceSpec": "scripts/assets/specs/heroes.json",
-      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0"
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us - CC0"
     },
     {
       "path": "heroes/juggernaut.glb",
@@ -275,7 +279,7 @@
       "group": "hero",
       "preloadGroup": "hero",
       "sourceSpec": "scripts/assets/specs/heroes.json",
-      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0"
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us - CC0"
     },
     {
       "path": "heroes/lich.glb",
@@ -285,7 +289,7 @@
       "group": "hero",
       "preloadGroup": "hero",
       "sourceSpec": "scripts/assets/specs/heroes.json",
-      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0"
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us - CC0"
     },
     {
       "path": "heroes/pudge.glb",
@@ -295,7 +299,7 @@
       "group": "hero",
       "preloadGroup": "hero",
       "sourceSpec": "scripts/assets/specs/heroes.json",
-      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0"
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us - CC0"
     },
     {
       "path": "heroes/sniper.glb",
@@ -305,7 +309,7 @@
       "group": "hero",
       "preloadGroup": "hero",
       "sourceSpec": "scripts/assets/specs/heroes.json",
-      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0"
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us - CC0"
     },
     {
       "path": "props/foliage/bush.glb",
@@ -656,6 +660,16 @@
       "preloadGroup": "terrain",
       "sourceSpec": null,
       "source": null
+    },
+    {
+      "path": "vfx/vfx_atlas.webp",
+      "url": "/assets/vfx/vfx_atlas.webp",
+      "bytes": 79834,
+      "type": "texture",
+      "group": "vfx",
+      "preloadGroup": "vfx",
+      "sourceSpec": "scripts/assets/generate_vfx_atlas.mjs",
+      "source": "Original generated VFX atlas"
     }
   ]
 }
