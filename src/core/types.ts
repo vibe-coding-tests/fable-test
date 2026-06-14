@@ -251,7 +251,11 @@ export type VfxArchetype =
   | 'global-mark'
   | 'hook'
   | 'wall'
-  | 'storm';
+  | 'storm'
+  // WS-G additions (VFX_OVERHAUL §11): shapes the 12 base archetypes cannot read.
+  | 'vortex'   // inward-spiraling pull: Black Hole, Reverse Polarity, Vacuum, Maelstrom
+  | 'dome'     // hemispherical containment: Chronosphere, Arena of Blood, Static Storm
+  | 'mine';    // small armed ground charge w/ proximity telegraph: Techies/Remote/Land mines
 
 export interface VfxSpec {
   archetype: VfxArchetype;
@@ -349,6 +353,7 @@ export interface AbilityDef {
   vfx: VfxSpec;
   anim?: AnimGesture;
   sound?: SoundArchetype;
+  glyph?: string;   // optional icon hint (WS-F); falls back to the archetype glyph
 }
 
 // ---------- Talents / Facets / Aghs ----------
@@ -552,6 +557,8 @@ export interface LootTable {
   assembledPool: string[];
   dropPct: Record<DifficultyTier, number>;
   pity: number;
+  /** Optional luck-at-source quality odds for the assembled drop (LOOT L5). */
+  qualityOdds?: Partial<Record<ItemQuality, number>>;
 }
 
 export interface BossDef {

@@ -2,10 +2,12 @@ import type { BossDef, LootTable } from '../core/types';
 import { TUNING } from './tuning';
 
 const AGILITY_CARRIES = new Set([
-  'phantom-assassin', 'medusa', 'naga-siren', 'slark', 'broodmother', 'faceless-void', 'terrorblade', 'spectre'
+  'phantom-assassin', 'medusa', 'naga-siren', 'slark', 'broodmother', 'faceless-void', 'terrorblade', 'spectre',
+  'templar-assassin', 'drow-ranger'
 ]);
 const STRENGTH_TITANS = new Set([
-  'pudge', 'lifestealer', 'doom', 'wraith-king', 'tidehunter', 'magnus', 'elder-titan', 'centaur-warrunner', 'sven', 'axe'
+  'pudge', 'lifestealer', 'doom', 'wraith-king', 'tidehunter', 'magnus', 'elder-titan', 'centaur-warrunner', 'sven', 'axe',
+  'dragon-knight'
 ]);
 const INTELLIGENCE_BOSSES = new Set([
   'invoker', 'zeus', 'silencer', 'outworld-destroyer', 'skywrath-mage', 'tinker', 'lich', 'crystal-maiden', 'lina'
@@ -32,11 +34,18 @@ function themedLoot(heroId: string, rank: BossDef['rank']): LootTable {
         hell: TUNING.bossAssembledDropPct.hell * 0.55
       }
     : TUNING.bossAssembledDropPct;
+  // Bosses are a curated, repeatable source, so their anchor can drop a modestly
+  // upgraded copy — but the prestige Unusual grade stays reserved to raids and
+  // special battles (LOOT_OVERHAUL §3.3/§3.5). Mini-bosses get the slimmer cut.
+  const qualityOdds = isMini
+    ? { inscribed: 0.04, genuine: 0.03 }
+    : { inscribed: 0.07, frozen: 0.05, genuine: 0.04 };
   return {
     guaranteed,
     assembledPool: isMini ? assembledPool.filter((id) => id !== 'aghanims-scepter').slice(0, 2) : assembledPool,
     dropPct,
-    pity: isMini ? TUNING.raidBadLuckPity + 2 : TUNING.raidBadLuckPity
+    pity: isMini ? TUNING.raidBadLuckPity + 2 : TUNING.raidBadLuckPity,
+    qualityOdds
   };
 }
 
@@ -96,7 +105,12 @@ const SPECS: [string, string, string, BossDef['rank']][] = [
   ['mini-centaur-warrunner', 'centaur-warrunner', 'mount-joerlak', 'mini-boss'],
   ['boss-spectre', 'spectre', 'mad-moon-crater', 'boss'],
   ['boss-faceless-void', 'faceless-void', 'mad-moon-crater', 'boss'],
-  ['boss-terrorblade', 'terrorblade', 'mad-moon-crater', 'boss']
+  ['boss-terrorblade', 'terrorblade', 'mad-moon-crater', 'boss'],
+  // Marquee guardians (MARQUEE_AND_ARMORY_ADDENDUM §2.3 / C2): the same boss the
+  // raid wave names, standing at the bottom of its themed descent. They surface
+  // as regional boss reruns too — one entity, three surfaces.
+  ['marquee-void-prelate', 'templar-assassin', 'quoidge', 'boss'],
+  ['marquee-last-eldwurm', 'dragon-knight', 'mad-moon-crater', 'boss']
 ];
 
 export const ALL_BOSSES: BossDef[] = SPECS.map(([id, heroId, region, rank]) => boss(id, heroId, region, rank));

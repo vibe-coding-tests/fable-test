@@ -48,6 +48,7 @@ export const ICEWRACK: RegionDef = {
   ],
   gyms: [{ gymId: 'frost-gym', pos: { x: 6500, y: 3200 }, radius: 650 }],
   dungeons: [{ id: 'iw-frost-hollow-portal', dungeonId: 'frost-hollow', name: 'Frost Hollow Portal', pos: { x: 5000, y: 9100 }, radius: 520 }],
+  raids: ['forsaken-queen'],
   props: { treeDensity: 0.25, rockDensity: 0.75 },
   gateHint: 'The Frost Gym stands north of Frostford.'
 };

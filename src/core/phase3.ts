@@ -69,6 +69,7 @@ export function lootTableToDropTable(table: LootTable): ItemDropTable {
         rolls: 1,
         chance: table.dropPct,
         pool: table.assembledPool.map((id) => ({ id, weight: 1 })),
+        qualityOdds: table.qualityOdds,
         pity: table.pity
       }
     ]

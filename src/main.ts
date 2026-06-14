@@ -1,9 +1,16 @@
 import './ui/styles.css';
 import { registerAllContent } from './data';
 import { REG } from './core/registry';
-import { Game, resolveQuality } from './systems/game';
+import { Game, HeadlessAudio, HeadlessScene, resolveQuality } from './systems/game';
 import { InputController } from './systems/input';
 import { debugEnabled, mountDebugPanel } from './systems/debug';
+import {
+  installTestApi,
+  testEnabled,
+  testRenderHeadless,
+  testSeed,
+  testStarterHero
+} from './systems/test-harness';
 import { Hud } from './ui/hud';
 import { showTitle } from './ui/title';
 import { withLoading } from './ui/loading';
@@ -55,7 +62,21 @@ function teardown(): void {
   unmountDebug = null;
 }
 
-function startGame(save: GameSave): void {
+// Headless-render boot for the QA harness (?test&render=headless): build the
+// real Game orchestrator over the no-op scene/audio so tests exercise all
+// gameplay logic without WebGL, without the loading screen, and without a rAF
+// loop (the harness steps time deterministically via __test.fastForward).
+function startGameHeadless(save: GameSave): void {
+  teardown();
+  game = new Game(canvas, save, { scene: new HeadlessScene(), audio: new HeadlessAudio() });
+  (window as unknown as { __game: Game }).__game = game;
+}
+
+function startGame(save: GameSave, opts: { headless?: boolean } = {}): void {
+  if (opts.headless) {
+    startGameHeadless(save);
+    return;
+  }
   teardown();
   let regionName = 'the Isle';
   try {
@@ -109,9 +130,27 @@ function boot(): void {
   showTitle((save) => startGame(save));
 }
 
+const HEADLESS_RENDER = testEnabled() && testRenderHeadless();
+
 window.addEventListener('ancients:load', (e) => {
   const save = (e as CustomEvent<GameSave>).detail;
-  startGame(save);
+  startGame(save, { headless: HEADLESS_RENDER });
 });
 
-boot();
+if (testEnabled()) {
+  installTestApi({
+    getGame: () => game,
+    start: (save, opts) => startGame(save, opts),
+    load: (save) => window.dispatchEvent(new CustomEvent('ancients:load', { detail: save })),
+    headless: HEADLESS_RENDER
+  });
+  const region = new URLSearchParams(location.search).get('region') ?? undefined;
+  (window as unknown as { __test: { startNewGame: (o: object) => void } }).__test.startNewGame({
+    hero: testStarterHero(),
+    seed: testSeed(),
+    region,
+    headless: HEADLESS_RENDER
+  });
+} else {
+  boot();
+}

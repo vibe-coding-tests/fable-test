@@ -291,6 +291,12 @@ export class GameScene {
   private adaptiveScale = 1;
   private adaptiveOverBudgetSec = 0;
   private adaptiveCooldownSec = 0;
+  // WS-H micro-feedback: bounded camera shake (crits / big stuns) and a transient
+  // per-element grade accent during marquee casts. Both decay every frame and are
+  // disabled under reducedMotion / when the grade pass is off.
+  private shakeTrauma = 0;
+  private accent = new THREE.Color(1, 1, 1);
+  private accentStrength = 0;
 
   constructor(canvas: HTMLCanvasElement, region: RegionDef, quality: QualityTier = 'high') {
     const qualityCfg = qualityPreset(quality);
@@ -514,6 +520,22 @@ export class GameScene {
     }
   }
 
+  /** Add bounded camera-shake trauma (0..1). No-op under reducedMotion. Applied
+   *  with a squared falloff in updateCamera so small hits barely move and big
+   *  ones punch, then decay back to rest (WS-H hit-stop/shake feedback). */
+  addShake(amount: number): void {
+    if (this.reducedMotion) return;
+    this.shakeTrauma = Math.min(1, this.shakeTrauma + amount);
+  }
+
+  /** Push the color grade toward an element color for a beat (big casts). The
+   *  accent decays each frame; off when the grade pass is disabled (low/medium). */
+  accentGrade(color: string, strength: number): void {
+    if (!this.gradePass || this.reducedMotion) return;
+    this.accent.set(color);
+    this.accentStrength = Math.min(0.6, Math.max(this.accentStrength, strength));
+  }
+
   /** Rebuild quality-gated systems for a new tier at runtime (Settings UI §6).
    *  Disposes the old post stack/weather/shadow map so switching is leak-free. */
   setQuality(tier: QualityTier): void {
@@ -603,6 +625,9 @@ export class GameScene {
     this.recordFrameMs(renderDt * 1000, renderDt);
     this.time += renderDt;
     this.frameParity ^= 1;
+    // Decay the WS-H micro-feedback envelopes (shake fades fast, accent slower).
+    if (this.shakeTrauma > 0) this.shakeTrauma = Math.max(0, this.shakeTrauma - renderDt * 1.9);
+    if (this.accentStrength > 0) this.accentStrength = Math.max(0, this.accentStrength - renderDt * 0.85);
     this.syncUnits(sim, renderDt);
     this.vfx.syncProjectiles(sim.projectiles);
     this.vfx.syncZoneFollow((uid) => {
@@ -715,10 +740,19 @@ export class GameScene {
     if (ev.t === 'damage') {
       const view = this.views.get(ev.uid);
       if (view) view.anim.hitFlash = Math.max(view.anim.hitFlash, ev.crit ? 1.4 : 1);
+      if (ev.crit) this.addShake(0.42);
     }
     if (ev.t === 'attack-launch') {
       const view = this.views.get(ev.uid);
       if (view) view.anim.lungeFlash = Math.max(view.anim.lungeFlash, 0.35);
+    }
+    // WS-H: marquee casts tint the frame toward their element and (for the big
+    // containment/pull ults) give a small shake. Cheap, decays on its own.
+    if (ev.t === 'cast') {
+      const a = ev.vfx.archetype;
+      const strong = a === 'vortex' || a === 'dome';
+      this.accentGrade(ev.vfx.color, strong ? 0.5 : a === 'storm' || a === 'global-mark' || a === 'beam' ? 0.38 : 0.22);
+      if (strong) this.addShake(0.3);
     }
     this.vfx.handleEvent(ev, (uid) => {
       const u = sim.unit(uid);
@@ -1084,6 +1118,21 @@ export class GameScene {
       u.uContrast.value = lerp(bg.contrast, NIGHT_GRADE.contrast);
       u.uBrightness.value = lerp(1.0, 0.92);
       u.uVignette.value = lerp(0.82, 0.6);
+
+      // WS-H per-element accent: nudge the whole frame toward the dominant cast's
+      // hue without darkening (the accent is normalized to unit luminance), so a
+      // Black Hole pushes violet, an inferno pushes warm, for the beat of the cast.
+      if (this.accentStrength > 0.001) {
+        const avg = (this.accent.r + this.accent.g + this.accent.b) / 3 || 1;
+        const s = this.accentStrength;
+        const tint = u.uTint.value as THREE.Color;
+        tint.setRGB(
+          tint.r * (1 - s) + (this.accent.r / avg) * s,
+          tint.g * (1 - s) + (this.accent.g / avg) * s,
+          tint.b * (1 - s) + (this.accent.b / avg) * s
+        );
+        u.uSaturation.value *= 1 + s * 0.18;
+      }
       u.uStrength.value = this.gradeScale;
     }
   }
@@ -1114,6 +1163,17 @@ export class GameScene {
     const back = (16 + (5 - 16) * m) * this.camZoom;
     const up = (13 + (42 - 13) * m) * this.camZoom;
     this.camera.position.set(this.camTarget.x, this.camTarget.y + up, this.camTarget.z + back);
+
+    // Bounded camera shake: squared trauma so it's subtle until a real spike,
+    // capped to a small world offset and skipped entirely under reducedMotion.
+    if (!this.reducedMotion && this.shakeTrauma > 0.001) {
+      const tr = this.shakeTrauma * this.shakeTrauma;
+      const t = this.time * 41;
+      const amp = 0.55 * tr * this.camZoom;
+      this.camera.position.x += Math.sin(t * 1.31) * amp;
+      this.camera.position.y += Math.sin(t * 1.73 + 1.1) * amp * 0.6;
+      this.camera.position.z += Math.cos(t * 1.07) * amp;
+    }
     this.camera.lookAt(this.camTarget.x, this.camTarget.y + 0.8 * (1 - m), this.camTarget.z);
   }
 

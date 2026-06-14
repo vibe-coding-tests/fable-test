@@ -397,6 +397,7 @@ export const ASSEMBLED: ItemDef[] = [
     passiveMods: { int: 10, hpRegen: 2.5 },
     lore: 'It pushes. Friend, foe, self \u2014 physics does not take sides.',
     glyph: 'staff',
+    appearance: { parts: ['boot-trail'], tint: '#9fd0ec' },
     active: {
       id: 'force-staff-active',
       name: 'Force',
@@ -791,12 +792,12 @@ export const EXTENDED_ASSEMBLED: ItemDef[] = [
     passiveMods: { hpRegen: 8, magicResistPct: 25 },
     aura: { radius: 1200, affects: 'allies', mods: { magicResistPct: 10, hpRegen: 2 } },
     lore: 'The team breathes in, and the next spell breaks softer.', glyph: 'pipe',
+    appearance: { parts: ['pauldrons'], tint: '#8ee8ff', aura: { archetype: 'shield', color: '#8ee8ff', color2: '#ffffff' } },
     active: {
       id: 'pipe-active', name: 'Insight Barrier', targeting: 'no-target', castPoint: 0, cooldown: [60], manaCost: [100],
       effects: [{ kind: 'statmod', mods: { magicResistPct: 35, damageTakenReductionPct: 12 }, duration: 10, target: 'allies-in-radius', radius: 1200 }],
       vfx: { archetype: 'ground-aoe', color: '#8ee8ff', color2: '#ffffff', scale: 1.05 }
-    },
-    appearance: { parts: ['pauldrons'], tint: '#8ee8ff', aura: { archetype: 'shield', color: '#8ee8ff', color2: '#ffffff' } }
+    }
   },
   {
     id: 'crimson-guard', name: 'Crimson Guard', tier: 'core', cost: 3675,
@@ -804,12 +805,12 @@ export const EXTENDED_ASSEMBLED: ItemDef[] = [
     passiveMods: { maxHp: 250, hpRegen: 6.5, armor: 3, attackDamageTakenReductionPct: 12 },
     aura: { radius: 1200, affects: 'allies', mods: { armor: 2 } },
     lore: 'A shield wall condensed into one press.', glyph: 'shield',
+    appearance: { parts: ['pauldrons'], tint: '#d84a42' },
     active: {
       id: 'crimson-active', name: 'Guard', targeting: 'no-target', castPoint: 0, cooldown: [35],
       effects: [{ kind: 'statmod', mods: { attackDamageTakenReductionPct: 28, armor: 4 }, duration: 10, target: 'allies-in-radius', radius: 1200 }],
       vfx: { archetype: 'ground-aoe', color: '#d84a42', color2: '#ffd0a0', scale: 1 }
-    },
-    appearance: { parts: ['pauldrons'], tint: '#d84a42' }
+    }
   },
   {
     id: 'shivas-guard', name: "Shiva's Guard", tier: 'core', cost: 4950,
@@ -817,6 +818,7 @@ export const EXTENDED_ASSEMBLED: ItemDef[] = [
     passiveMods: { armor: 15, int: 25 },
     aura: { radius: 900, affects: 'enemies', mods: { attackSpeed: -35 } },
     lore: 'A frozen sermon delivered in armor.', glyph: 'armor',
+    appearance: { parts: ['frost-shards', 'pauldrons'], tint: '#bfeaff', aura: { archetype: 'storm', color: '#bfeaff', color2: '#ffffff' } },
     active: {
       id: 'shivas-active', name: 'Arctic Blast', targeting: 'no-target', castPoint: 0, cooldown: [30], manaCost: [100],
       effects: [
@@ -825,7 +827,6 @@ export const EXTENDED_ASSEMBLED: ItemDef[] = [
       ],
       vfx: { archetype: 'storm', color: '#a8e8ff', color2: '#ffffff', scale: 1.1 }
     },
-    appearance: { parts: ['frost-shards', 'pauldrons'], tint: '#a8e8ff' },
     elementOnHit: 'cryo'
   },
   {
@@ -833,6 +834,7 @@ export const EXTENDED_ASSEMBLED: ItemDef[] = [
     components: ['platemail', 'mystic-staff'], recipeCost: 1000,
     passiveMods: { armor: 10, int: 25, manaRegen: 2 },
     lore: 'A mirrored flower. Until reflect scripting lands, it gives the dispel-and-shield half of the promise.', glyph: 'orb',
+    appearance: { parts: ['mana-orb'], tint: '#ff86d8', aura: { archetype: 'shield', color: '#5ad8c8', color2: '#ffffff' } },
     active: {
       id: 'lotus-active', name: 'Echo Shell', targeting: 'unit-target', affects: 'ally', castRange: 900, castPoint: 0, cooldown: [15], manaCost: [175],
       effects: [
@@ -840,14 +842,14 @@ export const EXTENDED_ASSEMBLED: ItemDef[] = [
         { kind: 'statmod', mods: { magicResistPct: 35, statusResistPct: 35 }, duration: 6, target: 'target' }
       ],
       vfx: { archetype: 'shield', color: '#ff86d8', color2: '#ffffff', scale: 0.85 }
-    },
-    appearance: { parts: ['mana-orb'], tint: '#ff86d8' }
+    }
   },
   {
     id: 'linkens-sphere', name: "Linken's Sphere", tier: 'core', cost: 5800,
     components: ['perseverance', 'ultimate-orb'], recipeCost: 1350,
     passiveMods: { str: 15, agi: 15, int: 15, hpRegen: 6.5, manaRegen: 2.25 },
     lore: 'A private answer to the next spell aimed at you.', glyph: 'orb',
+    appearance: { parts: ['mana-orb'], tint: '#b7a0ff' },
     active: {
       id: 'linkens-active', name: 'Transfer Shield', targeting: 'unit-target', affects: 'ally', castRange: 700, castPoint: 0, cooldown: [12], manaCost: [100],
       effects: [{ kind: 'status', status: 'magic-immune', duration: 1.2, target: 'target' }],
@@ -965,6 +967,8 @@ export const EXTENDED_ASSEMBLED: ItemDef[] = [
     components: ['sange', 'morbid-mask', 'reaver'], recipeCost: 400,
     passiveMods: { str: 41, statusResistPct: 15, lifestealPct: 25 },
     lore: 'Survive by taking back every wound.', glyph: 'mask',
+    appearance: { tint: '#7a1414', aura: { archetype: 'shield', color: '#b01818', color2: '#ffb08a' } },
+    attackVisual: [{ kind: 'tinted-impact', color: '#b01818', color2: '#ff9a5a', scale: 1 }],
     active: {
       id: 'satanic-active', name: 'Unholy Rage', targeting: 'no-target', castPoint: 0, cooldown: [35],
       effects: [{ kind: 'statmod', mods: { lifestealPct: 150, damageTakenReductionPct: 10 }, duration: 6, target: 'self' }],

@@ -3,6 +3,7 @@ import { registerAllContent } from '../data';
 import { REG } from '../core/registry';
 import { applyDamage } from '../core/combat';
 import { generateDungeon, rollRoomSpawns } from '../core/dungeon';
+import { rollItemDrops } from '../core/phase3';
 import { Rng } from '../core/rng';
 import { freshEchoProgress } from '../core/echo';
 import { xpForLevel } from '../core/stats';
@@ -187,6 +188,19 @@ describe('dungeon generation D0', () => {
     const plainBodies = plain.rooms.reduce((sum, room) => sum + populationScore(room.packs).bodies, 0);
     const packedBodies = packed.rooms.reduce((sum, room) => sum + populationScore(room.packs).bodies, 0);
     expect(packedBodies).toBeGreaterThan(plainBodies);
+  });
+
+  it('drops an upgraded-quality guardian anchor on some seed (L5 source quality)', () => {
+    const def = REG.dungeon('frost-hollow');
+    const guardian = def.loot.boss;
+    expect(guardian.slots.some((s) => s.qualityOdds)).toBe(true);
+
+    let sawQuality = false;
+    for (let seed = 1; seed <= 200 && !sawQuality; seed++) {
+      const roll = rollItemDrops(guardian, 'hell', {}, new Rng(seed));
+      if (roll.items.some((it) => it.quality)) sawQuality = true;
+    }
+    expect(sawQuality).toBe(true);
   });
 
   it('forces modifier affixes when legal', () => {

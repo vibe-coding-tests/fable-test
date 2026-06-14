@@ -10,7 +10,7 @@ import { abilityIcon, itemIcon, heroPortrait } from '../engine/icons';
 import { WORLD_SCALE } from '../engine/scale';
 import { Game } from '../systems/game';
 import type { InputController } from '../systems/input';
-import type { DifficultyTier, GambitAction, GambitCondition, GambitRule, GambitTargetMode, GraphicsSettings, ItemDef, ItemSave, SimEvent } from '../core/types';
+import type { DifficultyTier, GambitAction, GambitCondition, GambitRule, GambitTargetMode, GraphicsSettings, ItemDef, ItemRarity, ItemSave, SimEvent } from '../core/types';
 import * as THREE from 'three';
 
 // ------------------------------------------------------------------
@@ -267,7 +267,7 @@ export class Hud {
       const deadIn = dead ? Math.ceil(rec.respawnAt - g.sim.time) : 0;
       html += `
         <div class="party-frame ${active ? 'active' : ''} ${dead ? 'dead' : ''}" data-swap="${i}">
-          <img src="${heroPortrait(def.palette, def.name[0])}" alt="">
+          <img src="${heroPortrait(def.palette, def.name[0], 72, def.silhouette)}" alt="">
           <div class="pf-info">
             <div class="pf-name">${i + 1} ${def.name} <em>L${u ? u.level : rec.level}</em></div>
             <div class="bar hp"><div style="width:${hpPct}%"></div></div>
@@ -286,7 +286,7 @@ export class Hud {
       const hpPct = u && u.alive ? (u.hp / u.stats.maxHp) * 100 : 0;
       html += `
         <div class="party-frame creep">
-          <img src="${heroPortrait(def.palette, def.name[0], 48)}" alt="">
+          <img src="${heroPortrait(def.palette, def.name[0], 48, def.silhouette)}" alt="">
           <div class="pf-info">
             <div class="pf-name">${def.name} <em>${'★'.repeat(inst.star)}</em></div>
             <div class="bar hp"><div style="width:${hpPct}%"></div></div>
@@ -365,7 +365,7 @@ export class Hud {
 
     this.heroPanel.innerHTML = `
       <div class="hp-left">
-        <img class="portrait" src="${heroPortrait(def.palette, def.name[0])}" alt="">
+        <img class="portrait" src="${heroPortrait(def.palette, def.name[0], 72, def.silhouette)}" alt="">
         <div class="hp-id">
           <div class="hp-name">${def.name} <em>Lv ${u.level}</em>
             ${talentPending ? '<button class="talent-btn" id="talent-open">Talent!</button>' : ''}
@@ -750,7 +750,7 @@ export class Hud {
       const gambitLabel = rec.gambits.length > 0 ? `${rec.gambits.length} custom rules` : 'default role gambit';
       heroes += `
         <div class="roster-row ${i === g.activeIdx ? 'active' : ''}">
-          <img src="${heroPortrait(def.palette, def.name[0])}" alt="">
+          <img src="${heroPortrait(def.palette, def.name[0], 72, def.silhouette)}" alt="">
           <div class="rr-main">
             <b>${def.name}</b> <em>Lv ${rec.unit ? rec.unit.level : rec.level} · key ${i + 1}</em>
             <div class="rr-sub">${def.attribute.toUpperCase()} · ${def.roles.join(' / ')}</div>
@@ -776,7 +776,7 @@ export class Hud {
       const fainted = inst.faintedFor && inst.faintedFor > 0;
       creeps += `
         <div class="roster-row creep ${fielded ? 'fielded' : ''} ${fainted ? 'fainted' : ''}">
-          <img src="${heroPortrait(def.palette, def.name[0], 48)}" alt="">
+          <img src="${heroPortrait(def.palette, def.name[0], 48, def.silhouette)}" alt="">
           <div class="rr-main">
             <b>${def.name} ${'★'.repeat(inst.star)}</b>
             <div class="rr-sub">${def.tier}${fainted ? ` · fainted ${Math.ceil(inst.faintedFor!)}s` : ''}</div>
@@ -1185,7 +1185,7 @@ export class Hud {
       const label = rec.gambits.length > 0 ? `${rec.gambits.length} authored rules` : 'default role gambit';
       const itemBits = rec.items.map((it) => it ? REG.item(it.id).name : null).filter(Boolean).join(', ') || 'no items';
       return `<div class="pf-hero">
-        <img src="${heroPortrait(def.palette, def.name[0], 40)}" alt="">
+        <img src="${heroPortrait(def.palette, def.name[0], 40, def.silhouette)}" alt="">
         <div class="pf-main"><b>${def.name}</b> <em>Lv ${rec.unit ? rec.unit.level : rec.level}</em>
           <div class="rr-sub">${def.roles.join(' / ')} · ${itemBits}</div>
           <div class="rr-sub">Gambit: ${label} <button class="btn tiny accent" data-pf-edit="${i}">Edit rules</button></div>
@@ -1335,6 +1335,25 @@ export class Hud {
       </div>`;
     }).join('');
 
+    // Black Market (LOOT L4): recipe + relic gamble wheels — a gold sink that feeds the Armory.
+    const bm = g.blackMarketView();
+    const recipeBtns = bm.recipeRarities
+      .map((r) => `<button class="btn small" data-bm-recipe="${r}" ${bm.inTown && bm.gold >= bm.recipeCost ? '' : 'disabled'} style="color:${rarityColor(r)}">${cap(r)}</button>`)
+      .join('');
+    const bmHtml = `
+      <div class="svc-row">
+        <div class="svc-main"><b>Recipe Wheel</b> <em>${bm.recipeCost}g</em>
+          <div class="rr-sub">One roll for a component/basic piece of the chosen band — the steady gold that finishes the builds your drops start.</div>
+        </div>
+        <div class="svc-actions">${recipeBtns}</div>
+      </div>
+      <div class="svc-row">
+        <div class="svc-main"><b>Relic Wheel</b> <em>${bm.relicCost}g</em>
+          <div class="rr-sub">One bound assembled relic up to <span style="color:${rarityColor(bm.relicCeiling)}">${bm.relicCeiling}</span>; cost climbs each spin and never reaches the reserved peak.</div>
+        </div>
+        <div class="svc-actions"><button class="btn small accent" data-bm-relic="1" ${bm.inTown && bm.gold >= bm.relicCost ? '' : 'disabled'}>Spin</button></div>
+      </div>`;
+
     // Raids, executed (§3.9): scripted 5v1 with mechanics firing in the sim
     const aegisTag = g.aegisReady() ? ` <span class="gold">Aegis held</span>` : '';
     let raidHtml = '';
@@ -1399,6 +1418,7 @@ export class Hud {
           ${armoryHtml}
           <div class="svc-sub">Bound items</div>${armorySlotsHtml}
         </section>
+        <section><h3>Black Market <span class="gold">${Math.floor(g.gold)} g</span></h3>${bmHtml}</section>
         <section><h3>Recovery &amp; Growth</h3>
           <div class="svc-row"><div class="svc-main">Rest at the inn — full HP/mana</div>
             <div class="svc-actions">
@@ -1449,6 +1469,8 @@ export class Hud {
     this.modal.querySelectorAll<HTMLElement>('[data-arm-apply-loadout]').forEach((el) => el.addEventListener('click', () => { g.applyHeroLoadout(el.dataset.armApplyLoadout!); rerender(); }));
     this.modal.querySelectorAll<HTMLElement>('[data-arm-reclaim-all]').forEach((el) => el.addEventListener('click', () => { g.reclaimAllArmoryItemsForHero(el.dataset.armReclaimAll!); rerender(); }));
     this.modal.querySelector<HTMLElement>('[data-arm-gear-field]')?.addEventListener('click', () => { g.gearFieldLoadouts(); rerender(); });
+    this.modal.querySelectorAll<HTMLElement>('[data-bm-recipe]').forEach((el) => el.addEventListener('click', () => { g.blackMarketRecipeWheel(el.dataset.bmRecipe as ItemRarity); rerender(); }));
+    this.modal.querySelector<HTMLElement>('[data-bm-relic]')?.addEventListener('click', () => { g.blackMarketRelicWheel(); rerender(); });
     this.modal.querySelectorAll<HTMLElement>('[data-tome]').forEach((el) => el.addEventListener('click', () => { g.buyTome(Number(el.dataset.tome)); rerender(); }));
     this.modal.querySelectorAll<HTMLElement>('[data-respec]').forEach((el) => el.addEventListener('click', () => { g.respec(Number(el.dataset.respec)); rerender(); }));
     this.modal.querySelector<HTMLElement>('[data-heal]')?.addEventListener('click', () => { g.healParty(); rerender(); });
@@ -1715,7 +1737,7 @@ export class Hud {
       .sort((a, b) => a.name.localeCompare(b.name))
       .map((h) => `
         <div class="codex-card">
-          <img src="${heroPortrait(REG.hero(h.id).palette, h.name[0], 48)}" alt="">
+          <img src="${heroPortrait(REG.hero(h.id).palette, h.name[0], 48, REG.hero(h.id).silhouette)}" alt="">
           <div><b>${h.name}</b> <em>${h.sub}</em>
           <p>${h.lore}</p></div>
         </div>`)
@@ -1768,7 +1790,7 @@ export class Hud {
       const ownTag = h.owned ? `<em>Owned · Lv ${h.level}</em>` : '<em>Met — plan the recruit</em>';
       return `
         <div class="codex-card hero-codex">
-          <img src="${heroPortrait(REG.hero(h.id).palette, h.name[0], 48)}" alt="">
+          <img src="${heroPortrait(REG.hero(h.id).palette, h.name[0], 48, REG.hero(h.id).silhouette)}" alt="">
           <div>
             <b>${h.name}</b> <span class="dim">${h.title}</span><br>
             <em>${h.attribute} · ${h.roles.slice(0, 3).join(' / ')}</em> ${ownTag}

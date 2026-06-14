@@ -61,7 +61,7 @@ export function showTitle(onStart: (save: GameSave) => void): void {
       const def = REG.hero(id);
       return `
         <button class="starter-card" data-pick="${id}">
-          <img src="${heroPortrait(def.palette, def.name[0], 96)}" alt="">
+          <img src="${heroPortrait(def.palette, def.name[0], 96, def.silhouette)}" alt="">
           <b>${def.name}</b>
           <span class="attr ${def.attribute}">${def.attribute.toUpperCase()}</span>
           <p>${def.roles.join(' · ')}</p>

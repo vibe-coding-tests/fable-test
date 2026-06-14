@@ -108,6 +108,7 @@ export const SHADESHORE: RegionDef = {
   ],
   gyms: [{ gymId: 'tide-gym', pos: { x: 6000, y: 3000 }, radius: 650 }],
   bosses: ['boss-kunkka', 'boss-tidehunter', 'boss-naga-siren', 'mini-slardar', 'mini-slark'],
+  raids: ['renegade-marshal'],
   props: { treeDensity: 0.25, rockDensity: 0.45 },
   gateHint: 'The Rot Ferry opens with the Tide Badge.'
 };
@@ -170,8 +171,9 @@ export const VILE_REACHES: RegionDef = {
     { id: 'vr-to-quoidge', name: 'Scholar Road to Quoidge', pos: { x: 10800, y: 3000 }, radius: 520, toRegionId: 'quoidge', toPos: { x: 1200, y: 8800 }, requiredBadge: 'rot-badge' }
   ],
   gyms: [{ gymId: 'rot-gym', pos: { x: 6100, y: 3000 }, radius: 650 }],
+  dungeons: [{ id: 'vr-worldstone-portal', dungeonId: 'worldstone-vault', name: 'Worldstone Vault', pos: { x: 5000, y: 10300 }, radius: 520 }],
   bosses: ['boss-pudge', 'boss-lifestealer', 'boss-doom', 'boss-wraith-king', 'mini-undying', 'mini-night-stalker'],
-  raids: ['lord-of-terror'],
+  raids: ['lord-of-terror', 'prime-evil'],
   props: { treeDensity: 0.12, rockDensity: 0.85 },
   gateHint: 'The Scholar Road opens with the Rot Badge.'
 };
@@ -229,7 +231,9 @@ export const QUOIDGE: RegionDef = {
     { id: 'qc-to-hidden', name: 'Green Library Gate', pos: { x: 10900, y: 6200 }, radius: 520, toRegionId: 'hidden-wood', toPos: { x: 1000, y: 6200 }, requiredBadge: 'arcane-badge' }
   ],
   gyms: [{ gymId: 'arcane-gym', pos: { x: 6000, y: 3000 }, radius: 650 }],
+  dungeons: [{ id: 'qc-severed-dark-portal', dungeonId: 'severed-dark', name: 'The Severed Dark', pos: { x: 5200, y: 9600 }, radius: 520 }],
   bosses: ['boss-invoker', 'boss-zeus', 'mini-silencer', 'mini-outworld-destroyer', 'mini-skywrath-mage', 'mini-tinker'],
+  raids: ['void-prelate'],
   props: { treeDensity: 0.35, rockDensity: 0.35 },
   gateHint: 'The Green Library Gate opens with the Arcane Badge.'
 };
@@ -350,6 +354,7 @@ export const MOUNT_JOERLAK: RegionDef = {
   ],
   gyms: [{ gymId: 'titan-gym', pos: { x: 6000, y: 3000 }, radius: 650 }],
   bosses: ['boss-magnus', 'boss-elder-titan', 'boss-tiny', 'boss-storm-spirit', 'boss-ember-spirit', 'mini-treant-protector', 'mini-centaur-warrunner'],
+  raids: ['lord-of-hatred'],
   props: { treeDensity: 0.2, rockDensity: 1.0 },
   gateHint: 'The Mad Moon Stair opens with the Titan Badge.'
 };
@@ -398,8 +403,9 @@ export const MAD_MOON_CRATER: RegionDef = {
     { id: 'mm-to-joerlak', name: 'Mad Moon Stair to Joerlak', pos: { x: 850, y: 6000 }, radius: 520, toRegionId: 'mount-joerlak', toPos: { x: 10600, y: 6000 } }
   ],
   gyms: [],
+  dungeons: [{ id: 'mm-ember-caldera-portal', dungeonId: 'ember-caldera', name: 'Ember Caldera', pos: { x: 6400, y: 11600 }, radius: 520 }],
   bosses: ['boss-spectre', 'boss-faceless-void', 'boss-terrorblade'],
-  raids: ['roshan-pit'],
+  raids: ['roshan-pit', 'last-eldwurm'],
   props: { treeDensity: 0.05, rockDensity: 1.1 },
   gateHint: 'The Tower hosts the Elite Five and Champion.'
 };

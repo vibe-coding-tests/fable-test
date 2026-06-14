@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { applyHeroLikeness, buildUnitRig, modelGeometryCacheSize, mountHeroModel } from '../engine/models';
 import { ENABLED_HERO_MODELS, heroAssetEntry, PHASE5_STARTER_ASSETS } from '../engine/assets';
+import { ALL_HEROES } from '../data/index';
 
 describe('procedural model cache', () => {
   it('shares canonical geometry across repeated rigs', () => {
@@ -14,6 +15,15 @@ describe('procedural model cache', () => {
 
     expect(firstMeshA?.geometry).toBe(firstMeshB?.geometry);
     expect(modelGeometryCacheSize()).toBeGreaterThan(before);
+  });
+
+  it('builds a procedural likeness for every shipped hero without throwing (WS-A render smoke)', () => {
+    for (const hero of ALL_HEROES) {
+      const rig = buildUnitRig(hero.silhouette, hero.palette);
+      expect(() => applyHeroLikeness(rig, hero.id)).not.toThrow();
+      // The likeness overlay should add at least one detail mesh to the body.
+      expect(rig.body.children.length, `${hero.id} body parts`).toBeGreaterThan(0);
+    }
   });
 });
 

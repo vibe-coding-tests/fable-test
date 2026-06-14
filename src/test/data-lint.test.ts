@@ -28,7 +28,8 @@ beforeAll(() => registerAllContent());
 
 const VFX_ARCHETYPES: VfxArchetype[] = [
   'projectile', 'ground-aoe', 'chain', 'beam', 'summon-pop', 'shield',
-  'stun-stars', 'channel', 'global-mark', 'hook', 'wall', 'storm'
+  'stun-stars', 'channel', 'global-mark', 'hook', 'wall', 'storm',
+  'vortex', 'dome', 'mine'
 ];
 
 const STATUS_IDS = [
@@ -283,8 +284,8 @@ describe('data lint: items', () => {
   });
 
   it('has Phase 4 item appearance and attack override coverage', () => {
-    expect(ALL_ITEMS.filter((i) => i.appearance).length).toBeGreaterThanOrEqual(6);
-    expect(ALL_ITEMS.filter((i) => (i.attackVisual?.length ?? 0) > 0).length).toBeGreaterThanOrEqual(6);
+    expect(ALL_ITEMS.filter((i) => i.appearance).length).toBeGreaterThanOrEqual(30);
+    expect(ALL_ITEMS.filter((i) => (i.attackVisual?.length ?? 0) > 0).length).toBeGreaterThanOrEqual(20);
     expect(REG.item('battlefury').appearance?.weapon?.kind).toBe('broad-cleaver');
     expect(REG.item('divine-rapier').appearance?.weapon?.kind).toBe('glowing-blade');
     expect(REG.item('assault-cuirass').appearance?.parts).toContain('pauldrons');
@@ -325,6 +326,38 @@ describe('data lint: Phase 4/5 polish infrastructure', () => {
       expect(profile, `${heroId} likeness profile`).toBeDefined();
       expect(profile!.features.length, `${heroId} features`).toBeGreaterThanOrEqual(4);
       expect(profile!.readsAs).toBeTruthy();
+    }
+  });
+
+  it('wires the WS-G archetypes (vortex/dome/mine) to their signature spells (WS-B)', () => {
+    const archOf = (heroId: string, abilityId: string): string => {
+      const hero = REG.hero(heroId);
+      const ability = hero.abilities.find((a) => a.id === abilityId);
+      expect(ability, `${heroId}:${abilityId}`).toBeDefined();
+      return ability!.vfx.archetype;
+    };
+    expect(archOf('enigma', 'enigma-black-hole')).toBe('vortex');
+    expect(archOf('dark-seer', 'ds-vacuum')).toBe('vortex');
+    expect(archOf('pangolier', 'pango-rolling-thunder')).toBe('vortex');
+    expect(archOf('magnus', 'magnus-rp')).toBe('vortex');
+    expect(archOf('mars', 'mars-arena')).toBe('dome');
+    expect(archOf('disruptor', 'dis-static-storm')).toBe('dome');
+    expect(archOf('faceless-void', 'fv-chronosphere')).toBe('dome');
+    expect(archOf('techies', 'techies-proximity-mines')).toBe('mine');
+  });
+
+  it('has a recognizable likeness profile for the entire shipped roster (WS-A)', () => {
+    const byHero = new Map(HERO_LIKENESS_PROFILES.map((p) => [p.heroId, p]));
+    for (const hero of ALL_HEROES) {
+      const profile = byHero.get(hero.id);
+      expect(profile, `${hero.id} likeness profile`).toBeDefined();
+      expect(profile!.features.length, `${hero.id} features`).toBeGreaterThanOrEqual(4);
+      expect(profile!.readsAs, `${hero.id} readsAs`).toBeTruthy();
+    }
+    // No orphan profiles referencing heroes that do not exist.
+    const roster = new Set(ALL_HEROES.map((h) => h.id));
+    for (const profile of HERO_LIKENESS_PROFILES) {
+      expect(roster.has(profile.heroId), `profile ${profile.heroId} has no hero`).toBe(true);
     }
   });
 });
@@ -482,7 +515,7 @@ describe('data lint: Phase 3 registries', () => {
       expect(REG.regions.has(boss.region), `${boss.id}: region`).toBe(true);
       for (const id of [...boss.loot.guaranteed, ...boss.loot.assembledPool]) expect(REG.items.has(id), `${boss.id}: loot ${id}`).toBe(true);
     }
-    expect(ALL_RAIDS.length).toBe(4);
+    expect(ALL_RAIDS.length).toBe(10);
     for (const raid of ALL_RAIDS) {
       expect(REG.heroes.has(raid.boss.heroId), `${raid.id}: boss hero`).toBe(true);
       expect(REG.quests.has(raid.unlockQuest), `${raid.id}: unlock`).toBe(true);

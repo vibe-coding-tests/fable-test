@@ -100,6 +100,9 @@ export const TUNING = {
     relicWheelStepCost: 450,
     salvageEssence: { common: 1, uncommon: 2, rare: 4, mythical: 7, legendary: 12, immortal: 20, arcana: 30 },
     relicRarityCeiling: 'legendary' as const,
+    // Small chance a gambled relic copy comes upgraded; Unusual stays reserved to
+    // raids/special battles, so the wheel tops out at the collectible grades.
+    relicQualityOdds: { inscribed: 0.06, frozen: 0.05, genuine: 0.04 },
     // Essence + gold to raise a bound copy one quality grade (LOOT L5). Keyed by target grade.
     qualityUpgrade: {
       essence: { genuine: 2, frozen: 3, inscribed: 5, corrupted: 8, unusual: 14, standard: 0 },

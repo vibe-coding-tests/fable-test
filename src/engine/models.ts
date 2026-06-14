@@ -117,7 +117,106 @@ export const HERO_LIKENESS_PROFILES: HeroLikenessProfile[] = [
   { heroId: 'arc-warden', readsAs: 'blue-gold split self warden', features: ['faceless hood', 'crackling arc core', 'gold staff', 'double afterimage'] },
   { heroId: 'meepo', readsAs: 'small shovel-clan geomancer', features: ['digging cap', 'shovel blade', 'green scarf', 'clone pips'] },
   { heroId: 'morphling', readsAs: 'flowing blue water warrior', features: ['water body', 'crest wave', 'glowing eyes', 'ripple trail'] },
-  { heroId: 'brewmaster', readsAs: 'broad drunken elemental brawler', features: ['barrel charm', 'bare headband', 'totem keg', 'tri-element wisps'] }
+  { heroId: 'brewmaster', readsAs: 'broad drunken elemental brawler', features: ['barrel charm', 'bare headband', 'totem keg', 'tri-element wisps'] },
+  // ---- Phase 2 ----
+  { heroId: 'mirana', readsAs: 'moon-priestess on guard', features: ['star tiara', 'crescent bow', 'star cloak', 'glowing eyes'] },
+  { heroId: 'lina', readsAs: 'red fire sorceress', features: ['flame ponytail', 'ember hands', 'hot eyes', 'slim robe'] },
+  { heroId: 'zeus', readsAs: 'bearded storm lord', features: ['cloud beard', 'lightning rods', 'gold crown', 'crackling eyes'] },
+  { heroId: 'drow-ranger', readsAs: 'icy elf archer', features: ['hood', 'frost bow', 'quiver', 'pale-blue eyes'] },
+  { heroId: 'jakiro', readsAs: 'twin-headed dragon', features: ['fire head', 'ice head', 'wings', 'split palette'] },
+  { heroId: 'witch-doctor', readsAs: 'voodoo shaman', features: ['bone mask', 'fetish charms', 'green eyes', 'arcane cape'] },
+  { heroId: 'omniknight', readsAs: 'golden paladin', features: ['winged helm', 'halo glow', 'heavy plate', 'blue cape'] },
+  { heroId: 'windranger', readsAs: 'green archer', features: ['hood', 'red scarf', 'quiver', 'glowing eyes'] },
+  { heroId: 'phantom-assassin', readsAs: 'hooded daggerfall', features: ['veil mask', 'ragged cloak', 'hood', 'red eyes'] },
+  { heroId: 'tusk', readsAs: 'walrus brawler', features: ['tusks', 'fur coat', 'ice gauntlets', 'cold eyes'] },
+  { heroId: 'ancient-apparition', readsAs: 'floating ice wraith', features: ['frost crown', 'trailing wisp body', 'no legs', 'glacial eyes'] },
+  // ---- Phase 3 ----
+  { heroId: 'vengeful-spirit', readsAs: 'blue winged spirit', features: ['bat wings', 'horned crown', 'cape', 'glowing eyes'] },
+  { heroId: 'riki', readsAs: 'small invis assassin', features: ['hood', 'smoke wisps', 'twin daggers', 'glowing eyes'] },
+  { heroId: 'bounty-hunter', readsAs: 'masked ninja', features: ['gold mask', 'scarf', 'shuriken', 'gold trim'] },
+  { heroId: 'winter-wyvern', readsAs: 'icy dragon', features: ['wings', 'frost crest', 'fanged maw', 'glacial eyes'] },
+  { heroId: 'sand-king', readsAs: 'scorpion warrior', features: ['carapace', 'stinger tail', 'mandibles', 'glowing eyes'] },
+  { heroId: 'nyx-assassin', readsAs: 'beetle assassin', features: ['carapace shell', 'mandibles', 'back spikes', 'glowing eyes'] },
+  { heroId: 'viper', readsAs: 'nether drake', features: ['wings', 'scaled body', 'fanged maw', 'glowing eyes'] },
+  { heroId: 'slardar', readsAs: 'fish-knight', features: ['fin crest', 'scaled plate', 'mace', 'glowing eyes'] },
+  { heroId: 'naga-siren', readsAs: 'serpentine siren', features: ['scaled tail', 'head fins', 'no legs', 'glowing eyes'] },
+  { heroId: 'slark', readsAs: 'fish rogue', features: ['fin head', 'hood', 'dagger', 'glowing eyes'] },
+  { heroId: 'lifestealer', readsAs: 'feral ghoul', features: ['claws', 'exposed ribs', 'gaunt body', 'red eyes'] },
+  { heroId: 'undying', readsAs: 'rotting zombie lord', features: ['tombstone arm', 'tattered robe', 'sagging jaw', 'pale eyes'] },
+  { heroId: 'night-stalker', readsAs: 'bat demon', features: ['leather wings', 'fanged maw', 'horns', 'glowing eyes'] },
+  { heroId: 'silencer', readsAs: 'arcane duelist', features: ['hood', 'curse glaive', 'sigil', 'glowing eyes'] },
+  { heroId: 'outworld-destroyer', readsAs: 'astral construct', features: ['floating orb head', 'cape', 'orbiting glyphs', 'glowing eyes'] },
+  { heroId: 'skywrath-mage', readsAs: 'winged bird-mage', features: ['feathered wings', 'beak helm', 'crest', 'glowing eyes'] },
+  { heroId: 'tinker', readsAs: 'goblin inventor', features: ['goggles', 'backpack', 'laser arm', 'red core'] },
+  { heroId: 'enchantress', readsAs: 'deer dryad', features: ['antlers', 'leaf dress', 'forest palette', 'glowing eyes'] },
+  { heroId: 'chen', readsAs: 'holy knight', features: ['winged helm', 'halo glow', 'heavy plate', 'cape'] },
+  { heroId: 'beastmaster', readsAs: 'tribal beast lord', features: ['boar helm', 'tusks', 'fur shoulders', 'glowing eyes'] },
+  { heroId: 'broodmother', readsAs: 'giant spider', features: ['eight legs', 'abdomen', 'fangs', 'glowing eyes'] },
+  { heroId: 'warlock', readsAs: 'demon summoner', features: ['horned hood', 'tome', 'horns', 'glowing eyes'] },
+  { heroId: 'visage', readsAs: 'gargoyle', features: ['stone wings', 'crown', 'claws', 'glowing eyes'] },
+  { heroId: 'magnus', readsAs: 'armored mammoth-man', features: ['tusks', 'quad mount', 'horns', 'glowing eyes'] },
+  { heroId: 'elder-titan', readsAs: 'stone titan', features: ['rocky shoulders', 'spirit core', 'stone crown', 'glowing eyes'] },
+  { heroId: 'treant-protector', readsAs: 'walking tree', features: ['bark body', 'branch antlers', 'leaf crown', 'glowing eyes'] },
+  { heroId: 'centaur-warrunner', readsAs: 'centaur', features: ['quad mount', 'rock shoulders', 'beard', 'glowing eyes'] },
+  { heroId: 'ember-spirit', readsAs: 'fire swordsman', features: ['topknot', 'ember wisps', 'fire palette', 'glowing eyes'] },
+  { heroId: 'spectre', readsAs: 'shadow wraith', features: ['smoke body', 'blade-arms', 'no feet', 'glowing eyes'] },
+  { heroId: 'faceless-void', readsAs: 'time alien', features: ['faceless head', 'gauntlet', 'carapace', 'face plate'] },
+  { heroId: 'terrorblade', readsAs: 'demon marauder', features: ['horns', 'twin swords', 'wings', 'glowing eyes'] },
+  { heroId: 'phoenix', readsAs: 'fire bird', features: ['flame wings', 'beak', 'ember body', 'glowing eyes'] },
+  { heroId: 'io', readsAs: 'floating wisp', features: ['glowing orb', 'tether tendrils', 'no body', 'bright core'] },
+  // ---- Standard: Strength ----
+  { heroId: 'abaddon', readsAs: 'teal death-knight', features: ['horned helm', 'shield', 'mist cloak', 'glowing eyes'] },
+  { heroId: 'alchemist', readsAs: 'ogre and goblin rider', features: ['barrel', 'cleaver', 'vials', 'glowing eyes'] },
+  { heroId: 'bristleback', readsAs: 'quilled brute', features: ['back quills', 'snout', 'plate', 'glowing eyes'] },
+  { heroId: 'dawnbreaker', readsAs: 'celestial smith', features: ['halo', 'hammer', 'pauldrons', 'glowing eyes'] },
+  { heroId: 'dragon-knight', readsAs: 'armored dragon knight', features: ['helm crest', 'scale cape', 'plate', 'glowing eyes'] },
+  { heroId: 'huskar', readsAs: 'spear tribesman', features: ['topknot', 'back spear', 'low-HP glow', 'glowing eyes'] },
+  { heroId: 'ogre-magi', readsAs: 'two-headed ogre', features: ['two heads', 'club', 'fur', 'bulky body'] },
+  { heroId: 'primal-beast', readsAs: 'giant ape-beast', features: ['tusks', 'fists', 'mane', 'glowing eyes'] },
+  { heroId: 'spirit-breaker', readsAs: 'charging bull-demon', features: ['quad mount', 'horns', 'star core', 'glowing eyes'] },
+  { heroId: 'underlord', readsAs: 'hulking pit demon', features: ['tusks', 'maul', 'dark armor', 'glowing eyes'] },
+  // ---- Standard: Agility ----
+  { heroId: 'bloodseeker', readsAs: 'blood hound', features: ['crest fin', 'claws', 'red palette', 'red eyes'] },
+  { heroId: 'clinkz', readsAs: 'flaming skeleton archer', features: ['exposed ribs', 'gun-bow', 'fire eyes', 'bone body'] },
+  { heroId: 'gyrocopter', readsAs: 'goblin gyro pilot', features: ['rotor', 'cockpit', 'gun arms', 'glowing eyes'] },
+  { heroId: 'hoodwink', readsAs: 'squirrel ranger', features: ['bushy tail', 'hood', 'crossbow', 'glowing eyes'] },
+  { heroId: 'razor', readsAs: 'lightning revenant', features: ['smoke body', 'lightning whip', 'storm crackle', 'glowing eyes'] },
+  { heroId: 'templar-assassin', readsAs: 'psionic templar', features: ['headdress', 'refraction shards', 'crest', 'glowing eyes'] },
+  { heroId: 'troll-warlord', readsAs: 'troll berserker', features: ['tusks', 'dual axes', 'war paint', 'glowing eyes'] },
+  { heroId: 'ursa', readsAs: 'bear warrior', features: ['bear head', 'ears', 'claws', 'glowing eyes'] },
+  { heroId: 'venomancer', readsAs: 'plague lizard', features: ['tail', 'back spines', 'poison palette', 'glowing eyes'] },
+  { heroId: 'weaver', readsAs: 'beetle weaver', features: ['carapace', 'wings', 'mandibles', 'glowing eyes'] },
+  // ---- Standard: Intelligence ----
+  { heroId: 'death-prophet', readsAs: 'banshee witch', features: ['veil hood', 'robe cape', 'skull charm', 'glowing eyes'] },
+  { heroId: 'disruptor', readsAs: 'storm shaman', features: ['hide hood', 'totems', 'lightning palette', 'glowing eyes'] },
+  { heroId: 'grimstroke', readsAs: 'ink sorcerer', features: ['mask', 'brush-quill', 'cape', 'glowing eyes'] },
+  { heroId: 'keeper-of-the-light', readsAs: 'lantern wizard', features: ['beard', 'lantern', 'cape', 'glowing eyes'] },
+  { heroId: 'leshrac', readsAs: 'tormented demon', features: ['horns', 'tail', 'bone crown', 'glowing eyes'] },
+  { heroId: 'necrophos', readsAs: 'plague reaper', features: ['hood', 'scythe', 'skull head', 'glowing eyes'] },
+  { heroId: 'puck', readsAs: 'faerie dragon', features: ['wings', 'horns', 'slim body', 'glowing eyes'] },
+  { heroId: 'pugna', readsAs: 'nether skull-mage', features: ['skull head', 'ward orbs', 'cape', 'glowing eyes'] },
+  { heroId: 'queen-of-pain', readsAs: 'blue pain demon', features: ['bat wings', 'horns', 'claws', 'glowing eyes'] },
+  { heroId: 'shadow-demon', readsAs: 'eredar demon', features: ['horns', 'hood', 'claws', 'glowing eyes'] },
+  { heroId: 'shadow-shaman', readsAs: 'troll shaman', features: ['mask', 'feathers', 'ward staff', 'glowing eyes'] },
+  // ---- Standard: Universal ----
+  { heroId: 'bane', readsAs: 'nightmare horror', features: ['tentacle body', 'big eye', 'no legs', 'glowing eyes'] },
+  { heroId: 'batrider', readsAs: 'imp on bat', features: ['bat wings', 'torch', 'flame', 'glowing eyes'] },
+  { heroId: 'clockwerk', readsAs: 'clockwork knight', features: ['gear armor', 'cogs', 'hook', 'glowing eyes'] },
+  { heroId: 'dark-seer', readsAs: 'hooded seer', features: ['dome head', 'third eye', 'cape', 'glowing eyes'] },
+  { heroId: 'dark-willow', readsAs: 'fae trickster', features: ['wisp wings', 'fae mask', 'staff', 'glowing eyes'] },
+  { heroId: 'dazzle', readsAs: 'troll priest', features: ['bone mask', 'wand', 'robe', 'glowing eyes'] },
+  { heroId: 'earth-spirit', readsAs: 'stone monk', features: ['rock shoulders', 'totem', 'golem body', 'glowing eyes'] },
+  { heroId: 'enigma', readsAs: 'void blob', features: ['dark mass', 'inner stars', 'no legs', 'glowing eyes'] },
+  { heroId: 'lone-druid', readsAs: 'bear druid', features: ['hood', 'bear companion head', 'fur', 'glowing eyes'] },
+  { heroId: 'lycan', readsAs: 'werewolf lord', features: ['wolf head', 'snout', 'claws', 'glowing eyes'] },
+  { heroId: 'marci', readsAs: 'martial companion', features: ['braid', 'gauntlets', 'satchel', 'glowing eyes'] },
+  { heroId: 'pangolier', readsAs: 'pangolin swashbuckler', features: ['plumed hat', 'scale plates', 'rapier', 'glowing eyes'] },
+  { heroId: 'snapfire', readsAs: 'granny on a lizard mount', features: ['quad mount', 'goggles', 'shotgun', 'glowing eyes'] },
+  { heroId: 'timbersaw', readsAs: 'mech lumberjack', features: ['saw-mech frame', 'chain saws', 'armor', 'glowing eyes'] },
+  { heroId: 'void-spirit', readsAs: 'astral monk', features: ['crystal hood', 'rifts', 'blade', 'glowing eyes'] },
+  // ---- Complex ----
+  { heroId: 'chaos-knight', readsAs: 'armored chaos rider', features: ['jagged crown', 'cape', 'pauldrons', 'red eyes'] },
+  { heroId: 'phantom-lancer', readsAs: 'blue spear duelist', features: ['crest', 'lance', 'sash', 'glowing eyes'] }
 ];
 
 // PBR base material. Node-safe: MeshStandardMaterial constructs without a GL
@@ -520,6 +619,152 @@ export function applyHeroLikeness(rig: UnitRig, heroId: string): void {
     return [eL, eR];
   };
 
+  // ---- Composite feature closures ----
+  // Shared recognizable parts so each hero case stays a handful of cheap calls.
+  // All lean on the primitive helpers above, palette-driven and scaled by rig.scale.
+  const dodeca = (r: number, color: string | number, emissive = 0): THREE.Mesh =>
+    mesh(new THREE.DodecahedronGeometry(r * s, 0), lam(color, emissive));
+  const octa = (r: number, color: string | number, emissive = 0): THREE.Mesh =>
+    mesh(new THREE.OctahedronGeometry(r * s), lam(color, emissive));
+
+  const horns = (color: string, len = 0.42, y = 2.0, spread = 0.18, tilt = 0.4, lean = 0.5): void => {
+    const hL = cone(0.075, len, color);
+    hL.position.set(0.04 * s, y * s, spread * s);
+    hL.rotation.set(tilt, 0, lean);
+    const hR = hL.clone();
+    hR.position.z = -spread * s;
+    hR.rotation.set(-tilt, 0, lean);
+    add(hL, hR);
+  };
+  const wings = (color: string, span = 0.85, y = 1.3, emissive = 0): void => {
+    const wL = box(0.05, span, 0.34, color, emissive);
+    wL.position.set(-0.42 * s, y * s, 0.42 * s);
+    wL.rotation.z = 0.4;
+    const wR = wL.clone();
+    wR.position.z = -0.42 * s;
+    add(wL, wR);
+  };
+  const antlers = (color: string): void => {
+    const aL = cone(0.05, 0.5, color);
+    aL.position.set(0, 2.12 * s, 0.18 * s);
+    aL.rotation.x = 0.55;
+    const aR = aL.clone();
+    aR.position.z = -0.18 * s;
+    aR.rotation.x = -0.55;
+    const bL = cone(0.035, 0.24, color);
+    bL.position.set(0.02 * s, 2.34 * s, 0.32 * s);
+    bL.rotation.x = 1.0;
+    const bR = bL.clone();
+    bR.position.z = -0.32 * s;
+    bR.rotation.x = -1.0;
+    add(aL, aR, bL, bR);
+  };
+  const crownSpikes = (n: number, color: string, emissive = 0, y = 2.06): void => {
+    const g = new THREE.Group();
+    for (let i = 0; i < n; i++) {
+      const sp = cone(0.05, 0.26 + (i % 2) * 0.12, color, emissive);
+      sp.position.set(0.04 * s, (y + (i % 2) * 0.04) * s, (i - (n - 1) / 2) * 0.11 * s);
+      g.add(sp);
+    }
+    add(g);
+  };
+  const hoodCowl = (color: string, emissive = 0): void => {
+    const h = sphere(0.27, color, emissive);
+    h.scale.set(0.95, 1.05, 1.12);
+    h.position.set(-0.04 * s, 1.86 * s, 0);
+    const peak = cone(0.13, 0.32, color, emissive);
+    peak.position.set(-0.1 * s, 2.04 * s, 0);
+    peak.rotation.z = 0.4;
+    add(h, peak);
+  };
+  const beard = (color: string, y = 1.54): void => {
+    const b = cone(0.18, 0.42, color);
+    b.rotation.z = Math.PI;
+    b.position.set(0.15 * s, y * s, 0);
+    add(b);
+  };
+  const tailSerpent = (color: string, tipColor?: string): void => {
+    const seg = cyl(0.27, 0.1, 0.95, color);
+    seg.position.set(-0.06 * s, 0.5 * s, 0);
+    seg.rotation.z = 0.25;
+    const coil = torus(0.2, 0.09, color, 0, Math.PI * 1.3);
+    coil.position.set(-0.32 * s, 0.22 * s, 0);
+    const tip = cone(0.09, 0.3, tipColor ?? color);
+    tip.position.set(-0.12 * s, 0.06 * s, 0);
+    tip.rotation.z = 1.4;
+    add(seg, coil, tip);
+  };
+  const mountQuad = (color: string): void => {
+    const haunch = sphere(0.36, color);
+    haunch.scale.set(1.5, 0.95, 0.95);
+    haunch.position.set(-0.52 * s, 0.95 * s, 0);
+    add(haunch);
+    for (const [x, z] of [[-0.78, 0.24], [-0.78, -0.24], [-0.3, 0.26], [-0.3, -0.26]] as const) {
+      const lg = cyl(0.08, 0.05, 0.95, color);
+      lg.position.set(x * s, 0.46 * s, z * s);
+      add(lg);
+    }
+  };
+  const shoulderSlabs = (color: string, r = 0.26): void => {
+    const sL = dodeca(r, color);
+    sL.position.set(0, 1.54 * s, 0.56 * s);
+    const sR = sL.clone();
+    sR.position.z = -0.56 * s;
+    add(sL, sR);
+  };
+  const chestCore = (color: string, emissive = 0x222222): void => {
+    const c = sphere(0.15, color, emissive);
+    c.position.set(0.34 * s, 1.2 * s, 0);
+    add(c);
+  };
+  const cape = (color: string, w = 0.68): void => {
+    const c = box(0.05, 1.05, w, color);
+    c.position.set(-0.34 * s, 1.0 * s, 0);
+    add(c);
+  };
+  const gunArm = (color: string, accent?: string): void => {
+    const barrel = cyl(0.06, 0.085, 0.72, color);
+    barrel.position.set(0.5 * s, 1.2 * s, 0.18 * s);
+    barrel.rotation.z = Math.PI / 2;
+    const muzzle = cyl(0.1, 0.1, 0.1, accent ?? color, 0x331100);
+    muzzle.position.set(0.86 * s, 1.2 * s, 0.18 * s);
+    muzzle.rotation.z = Math.PI / 2;
+    add(barrel, muzzle);
+  };
+  const bowCrest = (color: string): void => {
+    const b = torus(0.3, 0.035, color, 0, Math.PI * 1.5);
+    b.position.set(0.5 * s, 1.2 * s, 0.4 * s);
+    b.rotation.y = Math.PI / 2;
+    add(b);
+  };
+  const fangedMaw = (color: string): void => {
+    const jaw = sphere(0.22, color);
+    jaw.scale.set(1.1, 0.55, 1);
+    jaw.position.set(0.26 * s, 1.62 * s, 0);
+    const fL = cone(0.03, 0.12, '#f4f4e8');
+    fL.rotation.x = Math.PI;
+    fL.position.set(0.34 * s, 1.5 * s, 0.06 * s);
+    const fR = fL.clone();
+    fR.position.z = -0.06 * s;
+    add(jaw, fL, fR);
+  };
+  const tusksPair = (color = '#f0ead8'): void => {
+    const tL = cone(0.05, 0.26, color);
+    tL.rotation.set(0, 0, 2.6);
+    tL.position.set(0.28 * s, 1.5 * s, 0.12 * s);
+    const tR = tL.clone();
+    tR.position.z = -0.12 * s;
+    add(tL, tR);
+  };
+  const orbitOrbs = (n: number, color: string, r = 0.09, ringR = 0.42, y = 1.5): void => {
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2;
+      const o = sphere(r, color, 0x222222);
+      o.position.set(0.1 * s, (y + Math.sin(a) * 0.18) * s, Math.cos(a) * ringR * s);
+      add(o);
+    }
+  };
+
   switch (heroId) {
     case 'juggernaut': {
       // White Mask of the Yurnero: slit mask, teal eye-slit glow, fanned crest fins, red sash.
@@ -890,6 +1135,1034 @@ export function applyHeroLikeness(rig: UnitRig, heroId: string): void {
       const seedR = seedL.clone();
       seedR.position.z = -0.34 * s;
       add(antlerL, antlerR, leafCape, seedL, seedR);
+      break;
+    }
+
+    // ---------- Phase 2 cohort ----------
+    case 'mirana': {
+      crownSpikes(3, '#f3f7ff', 0x2a3a66, 2.04);
+      cape('#4a5c94', 0.7);
+      bowCrest('#cfe0ff');
+      const star = octa(0.1, '#e9f3ff', 0x3a4c84);
+      star.position.set(0.32 * s, 1.26 * s, 0);
+      add(star, ...eyes(0.32, 1.86, 0.08, 0.04, '#dceaff'));
+      break;
+    }
+    case 'lina': {
+      const ponytail = cone(0.12, 0.7, '#ff6b30', 0x5a1404);
+      ponytail.rotation.z = 0.5;
+      ponytail.position.set(-0.22 * s, 1.96 * s, 0);
+      const emberL = sphere(0.1, '#ffd36b', 0x6a2a04);
+      emberL.position.set(0.42 * s, 1.18 * s, 0.28 * s);
+      const emberR = emberL.clone();
+      emberR.position.z = -0.28 * s;
+      cape('#7a1f12', 0.6);
+      add(ponytail, emberL, emberR, ...eyes(0.32, 1.86, 0.08, 0.04, '#ffd36b'));
+      break;
+    }
+    case 'zeus': {
+      beard('#eef2ff', 1.56);
+      crownSpikes(5, '#f5e76b', 0x4a4410, 2.04);
+      const boltL = box(0.04, 0.4, 0.04, '#fff28a', 0x6a6010);
+      boltL.rotation.z = 0.4;
+      boltL.position.set(0.04 * s, 1.6 * s, 0.46 * s);
+      const boltR = boltL.clone();
+      boltR.position.z = -0.46 * s;
+      add(boltL, boltR, ...eyes(0.3, 1.86, 0.08, 0.04, '#fff6c0'));
+      break;
+    }
+    case 'drow-ranger': {
+      hoodCowl('#1e406b');
+      bowCrest('#d8f0ff');
+      const quiver = cyl(0.07, 0.07, 0.5, '#16304f');
+      quiver.position.set(-0.34 * s, 1.4 * s, -0.12 * s);
+      quiver.rotation.z = 0.3;
+      add(quiver, ...eyes(0.3, 1.84, 0.08, 0.04, '#bfe6ff'));
+      break;
+    }
+    case 'jakiro': {
+      const headFire = sphere(0.2, '#ff7a3c', 0x5a1a04);
+      headFire.position.set(0.2 * s, 1.86 * s, 0.18 * s);
+      const headIce = sphere(0.2, '#9fd8ff', 0x163a52);
+      headIce.position.set(0.2 * s, 1.86 * s, -0.18 * s);
+      horns('#ffb16b', 0.28, 1.98, 0.32, 0.5, 0.4);
+      wings('#2f3f6b', 0.8, 1.3);
+      add(headFire, headIce);
+      break;
+    }
+    case 'witch-doctor': {
+      const mask = box(0.1, 0.34, 0.28, '#f4e37a');
+      mask.position.set(0.26 * s, 1.84 * s, 0);
+      const charm1 = sphere(0.06, '#39c46a', 0x0c3a18);
+      charm1.position.set(0.3 * s, 1.5 * s, 0.18 * s);
+      const charm2 = charm1.clone();
+      charm2.position.z = -0.18 * s;
+      const charm3 = charm1.clone();
+      charm3.position.set(0.34 * s, 1.34 * s, 0);
+      cape('#7c4bd8', 0.56);
+      add(mask, charm1, charm2, charm3, ...eyes(0.34, 1.88, 0.07, 0.035, '#7dff9a'));
+      break;
+    }
+    case 'omniknight': {
+      wings('#ffffff', 0.3, 2.0);
+      const halo = torus(0.2, 0.03, '#fff4b0', 0x6a6020);
+      halo.position.set(0, 2.16 * s, 0);
+      halo.rotation.x = Math.PI / 2;
+      shoulderSlabs('#f8e59a', 0.24);
+      cape('#5a7cc8', 0.62);
+      add(halo);
+      break;
+    }
+    case 'windranger': {
+      hoodCowl('#6fd46f');
+      const scarf = torus(0.24, 0.06, '#b84028', 0, Math.PI * 1.4);
+      scarf.position.set(0.06 * s, 1.62 * s, 0);
+      scarf.rotation.x = Math.PI / 2;
+      const quiver = cyl(0.07, 0.07, 0.5, '#5a3a18');
+      quiver.position.set(-0.32 * s, 1.4 * s, -0.14 * s);
+      quiver.rotation.z = 0.3;
+      add(scarf, quiver, ...eyes(0.3, 1.84, 0.08, 0.04, '#d8ffb0'));
+      break;
+    }
+    case 'phantom-assassin': {
+      hoodCowl('#1c2038');
+      const veil = box(0.08, 0.24, 0.26, '#cfd6ff', 0x1a2038);
+      veil.position.set(0.28 * s, 1.82 * s, 0);
+      cape('#1c2038', 0.6);
+      add(veil, ...eyes(0.32, 1.84, 0.08, 0.038, '#ff5a5a'));
+      break;
+    }
+    case 'tusk': {
+      tusksPair('#eef8ff');
+      const coat = box(0.08, 0.7, 0.7, '#6c8ca8');
+      coat.position.set(-0.2 * s, 1.0 * s, 0);
+      shoulderSlabs('#d8f4ff', 0.24);
+      const gauntL = sphere(0.16, '#bfe6ff', 0x163a52);
+      gauntL.position.set(0.34 * s, 1.0 * s, 0.4 * s);
+      const gauntR = gauntL.clone();
+      gauntR.position.z = -0.4 * s;
+      add(coat, gauntL, gauntR, ...eyes(0.26, 1.8, 0.09, 0.035, '#bfe6ff'));
+      break;
+    }
+    case 'ancient-apparition': {
+      crownSpikes(5, '#e4fbff', 0x2a5c7e, 2.0);
+      const wisp = cone(0.3, 0.95, '#9fe8ff', 0x244a6a);
+      wisp.rotation.z = Math.PI;
+      wisp.position.set(0, 0.78 * s, 0);
+      const trailL = cone(0.08, 0.5, '#e4fbff', 0x244a6a);
+      trailL.rotation.z = Math.PI;
+      trailL.position.set(-0.12 * s, 0.4 * s, 0.16 * s);
+      const trailR = trailL.clone();
+      trailR.position.z = -0.16 * s;
+      add(wisp, trailL, trailR, ...eyes(0.3, 1.86, 0.08, 0.045, '#e4fbff'));
+      break;
+    }
+
+    // ---------- Phase 3 cohort ----------
+    case 'vengeful-spirit': {
+      wings('#252a72', 0.78, 1.32);
+      horns('#c7d4ff', 0.3, 2.0, 0.16, 0.3, 0.6);
+      cape('#252a72', 0.58);
+      add(...eyes(0.3, 1.86, 0.08, 0.04, '#c7d4ff'));
+      break;
+    }
+    case 'riki': {
+      hoodCowl('#1c1436');
+      const smokeL = sphere(0.16, '#6a4cff', 0x1c1436);
+      smokeL.position.set(-0.2 * s, 0.7 * s, 0.24 * s);
+      const smokeR = smokeL.clone();
+      smokeR.position.set(-0.24 * s, 0.6 * s, -0.2 * s);
+      add(smokeL, smokeR, ...eyes(0.3, 1.84, 0.08, 0.038, '#c8b8ff'));
+      break;
+    }
+    case 'bounty-hunter': {
+      const mask = box(0.08, 0.28, 0.3, '#f2df7a');
+      mask.position.set(0.26 * s, 1.84 * s, 0);
+      const scarf = torus(0.22, 0.06, '#d99a28', 0, Math.PI * 1.4);
+      scarf.position.set(0.04 * s, 1.6 * s, 0);
+      scarf.rotation.x = Math.PI / 2;
+      const shuriken = torus(0.12, 0.03, '#f2df7a');
+      shuriken.position.set(-0.34 * s, 1.4 * s, 0);
+      add(mask, scarf, shuriken, ...eyes(0.3, 1.86, 0.08, 0.035, '#fff0a0'));
+      break;
+    }
+    case 'winter-wyvern': {
+      wings('#3d75b8', 0.9, 1.36);
+      crownSpikes(3, '#e4fbff', 0x2a5c7e, 2.0);
+      fangedMaw('#9fe8ff');
+      add(...eyes(0.3, 1.84, 0.08, 0.04, '#e4fbff'));
+      break;
+    }
+    case 'sand-king': {
+      const carapace = sphere(0.34, '#7a4b1c');
+      carapace.scale.set(1.2, 0.7, 1.1);
+      carapace.position.set(-0.14 * s, 1.28 * s, 0);
+      tailSerpent('#d9a441', '#fff0a8');
+      const mandL = cone(0.04, 0.18, '#fff0a8');
+      mandL.rotation.z = 2.4;
+      mandL.position.set(0.32 * s, 1.6 * s, 0.1 * s);
+      const mandR = mandL.clone();
+      mandR.position.z = -0.1 * s;
+      add(carapace, mandL, mandR, ...eyes(0.3, 1.82, 0.08, 0.035, '#fff0a8'));
+      break;
+    }
+    case 'nyx-assassin': {
+      const shell = sphere(0.34, '#5d3b9a');
+      shell.scale.set(1.15, 0.75, 1.15);
+      shell.position.set(-0.12 * s, 1.34 * s, 0);
+      const spikeG = new THREE.Group();
+      for (let i = 0; i < 4; i++) {
+        const sp = cone(0.05, 0.2, '#c4a3ff');
+        sp.position.set((-0.3 + i * 0.12) * s, 1.62 * s, 0);
+        spikeG.add(sp);
+      }
+      const mandL = cone(0.04, 0.16, '#c4a3ff');
+      mandL.rotation.z = 2.4;
+      mandL.position.set(0.3 * s, 1.6 * s, 0.1 * s);
+      const mandR = mandL.clone();
+      mandR.position.z = -0.1 * s;
+      add(shell, spikeG, mandL, mandR, ...eyes(0.3, 1.8, 0.08, 0.038, '#d8c4ff'));
+      break;
+    }
+    case 'viper': {
+      wings('#273a18', 0.78, 1.32);
+      fangedMaw('#6fc247');
+      const scaleL = box(0.06, 0.4, 0.18, '#4a8a2a');
+      scaleL.position.set(0.28 * s, 1.1 * s, 0.18 * s);
+      const scaleR = scaleL.clone();
+      scaleR.position.z = -0.18 * s;
+      add(scaleL, scaleR, ...eyes(0.3, 1.82, 0.08, 0.04, '#c8ff7a'));
+      break;
+    }
+    case 'slardar': {
+      const fin = cone(0.06, 0.5, '#cbb8ff', 0x2a1a4a);
+      fin.position.set(-0.04 * s, 2.12 * s, 0);
+      fin.rotation.z = -0.2;
+      shoulderSlabs('#2a1a4a', 0.24);
+      const plate = box(0.1, 0.5, 0.5, '#8050d8');
+      plate.position.set(0.32 * s, 1.1 * s, 0);
+      add(fin, plate, ...eyes(0.28, 1.82, 0.09, 0.04, '#cbb8ff'));
+      break;
+    }
+    case 'naga-siren': {
+      tailSerpent('#4bb8d8', '#f0d08a');
+      const finL = cone(0.04, 0.34, '#f0d08a');
+      finL.rotation.z = 0.6;
+      finL.position.set(0.02 * s, 1.96 * s, 0.16 * s);
+      const finR = finL.clone();
+      finR.position.z = -0.16 * s;
+      finR.rotation.z = 0.6;
+      add(finL, finR, ...eyes(0.3, 1.84, 0.08, 0.04, '#d8f6ff'));
+      break;
+    }
+    case 'slark': {
+      const fin = cone(0.07, 0.42, '#9bdcff', 0x16344a);
+      fin.position.set(-0.06 * s, 2.04 * s, 0);
+      fin.rotation.z = -0.5;
+      hoodCowl('#1b2730');
+      add(fin, ...eyes(0.3, 1.84, 0.08, 0.04, '#9bdcff'));
+      break;
+    }
+    case 'lifestealer': {
+      const clawL = cone(0.05, 0.28, '#e8b082');
+      clawL.rotation.z = -1.0;
+      clawL.position.set(0.4 * s, 0.95 * s, 0.3 * s);
+      const clawR = clawL.clone();
+      clawR.position.z = -0.3 * s;
+      const ribs = box(0.1, 0.42, 0.4, '#34120d');
+      ribs.position.set(0.3 * s, 1.16 * s, 0);
+      add(clawL, clawR, ribs, ...eyes(0.28, 1.82, 0.09, 0.04, '#ff5a3a'));
+      break;
+    }
+    case 'undying': {
+      const tomb = box(0.26, 0.5, 0.18, '#d8e8aa', 0x1c2814);
+      tomb.position.set(0.36 * s, 1.1 * s, 0.36 * s);
+      cape('#233323', 0.66);
+      const jaw = sphere(0.18, '#5aa36a');
+      jaw.scale.set(0.9, 0.6, 1);
+      jaw.position.set(0.24 * s, 1.6 * s, 0);
+      add(tomb, jaw, ...eyes(0.28, 1.82, 0.09, 0.04, '#d8e8aa'));
+      break;
+    }
+    case 'night-stalker': {
+      wings('#050814', 0.9, 1.34);
+      fangedMaw('#1b2a58');
+      horns('#7a8cff', 0.26, 2.0, 0.18, 0.4, 0.6);
+      add(...eyes(0.3, 1.82, 0.09, 0.045, '#7a8cff'));
+      break;
+    }
+    case 'silencer': {
+      hoodCowl('#332255');
+      const glaive = box(0.5, 0.1, 0.03, '#b78cff', 0x332255);
+      glaive.rotation.z = 0.5;
+      glaive.position.set(0.5 * s, 1.3 * s, 0.18 * s);
+      const sigil = octa(0.09, '#e8e8ff', 0x332255);
+      sigil.position.set(0.34 * s, 1.26 * s, 0);
+      add(glaive, sigil, ...eyes(0.3, 1.84, 0.08, 0.038, '#e8e8ff'));
+      break;
+    }
+    case 'outworld-destroyer': {
+      const orbHead = sphere(0.26, '#64d8ff', 0x163a52);
+      orbHead.position.set(0.12 * s, 1.92 * s, 0);
+      cape('#222244', 0.62);
+      orbitOrbs(3, '#d8f7ff', 0.07, 0.4, 1.5);
+      add(orbHead, ...eyes(0.3, 1.92, 0.06, 0.03, '#ffffff'));
+      break;
+    }
+    case 'skywrath-mage': {
+      wings('#244d86', 0.8, 1.34);
+      const beak = cone(0.1, 0.3, '#f7e39a');
+      beak.rotation.z = -Math.PI / 2;
+      beak.position.set(0.34 * s, 1.84 * s, 0);
+      crownSpikes(3, '#f7e39a', 0x4a4014, 2.02);
+      add(beak, ...eyes(0.3, 1.88, 0.08, 0.035, '#f7e39a'));
+      break;
+    }
+    case 'tinker': {
+      const goggles = box(0.08, 0.12, 0.32, '#f8e07a', 0x4a3208);
+      goggles.position.set(0.26 * s, 1.86 * s, 0);
+      const pack = box(0.26, 0.4, 0.34, '#30405a');
+      pack.position.set(-0.32 * s, 1.34 * s, 0);
+      const laser = cyl(0.05, 0.05, 0.42, '#606878');
+      laser.position.set(0.46 * s, 1.2 * s, 0.2 * s);
+      laser.rotation.z = Math.PI / 2;
+      const tip = sphere(0.06, '#e05040', 0x5a1408);
+      tip.position.set(0.7 * s, 1.2 * s, 0.2 * s);
+      add(goggles, pack, laser, tip);
+      break;
+    }
+    case 'enchantress': {
+      antlers('#fff2a6');
+      const dress = cone(0.34, 0.8, '#345d2f');
+      dress.rotation.z = Math.PI;
+      dress.position.set(0, 0.78 * s, 0);
+      add(dress, ...eyes(0.3, 1.86, 0.08, 0.04, '#d8ffb0'));
+      break;
+    }
+    case 'chen': {
+      wings('#ffffff', 0.3, 2.0);
+      const halo = torus(0.2, 0.03, '#fff4b0', 0x6a6020);
+      halo.position.set(0, 2.16 * s, 0);
+      halo.rotation.x = Math.PI / 2;
+      shoulderSlabs('#f4e4a0', 0.24);
+      cape('#67513a', 0.62);
+      add(halo);
+      break;
+    }
+    case 'beastmaster': {
+      tusksPair('#f0c080');
+      const boarHelm = sphere(0.26, '#3d2716');
+      boarHelm.scale.set(1, 0.9, 1.15);
+      boarHelm.position.set(0.04 * s, 1.88 * s, 0);
+      shoulderSlabs('#b8723a', 0.24);
+      add(boarHelm, ...eyes(0.28, 1.84, 0.09, 0.04, '#f0c080'));
+      break;
+    }
+    case 'broodmother': {
+      const legs = new THREE.Group();
+      for (let i = 0; i < 4; i++) {
+        const sideZ = i < 2 ? 1 : -1;
+        const lg = box(0.04, 0.06, 0.6, '#111111');
+        lg.position.set((-0.1 + (i % 2) * 0.24) * s, 1.3 * s, sideZ * 0.5 * s);
+        lg.rotation.x = sideZ * 0.7;
+        legs.add(lg);
+      }
+      const abdomen = sphere(0.32, '#5b2b72');
+      abdomen.scale.set(1.1, 0.9, 1);
+      abdomen.position.set(-0.42 * s, 1.0 * s, 0);
+      add(legs, abdomen, ...eyes(0.3, 1.82, 0.1, 0.03, '#d38cff'));
+      break;
+    }
+    case 'warlock': {
+      hoodCowl('#3a1010');
+      horns('#f2c06b', 0.3, 2.0, 0.2, 0.4, 0.5);
+      const tome = box(0.14, 0.22, 0.3, '#9b2d2d', 0x2a0606);
+      tome.position.set(0.3 * s, 1.1 * s, 0.24 * s);
+      add(tome, ...eyes(0.3, 1.84, 0.08, 0.04, '#f2c06b'));
+      break;
+    }
+    case 'visage': {
+      wings('#22222f', 0.82, 1.34);
+      crownSpikes(3, '#c8c8e8', 0x22222f, 2.02);
+      const clawL = cone(0.05, 0.24, '#c8c8e8');
+      clawL.rotation.z = -1.0;
+      clawL.position.set(0.38 * s, 0.95 * s, 0.28 * s);
+      const clawR = clawL.clone();
+      clawR.position.z = -0.28 * s;
+      add(clawL, clawR, ...eyes(0.3, 1.84, 0.08, 0.04, '#c8c8e8'));
+      break;
+    }
+    case 'magnus': {
+      tusksPair('#d8b080');
+      mountQuad('#7a4a32');
+      horns('#d8b080', 0.34, 1.98, 0.22, 0.4, 0.7);
+      add(...eyes(0.3, 1.84, 0.09, 0.04, '#f0d8b0'));
+      break;
+    }
+    case 'elder-titan': {
+      shoulderSlabs('#8a6a4a', 0.3);
+      const core = sphere(0.16, '#e0d0b0', 0x4a4030);
+      core.position.set(0.34 * s, 1.22 * s, 0);
+      const crown = dodeca(0.24, '#e0d0b0');
+      crown.position.set(0.02 * s, 2.1 * s, 0);
+      add(core, crown, ...eyes(0.28, 1.84, 0.09, 0.04, '#fff0c0'));
+      break;
+    }
+    case 'treant-protector': {
+      const branchL = cone(0.04, 0.4, '#6b4f2a');
+      branchL.position.set(0, 2.1 * s, 0.18 * s);
+      branchL.rotation.x = 0.6;
+      const branchR = branchL.clone();
+      branchR.position.z = -0.18 * s;
+      branchR.rotation.x = -0.6;
+      const leaves = sphere(0.3, '#3f7a3a');
+      leaves.scale.set(1.1, 0.7, 1.1);
+      leaves.position.set(0, 2.32 * s, 0);
+      const bark = box(0.12, 0.7, 0.5, '#6b4f2a');
+      bark.position.set(0.16 * s, 1.1 * s, 0);
+      add(branchL, branchR, leaves, bark, ...eyes(0.3, 1.82, 0.09, 0.04, '#d8f0a8'));
+      break;
+    }
+    case 'centaur-warrunner': {
+      mountQuad('#9a5a32');
+      shoulderSlabs('#4a2712', 0.26);
+      const beardC = cone(0.16, 0.36, '#4a2712');
+      beardC.rotation.z = Math.PI;
+      beardC.position.set(0.14 * s, 1.56 * s, 0);
+      add(beardC, ...eyes(0.28, 1.84, 0.09, 0.04, '#f0c090'));
+      break;
+    }
+    case 'ember-spirit': {
+      const topknot = cone(0.09, 0.34, '#ff6b2a', 0x5a1404);
+      topknot.position.set(-0.04 * s, 2.06 * s, 0);
+      const emberL = sphere(0.07, '#ffd27a', 0x6a3008);
+      emberL.position.set(-0.2 * s, 1.2 * s, 0.2 * s);
+      const emberR = emberL.clone();
+      emberR.position.set(-0.26 * s, 1.0 * s, -0.16 * s);
+      add(topknot, emberL, emberR, ...eyes(0.3, 1.86, 0.08, 0.04, '#ffd27a'));
+      break;
+    }
+    case 'spectre': {
+      const smoke = cone(0.3, 0.95, '#7a67ff', 0x1d1838);
+      smoke.rotation.z = Math.PI;
+      smoke.position.set(0, 0.78 * s, 0);
+      const bladeL = box(0.4, 0.06, 0.03, '#d8d0ff', 0x1d1838);
+      bladeL.rotation.z = -0.4;
+      bladeL.position.set(0.32 * s, 1.0 * s, 0.34 * s);
+      const bladeR = bladeL.clone();
+      bladeR.position.z = -0.34 * s;
+      add(smoke, bladeL, bladeR, ...eyes(0.3, 1.86, 0.08, 0.045, '#d8d0ff'));
+      break;
+    }
+    case 'faceless-void': {
+      const facePlate = box(0.1, 0.34, 0.3, '#1c163a');
+      facePlate.position.set(0.27 * s, 1.84 * s, 0);
+      const shell = sphere(0.3, '#5a46c8');
+      shell.scale.set(1, 1.1, 1.1);
+      shell.position.set(-0.08 * s, 1.5 * s, 0);
+      const gaunt = sphere(0.18, '#c2b8ff', 0x1c163a);
+      gaunt.position.set(0.36 * s, 1.0 * s, 0.4 * s);
+      add(facePlate, shell, gaunt);
+      break;
+    }
+    case 'terrorblade': {
+      wings('#101426', 0.86, 1.34);
+      horns('#d8f5ff', 0.34, 2.0, 0.2, 0.4, 0.6);
+      const bladeL = box(0.5, 0.08, 0.03, '#4bb8ff', 0x101426);
+      bladeL.rotation.z = -0.4;
+      bladeL.position.set(0.4 * s, 1.1 * s, 0.3 * s);
+      const bladeR = bladeL.clone();
+      bladeR.position.z = -0.3 * s;
+      add(bladeL, bladeR, ...eyes(0.3, 1.84, 0.08, 0.045, '#d8f5ff'));
+      break;
+    }
+    case 'phoenix': {
+      wings('#ff7a30', 0.95, 1.36, 0x5a1e04);
+      const beak = cone(0.1, 0.3, '#ffe07a');
+      beak.rotation.z = -Math.PI / 2;
+      beak.position.set(0.34 * s, 1.84 * s, 0);
+      const ember = sphere(0.18, '#ffe07a', 0x6a3008);
+      ember.position.set(0.32 * s, 1.2 * s, 0);
+      add(beak, ember, ...eyes(0.3, 1.88, 0.08, 0.04, '#ffe07a'));
+      break;
+    }
+    case 'io': {
+      const orb = sphere(0.34, '#c8f6ff', 0x4a7cae);
+      orb.position.set(0, 1.3 * s, 0);
+      const tendrilL = cyl(0.02, 0.04, 0.6, '#7aa8ff', 0x2a3c6a);
+      tendrilL.position.set(-0.1 * s, 0.6 * s, 0.2 * s);
+      tendrilL.rotation.z = 0.4;
+      const tendrilR = tendrilL.clone();
+      tendrilR.position.z = -0.2 * s;
+      add(orb, tendrilL, tendrilR, ...eyes(0.22, 1.36, 0.1, 0.05, '#ffffff'));
+      break;
+    }
+
+    // ---------- Standard: Strength ----------
+    case 'abaddon': {
+      horns('#d8fff8', 0.3, 2.0, 0.2, 0.4, 0.6);
+      cape('#1d3340', 0.66);
+      const shield = cyl(0.26, 0.26, 0.06, '#58d8c8', 0x163a36);
+      shield.position.set(0.34 * s, 1.1 * s, 0.4 * s);
+      shield.rotation.z = Math.PI / 2;
+      add(shield, ...eyes(0.28, 1.84, 0.09, 0.04, '#d8fff8'));
+      break;
+    }
+    case 'alchemist': {
+      const barrel = cyl(0.24, 0.24, 0.5, '#5b3318');
+      barrel.position.set(-0.3 * s, 1.2 * s, 0);
+      const vialL = cyl(0.05, 0.05, 0.18, '#b8d84a', 0x3a4a14);
+      vialL.position.set(0.3 * s, 1.4 * s, 0.24 * s);
+      const vialR = vialL.clone();
+      vialR.position.z = -0.24 * s;
+      add(barrel, vialL, vialR, ...eyes(0.3, 1.84, 0.09, 0.04, '#f0d46a'));
+      break;
+    }
+    case 'bristleback': {
+      const quills = new THREE.Group();
+      for (let i = 0; i < 6; i++) {
+        const q = cone(0.05, 0.3 + (i % 2) * 0.12, '#6a3520');
+        q.position.set((-0.36 + (i % 3) * 0.16) * s, 1.5 * s, (i < 3 ? 0.4 : -0.4) * s);
+        q.rotation.z = 0.6;
+        quills.add(q);
+      }
+      const snout = cone(0.12, 0.26, '#d8a04a');
+      snout.rotation.z = -Math.PI / 2;
+      snout.position.set(0.32 * s, 1.78 * s, 0);
+      add(quills, snout, ...eyes(0.3, 1.86, 0.08, 0.035, '#f7e0a0'));
+      break;
+    }
+    case 'dawnbreaker': {
+      const halo = torus(0.22, 0.035, '#fff3c0', 0x6a5020);
+      halo.position.set(0, 2.18 * s, 0);
+      halo.rotation.x = Math.PI / 2;
+      shoulderSlabs('#ffd36a', 0.26);
+      add(halo, ...eyes(0.28, 1.84, 0.09, 0.04, '#fff3c0'));
+      break;
+    }
+    case 'dragon-knight': {
+      crownSpikes(3, '#f0b05a', 0x4a3014, 2.02);
+      cape('#314a38', 0.66);
+      const scaleL = box(0.06, 0.42, 0.18, '#314a38');
+      scaleL.position.set(0.28 * s, 1.1 * s, 0.2 * s);
+      const scaleR = scaleL.clone();
+      scaleR.position.z = -0.2 * s;
+      add(scaleL, scaleR, ...eyes(0.28, 1.84, 0.09, 0.04, '#ff9a5a'));
+      break;
+    }
+    case 'huskar': {
+      const topknot = cone(0.08, 0.32, '#401510');
+      topknot.position.set(-0.04 * s, 2.04 * s, 0);
+      const spearOnBack = cyl(0.03, 0.03, 0.7, '#ffd06a');
+      spearOnBack.position.set(-0.3 * s, 1.4 * s, -0.12 * s);
+      spearOnBack.rotation.z = 0.3;
+      chestCore('#ff5a2a', 0x5a1404);
+      add(topknot, spearOnBack, ...eyes(0.3, 1.84, 0.08, 0.04, '#ffd06a'));
+      break;
+    }
+    case 'ogre-magi': {
+      const head2 = sphere(0.22, '#3d8cff');
+      head2.position.set(0.16 * s, 1.82 * s, 0.22 * s);
+      const head1 = sphere(0.22, '#3d8cff');
+      head1.position.set(0.16 * s, 1.82 * s, -0.22 * s);
+      const club = cyl(0.12, 0.16, 0.5, '#4a2a12');
+      club.position.set(0.5 * s, 1.3 * s, 0.2 * s);
+      add(head2, head1, club);
+      break;
+    }
+    case 'primal-beast': {
+      tusksPair('#f0a05a');
+      const mane = sphere(0.34, '#2b1a12');
+      mane.scale.set(1.1, 1.1, 1.2);
+      mane.position.set(0.02 * s, 1.7 * s, 0);
+      const fistL = sphere(0.22, '#9a4a2f');
+      fistL.position.set(0.4 * s, 0.9 * s, 0.42 * s);
+      const fistR = fistL.clone();
+      fistR.position.z = -0.42 * s;
+      add(mane, fistL, fistR, ...eyes(0.3, 1.78, 0.09, 0.04, '#f0a05a'));
+      break;
+    }
+    case 'spirit-breaker': {
+      mountQuad('#1b2148');
+      horns('#c8d8ff', 0.34, 1.98, 0.22, 0.4, 0.7);
+      const star = octa(0.1, '#c8d8ff', 0x2a3a6a);
+      star.position.set(0.34 * s, 1.2 * s, 0);
+      add(star, ...eyes(0.3, 1.84, 0.09, 0.045, '#c8d8ff'));
+      break;
+    }
+    case 'underlord': {
+      tusksPair('#f0a05a');
+      shoulderSlabs('#301830', 0.28);
+      const maul = box(0.2, 0.3, 0.2, '#301830', 0x180c18);
+      maul.position.set(0.52 * s, 1.4 * s, 0.2 * s);
+      add(maul, ...eyes(0.3, 1.8, 0.09, 0.04, '#6fd84f'));
+      break;
+    }
+
+    // ---------- Standard: Agility ----------
+    case 'anti-mage': {
+      const mark = box(0.02, 0.16, 0.16, '#d8c8ff', 0x3a2a5a);
+      mark.position.set(0.3 * s, 1.92 * s, 0);
+      const glaiveL = torus(0.16, 0.03, '#d8c8ff', 0x3a2a5a, Math.PI * 1.2);
+      glaiveL.position.set(0.32 * s, 1.0 * s, 0.4 * s);
+      const glaiveR = glaiveL.clone();
+      glaiveR.position.z = -0.4 * s;
+      const sash = box(0.06, 0.18, 0.5, '#7c4dff');
+      sash.position.set(0.18 * s, 0.74 * s, 0);
+      add(mark, glaiveL, glaiveR, sash, ...eyes(0.3, 1.86, 0.08, 0.038, '#d8c8ff'));
+      break;
+    }
+    case 'bloodseeker': {
+      const fin = cone(0.06, 0.46, '#ff9a5a', 0x5a1408);
+      fin.position.set(-0.04 * s, 2.1 * s, 0);
+      fin.rotation.z = -0.4;
+      const clawL = cone(0.045, 0.24, '#ff9a5a');
+      clawL.rotation.z = -1.0;
+      clawL.position.set(0.4 * s, 0.95 * s, 0.3 * s);
+      const clawR = clawL.clone();
+      clawR.position.z = -0.3 * s;
+      add(fin, clawL, clawR, ...eyes(0.3, 1.84, 0.08, 0.04, '#ff5a3a'));
+      break;
+    }
+    case 'clinkz': {
+      const ribs = box(0.1, 0.5, 0.42, '#1a1010');
+      ribs.position.set(0.26 * s, 1.16 * s, 0);
+      gunArm('#1a1010', '#ff6b2f');
+      bowCrest('#ff6b2f');
+      add(ribs, ...eyes(0.3, 1.86, 0.08, 0.045, '#ffd08a'));
+      break;
+    }
+    case 'gyrocopter': {
+      const rotor = box(0.9, 0.02, 0.06, '#606878');
+      rotor.position.set(0, 2.2 * s, 0);
+      const cockpit = sphere(0.24, '#606878', 0x202830);
+      cockpit.position.set(0.1 * s, 1.4 * s, 0);
+      gunArm('#606878', '#ffe0a0');
+      add(rotor, cockpit, ...eyes(0.3, 1.5, 0.07, 0.03, '#ffe0a0'));
+      break;
+    }
+    case 'hoodwink': {
+      hoodCowl('#2e5a2e');
+      const tail = cone(0.18, 0.8, '#d88a3a');
+      tail.rotation.z = 0.8;
+      tail.position.set(-0.36 * s, 1.0 * s, 0);
+      gunArm('#5a3a18', '#ffe0a0');
+      add(tail, ...eyes(0.3, 1.84, 0.08, 0.04, '#ffe0a0'));
+      break;
+    }
+    case 'razor': {
+      const smoke = cone(0.28, 0.9, '#1c2a5a', 0x162a5a);
+      smoke.rotation.z = Math.PI;
+      smoke.position.set(0, 0.8 * s, 0);
+      const whip = cyl(0.025, 0.025, 0.8, '#72d8ff', 0x163a52);
+      whip.position.set(0.42 * s, 1.1 * s, 0.2 * s);
+      whip.rotation.z = 0.7;
+      add(smoke, whip, ...eyes(0.3, 1.86, 0.08, 0.045, '#72d8ff'));
+      break;
+    }
+    case 'templar-assassin': {
+      crownSpikes(3, '#ffe8ff', 0x4a2a5a, 2.0);
+      const shardG = new THREE.Group();
+      for (let i = 0; i < 3; i++) {
+        const sh = octa(0.08, '#d88cff', 0x3a1a5a);
+        sh.position.set(-0.3 * s, (1.2 + i * 0.18) * s, ((i % 2) - 0.5) * 0.4 * s);
+        shardG.add(sh);
+      }
+      add(shardG, ...eyes(0.3, 1.84, 0.08, 0.038, '#ffe8ff'));
+      break;
+    }
+    case 'troll-warlord': {
+      tusksPair('#f0e0a0');
+      const axeL = box(0.18, 0.22, 0.03, '#d85a2a');
+      axeL.position.set(0.46 * s, 1.2 * s, 0.34 * s);
+      const axeR = axeL.clone();
+      axeR.position.z = -0.34 * s;
+      add(axeL, axeR, ...eyes(0.3, 1.84, 0.08, 0.04, '#f0e0a0'));
+      break;
+    }
+    case 'ursa': {
+      const bearHead = sphere(0.26, '#9a5a32');
+      bearHead.scale.set(1, 0.95, 1.1);
+      bearHead.position.set(0.06 * s, 1.86 * s, 0);
+      const earL = sphere(0.08, '#9a5a32');
+      earL.position.set(0.02 * s, 2.06 * s, 0.16 * s);
+      const earR = earL.clone();
+      earR.position.z = -0.16 * s;
+      const clawL = cone(0.045, 0.22, '#f0c090');
+      clawL.rotation.z = -1.0;
+      clawL.position.set(0.4 * s, 0.95 * s, 0.32 * s);
+      const clawR = clawL.clone();
+      clawR.position.z = -0.32 * s;
+      add(bearHead, earL, earR, clawL, clawR, ...eyes(0.28, 1.86, 0.09, 0.035, '#f0c090'));
+      break;
+    }
+    case 'venomancer': {
+      tailSerpent('#75d84a', '#d8ff7a');
+      const spikes = new THREE.Group();
+      for (let i = 0; i < 5; i++) {
+        const sp = cone(0.04, 0.18, '#d8ff7a');
+        sp.position.set((-0.3 + i * 0.14) * s, 1.5 * s, 0);
+        spikes.add(sp);
+      }
+      add(spikes, ...eyes(0.3, 1.82, 0.08, 0.04, '#d8ff7a'));
+      break;
+    }
+    case 'weaver': {
+      wings('#2a1a58', 0.7, 1.3, 0x2a1a58);
+      const shell = sphere(0.3, '#7ad8ff', 0x163a52);
+      shell.scale.set(1.1, 0.8, 1.1);
+      shell.position.set(-0.12 * s, 1.36 * s, 0);
+      const mandL = cone(0.04, 0.16, '#ffd86a');
+      mandL.rotation.z = 2.4;
+      mandL.position.set(0.3 * s, 1.6 * s, 0.1 * s);
+      const mandR = mandL.clone();
+      mandR.position.z = -0.1 * s;
+      add(shell, mandL, mandR, ...eyes(0.3, 1.8, 0.08, 0.04, '#ffd86a'));
+      break;
+    }
+
+    // ---------- Standard: Intelligence ----------
+    case 'death-prophet': {
+      hoodCowl('#243830');
+      cape('#243830', 0.66);
+      const skull = sphere(0.1, '#d8fff0', 0x14281e);
+      skull.position.set(0.5 * s, 1.5 * s, 0.18 * s);
+      add(skull, ...eyes(0.3, 1.84, 0.08, 0.04, '#d8fff0'));
+      break;
+    }
+    case 'disruptor': {
+      hoodCowl('#223a5a');
+      const totemL = cyl(0.05, 0.05, 0.3, '#70c8ff', 0x163a52);
+      totemL.position.set(-0.3 * s, 1.4 * s, 0.2 * s);
+      const totemR = totemL.clone();
+      totemR.position.z = -0.2 * s;
+      add(totemL, totemR, ...eyes(0.3, 1.84, 0.08, 0.04, '#ffffff'));
+      break;
+    }
+    case 'grimstroke': {
+      const mask = box(0.09, 0.32, 0.28, '#f0d8ff');
+      mask.position.set(0.26 * s, 1.84 * s, 0);
+      const quill = cone(0.04, 0.6, '#d84a7a', 0x401020);
+      quill.position.set(0.5 * s, 1.3 * s, 0.18 * s);
+      quill.rotation.z = -0.5;
+      cape('#201020', 0.62);
+      add(mask, quill, ...eyes(0.32, 1.86, 0.07, 0.035, '#f0d8ff'));
+      break;
+    }
+    case 'keeper-of-the-light': {
+      beard('#ffffff', 1.54);
+      const lantern = sphere(0.12, '#ffe78a', 0x6a5814);
+      lantern.position.set(0.5 * s, 1.5 * s, 0.18 * s);
+      cape('#7aa8ff', 0.62);
+      add(lantern, ...eyes(0.3, 1.86, 0.08, 0.035, '#fff6c0'));
+      break;
+    }
+    case 'leshrac': {
+      tailSerpent('#9a70ff', '#70d8ff');
+      horns('#70d8ff', 0.34, 2.0, 0.2, 0.4, 0.6);
+      crownSpikes(3, '#e8e8ff', 0x2a164a, 2.06);
+      add(...eyes(0.3, 1.84, 0.08, 0.04, '#70d8ff'));
+      break;
+    }
+    case 'necrophos': {
+      hoodCowl('#283820');
+      const scythe = box(0.04, 0.7, 0.04, '#84d86a', 0x14280c);
+      scythe.position.set(0.5 * s, 1.4 * s, 0.18 * s);
+      const blade = box(0.3, 0.06, 0.03, '#d8ffb0', 0x14280c);
+      blade.position.set(0.6 * s, 1.7 * s, 0.18 * s);
+      blade.rotation.z = 0.6;
+      add(scythe, blade, ...eyes(0.3, 1.84, 0.08, 0.045, '#d8ffb0'));
+      break;
+    }
+    case 'puck': {
+      wings('#7650ff', 0.6, 1.4, 0x2a1a5a);
+      horns('#d8f0ff', 0.24, 1.98, 0.16, 0.4, 0.5);
+      add(...eyes(0.3, 1.84, 0.08, 0.045, '#ff9ad8'));
+      break;
+    }
+    case 'pugna': {
+      const skull = sphere(0.24, '#f0ffd8', 0x16280c);
+      skull.position.set(0.16 * s, 1.86 * s, 0);
+      orbitOrbs(2, '#9aff70', 0.07, 0.42, 1.4);
+      cape('#243818', 0.6);
+      add(skull, ...eyes(0.34, 1.88, 0.07, 0.035, '#9aff70'));
+      break;
+    }
+    case 'queen-of-pain': {
+      wings('#2a102e', 0.72, 1.32, 0x2a102e);
+      horns('#ffb0d8', 0.3, 2.0, 0.18, 0.3, 0.6);
+      const clawL = cone(0.04, 0.22, '#ffb0d8');
+      clawL.rotation.z = -1.0;
+      clawL.position.set(0.38 * s, 0.95 * s, 0.3 * s);
+      const clawR = clawL.clone();
+      clawR.position.z = -0.3 * s;
+      add(clawL, clawR, ...eyes(0.3, 1.84, 0.08, 0.04, '#ffb0d8'));
+      break;
+    }
+    case 'shadow-demon': {
+      hoodCowl('#120a24');
+      horns('#c8b8ff', 0.32, 2.0, 0.2, 0.4, 0.6);
+      cape('#120a24', 0.64);
+      const clawL = cone(0.04, 0.22, '#c8b8ff');
+      clawL.rotation.z = -1.0;
+      clawL.position.set(0.38 * s, 0.95 * s, 0.3 * s);
+      const clawR = clawL.clone();
+      clawR.position.z = -0.3 * s;
+      add(clawL, clawR, ...eyes(0.3, 1.84, 0.08, 0.04, '#c8b8ff'));
+      break;
+    }
+    case 'shadow-shaman': {
+      const mask = box(0.09, 0.34, 0.3, '#70d8ff');
+      mask.position.set(0.26 * s, 1.84 * s, 0);
+      const featherG = new THREE.Group();
+      for (let i = 0; i < 3; i++) {
+        const f = cone(0.04, 0.3, '#f0c45c');
+        f.position.set(-0.06 * s, 2.04 * s, (i - 1) * 0.12 * s);
+        f.rotation.z = -0.3;
+        featherG.add(f);
+      }
+      add(mask, featherG, ...eyes(0.32, 1.86, 0.07, 0.035, '#70d8ff'));
+      break;
+    }
+
+    // ---------- Standard: Universal ----------
+    case 'bane': {
+      const tentL = cone(0.08, 0.6, '#160d28');
+      tentL.rotation.z = 0.6;
+      tentL.position.set(-0.12 * s, 0.7 * s, 0.22 * s);
+      const tentR = tentL.clone();
+      tentR.position.set(-0.16 * s, 0.7 * s, -0.2 * s);
+      tentR.rotation.z = -0.6;
+      const eyeBig = sphere(0.12, '#c8b8ff', 0x2a1a4a);
+      eyeBig.position.set(0.3 * s, 1.5 * s, 0);
+      add(tentL, tentR, eyeBig, ...eyes(0.3, 1.7, 0.12, 0.05, '#c8b8ff'));
+      break;
+    }
+    case 'batrider': {
+      wings('#2a1408', 0.85, 1.3, 0x2a1408);
+      const torch = cyl(0.04, 0.04, 0.4, '#5a3418');
+      torch.position.set(0.46 * s, 1.3 * s, 0.2 * s);
+      const flame = cone(0.08, 0.2, '#ff7a2f', 0x5a1404);
+      flame.position.set(0.46 * s, 1.56 * s, 0.2 * s);
+      add(torch, flame, ...eyes(0.3, 1.84, 0.08, 0.04, '#ffe08a'));
+      break;
+    }
+    case 'clockwerk': {
+      const gearL = torus(0.16, 0.05, '#303848', 0x101820);
+      gearL.position.set(0, 1.5 * s, 0.5 * s);
+      const gearR = gearL.clone();
+      gearR.position.z = -0.5 * s;
+      const cog = torus(0.12, 0.04, '#ffd48a');
+      cog.position.set(0.34 * s, 1.2 * s, 0);
+      add(gearL, gearR, cog, ...eyes(0.3, 1.84, 0.08, 0.04, '#ffd48a'));
+      break;
+    }
+    case 'dark-seer': {
+      const dome = sphere(0.28, '#201838');
+      dome.scale.set(1, 1.25, 1.1);
+      dome.position.set(0, 1.92 * s, 0);
+      const thirdEye = sphere(0.06, '#80d8ff', 0x163a52);
+      thirdEye.position.set(0.26 * s, 1.96 * s, 0);
+      cape('#201838', 0.62);
+      add(dome, thirdEye, ...eyes(0.3, 1.82, 0.08, 0.038, '#80d8ff'));
+      break;
+    }
+    case 'dark-willow': {
+      wings('#1c1028', 0.6, 1.4, 0x2a1a4a);
+      const mask = box(0.08, 0.26, 0.26, '#ffb8e8');
+      mask.position.set(0.26 * s, 1.84 * s, 0);
+      add(mask, ...eyes(0.3, 1.84, 0.08, 0.04, '#d85cff'));
+      break;
+    }
+    case 'dazzle': {
+      const mask = box(0.09, 0.34, 0.3, '#ffd8ff');
+      mask.position.set(0.26 * s, 1.84 * s, 0);
+      const wand = cyl(0.03, 0.03, 0.5, '#302040');
+      wand.position.set(0.46 * s, 1.4 * s, 0.18 * s);
+      const tip = sphere(0.07, '#f05cff', 0x401040);
+      tip.position.set(0.46 * s, 1.68 * s, 0.18 * s);
+      add(mask, wand, tip, ...eyes(0.32, 1.86, 0.07, 0.035, '#f05cff'));
+      break;
+    }
+    case 'earth-spirit': {
+      shoulderSlabs('#203820', 0.3);
+      const totem = box(0.16, 0.4, 0.16, '#58b86a', 0x14280c);
+      totem.position.set(0.42 * s, 1.3 * s, 0.2 * s);
+      add(totem, ...eyes(0.28, 1.82, 0.09, 0.04, '#d8f0b0'));
+      break;
+    }
+    case 'enigma': {
+      const mass = sphere(0.4, '#050510');
+      mass.position.set(0, 1.3 * s, 0);
+      const starG = new THREE.Group();
+      for (let i = 0; i < 4; i++) {
+        const st = sphere(0.04, '#b8a8ff', 0x2a1c5a);
+        st.position.set((0.1 + (i % 2) * 0.1) * s, (1.2 + i * 0.16) * s, ((i % 2) - 0.5) * 0.5 * s);
+        starG.add(st);
+      }
+      add(mass, starG, ...eyes(0.34, 1.4, 0.1, 0.05, '#b8a8ff'));
+      break;
+    }
+    case 'lone-druid': {
+      hoodCowl('#3a2a18');
+      const bearHead = sphere(0.2, '#8ac06a');
+      bearHead.position.set(-0.34 * s, 1.0 * s, 0.3 * s);
+      const earL = sphere(0.06, '#8ac06a');
+      earL.position.set(-0.36 * s, 1.16 * s, 0.4 * s);
+      add(bearHead, earL, ...eyes(0.3, 1.84, 0.08, 0.04, '#f0d0a0'));
+      break;
+    }
+    case 'lycan': {
+      const wolfHead = sphere(0.24, '#8a8a8a');
+      wolfHead.scale.set(1.15, 0.95, 1);
+      wolfHead.position.set(0.1 * s, 1.86 * s, 0);
+      const snout = cone(0.1, 0.24, '#8a8a8a');
+      snout.rotation.z = -Math.PI / 2;
+      snout.position.set(0.34 * s, 1.82 * s, 0);
+      const clawL = cone(0.045, 0.22, '#f0c090');
+      clawL.rotation.z = -1.0;
+      clawL.position.set(0.4 * s, 0.95 * s, 0.32 * s);
+      const clawR = clawL.clone();
+      clawR.position.z = -0.32 * s;
+      add(wolfHead, snout, clawL, clawR, ...eyes(0.3, 1.88, 0.08, 0.04, '#f0c090'));
+      break;
+    }
+    case 'marci': {
+      const braid = cone(0.08, 0.6, '#3a2418');
+      braid.rotation.z = 0.3;
+      braid.position.set(-0.2 * s, 1.8 * s, 0);
+      const gauntL = sphere(0.16, '#f0b06a', 0x4a2a10);
+      gauntL.position.set(0.34 * s, 0.95 * s, 0.4 * s);
+      const gauntR = gauntL.clone();
+      gauntR.position.z = -0.4 * s;
+      const satchel = box(0.16, 0.2, 0.12, '#3a2418');
+      satchel.position.set(-0.28 * s, 1.0 * s, 0.2 * s);
+      add(braid, gauntL, gauntR, satchel, ...eyes(0.3, 1.86, 0.08, 0.035, '#ffe8c0'));
+      break;
+    }
+    case 'pangolier': {
+      const hat = cyl(0.26, 0.3, 0.1, '#2c2440');
+      hat.position.set(0, 1.98 * s, 0);
+      const plume = cone(0.06, 0.3, '#80d8ff');
+      plume.position.set(-0.04 * s, 2.18 * s, 0);
+      plume.rotation.z = 0.4;
+      const scaleL = box(0.06, 0.4, 0.2, '#d8a04a');
+      scaleL.position.set(-0.2 * s, 1.1 * s, 0.18 * s);
+      const scaleR = scaleL.clone();
+      scaleR.position.z = -0.18 * s;
+      add(hat, plume, scaleL, scaleR, ...eyes(0.3, 1.86, 0.08, 0.035, '#80d8ff'));
+      break;
+    }
+    case 'snapfire': {
+      mountQuad('#5a3418');
+      const goggles = box(0.08, 0.1, 0.3, '#ffe0a0', 0x4a3208);
+      goggles.position.set(0.26 * s, 1.88 * s, 0);
+      gunArm('#5a3418', '#e86a32');
+      add(goggles, ...eyes(0.3, 1.86, 0.08, 0.03, '#ffe0a0'));
+      break;
+    }
+    case 'timbersaw': {
+      const frame = box(0.36, 0.5, 0.5, '#4a4a4a');
+      frame.position.set(-0.04 * s, 1.2 * s, 0);
+      const saw = torus(0.18, 0.04, '#b8f0ff', 0x163a52);
+      saw.position.set(0.42 * s, 1.2 * s, 0.34 * s);
+      const sawR = saw.clone();
+      sawR.position.z = -0.34 * s;
+      add(frame, saw, sawR, ...eyes(0.3, 1.84, 0.08, 0.04, '#b8f0ff'));
+      break;
+    }
+    case 'void-spirit': {
+      hoodCowl('#181028');
+      const riftL = octa(0.08, '#ff8ad8', 0x3a1a2e);
+      riftL.position.set(-0.28 * s, 1.4 * s, 0.3 * s);
+      const riftR = riftL.clone();
+      riftR.position.set(-0.32 * s, 1.2 * s, -0.26 * s);
+      add(riftL, riftR, ...eyes(0.3, 1.84, 0.08, 0.04, '#ff8ad8'));
+      break;
+    }
+
+    // ---------- Complex ----------
+    case 'chaos-knight': {
+      crownSpikes(4, '#f0c060', 0x4a3010, 2.02);
+      cape('#1a0a0a', 0.66);
+      shoulderSlabs('#1a0a0a', 0.26);
+      add(...eyes(0.3, 1.84, 0.09, 0.045, '#ff4a2a'));
+      break;
+    }
+    case 'phantom-lancer': {
+      crownSpikes(3, '#d8e8ff', 0x18224a, 2.02);
+      const lance = cyl(0.03, 0.03, 0.9, '#4a8cff', 0x18224a);
+      lance.position.set(0.5 * s, 1.3 * s, 0.18 * s);
+      lance.rotation.z = 0.2;
+      const sash = box(0.06, 0.18, 0.5, '#4a8cff');
+      sash.position.set(0.18 * s, 0.74 * s, 0);
+      add(lance, sash, ...eyes(0.3, 1.86, 0.08, 0.038, '#d8e8ff'));
+      break;
+    }
+    case 'monkey-king': {
+      const mask = box(0.09, 0.3, 0.28, '#fff0a0');
+      mask.position.set(0.26 * s, 1.84 * s, 0);
+      const circlet = torus(0.24, 0.03, '#d8a048', 0x4a2410);
+      circlet.position.set(0.04 * s, 1.98 * s, 0);
+      circlet.rotation.x = Math.PI / 2;
+      cape('#4a2410', 0.6);
+      add(mask, circlet, ...eyes(0.32, 1.86, 0.07, 0.035, '#fff0a0'));
+      break;
+    }
+    case 'rubick': {
+      hoodCowl('#204020');
+      const cube = box(0.16, 0.16, 0.16, '#d8ffd0', 0x14280c);
+      cube.position.set(0.34 * s, 1.5 * s, 0);
+      cape('#204020', 0.62);
+      add(cube, ...eyes(0.3, 1.84, 0.08, 0.04, '#d8ffd0'));
+      break;
+    }
+    case 'techies': {
+      const goggles = box(0.08, 0.12, 0.34, '#f0f060', 0x4a4a08);
+      goggles.position.set(0.26 * s, 1.86 * s, 0);
+      const satchel = box(0.22, 0.26, 0.3, '#304030');
+      satchel.position.set(-0.3 * s, 1.2 * s, 0);
+      const mine = sphere(0.1, '#ff8a2f', 0x5a2808);
+      mine.position.set(0.32 * s, 1.0 * s, 0.34 * s);
+      add(goggles, satchel, mine, ...eyes(0.28, 1.86, 0.08, 0.03, '#f0f060'));
+      break;
+    }
+    case 'arc-warden': {
+      hoodCowl('#1c2440');
+      const arcCore = sphere(0.14, '#65d8ff', 0x163a52);
+      arcCore.position.set(0.34 * s, 1.4 * s, 0);
+      orbitOrbs(3, '#f6f0a8', 0.05, 0.34, 1.4);
+      cape('#1c2440', 0.6);
+      add(arcCore, ...eyes(0.3, 1.84, 0.08, 0.04, '#65d8ff'));
+      break;
+    }
+    case 'meepo': {
+      const cap = cyl(0.24, 0.26, 0.12, '#4a2a18');
+      cap.position.set(0, 1.96 * s, 0);
+      const scarf = torus(0.22, 0.05, '#78b85a', 0, Math.PI * 1.4);
+      scarf.position.set(0.04 * s, 1.62 * s, 0);
+      scarf.rotation.x = Math.PI / 2;
+      add(cap, scarf, ...eyes(0.3, 1.84, 0.08, 0.04, '#d8f0a0'));
+      break;
+    }
+    case 'morphling': {
+      const crest = cone(0.1, 0.4, '#5ad8ff', 0x16344a);
+      crest.position.set(-0.06 * s, 2.04 * s, 0);
+      crest.rotation.z = -0.5;
+      const ripple = torus(0.3, 0.04, '#d8fbff', 0x16344a);
+      ripple.position.set(-0.02 * s, 0.7 * s, 0);
+      ripple.rotation.x = Math.PI / 2;
+      add(crest, ripple, ...eyes(0.3, 1.86, 0.08, 0.045, '#d8fbff'));
+      break;
+    }
+    case 'brewmaster': {
+      const band = torus(0.26, 0.04, '#70c8ff', 0x163a52);
+      band.position.set(0.04 * s, 1.92 * s, 0);
+      band.rotation.x = Math.PI / 2;
+      const keg = cyl(0.18, 0.18, 0.4, '#3a2410');
+      keg.position.set(-0.3 * s, 1.2 * s, 0);
+      beard('#3a2410', 1.56);
+      add(band, keg, ...eyes(0.28, 1.84, 0.09, 0.04, '#70c8ff'));
       break;
     }
   }

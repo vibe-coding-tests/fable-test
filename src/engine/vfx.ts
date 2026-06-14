@@ -47,50 +47,119 @@ export function vfxGeometryCacheSize(): number {
 }
 
 // Numerically-built sprite textures (GRAPHICS_SPEC §7). DataTexture needs no DOM
-// or GL context, so the headless VFX/perf tests keep working.
-let SOFT_SPRITE: THREE.DataTexture | null = null;
-function softSprite(): THREE.DataTexture {
-  if (SOFT_SPRITE) return SOFT_SPRITE;
+// or GL context, so the headless VFX/perf tests keep working. WS-H adds a small
+// family so fire/frost/storm bursts throw shaped particles (ember/snow/shard)
+// instead of all sharing one round dot. White luminance; the material tints it.
+type SpriteKind = 'soft' | 'ember' | 'snow' | 'shard';
+const SPRITE_TEX: Partial<Record<SpriteKind, THREE.DataTexture>> = {};
+function spriteAlpha(kind: SpriteKind, nx: number, ny: number): number {
+  const d = Math.hypot(nx, ny); // 0 at center, 1 at edge
+  switch (kind) {
+    case 'ember': {
+      // Hot tight core with a soft falloff — reads as a spark.
+      const core = Math.max(0, 1 - d * 1.4);
+      return Math.min(1, core * core * 1.3);
+    }
+    case 'snow': {
+      // Six-point flake: radial falloff modulated by an angular star.
+      const ang = Math.atan2(ny, nx);
+      const star = 0.55 + 0.45 * Math.cos(ang * 6);
+      return Math.max(0, 1 - d) * star;
+    }
+    case 'shard': {
+      // Diamond: alpha by Manhattan distance, so the sprite is angular.
+      const m = Math.abs(nx) + Math.abs(ny);
+      return Math.max(0, 1 - m);
+    }
+    default: {
+      const a = Math.max(0, 1 - d);
+      return a * a;
+    }
+  }
+}
+function particleSprite(kind: SpriteKind = 'soft'): THREE.DataTexture {
+  const hit = SPRITE_TEX[kind];
+  if (hit) return hit;
   const s = 32;
   const data = new Uint8Array(s * s * 4);
   const c = (s - 1) / 2;
   for (let y = 0; y < s; y++) {
     for (let x = 0; x < s; x++) {
-      const d = Math.hypot(x - c, y - c) / c;
-      const a = Math.max(0, 1 - d);
+      const a = spriteAlpha(kind, (x - c) / c, (y - c) / c);
       const i = (y * s + x) * 4;
       data[i] = data[i + 1] = data[i + 2] = 255;
-      data[i + 3] = Math.floor(255 * a * a);
+      data[i + 3] = Math.floor(255 * Math.max(0, Math.min(1, a)));
     }
   }
   const tex = new THREE.DataTexture(data, s, s);
   tex.needsUpdate = true;
-  return (SOFT_SPRITE = tex);
+  return (SPRITE_TEX[kind] = tex);
 }
 
-// Ground telegraph decal: faint filled disc with a bright rim ring — the Dota
-// AoE target read. White luminance; the material tints it.
-let TELEGRAPH_TEX: THREE.DataTexture | null = null;
-function telegraphTexture(): THREE.DataTexture {
-  if (TELEGRAPH_TEX) return TELEGRAPH_TEX;
+// Ground telegraph decals: a small family selected by archetype so a stun ring,
+// a wall line, and a mine field each read differently on the ground instead of
+// sharing one disc (VFX_OVERHAUL WS-H). White luminance; the material tints it.
+type TelegraphKind = 'ring' | 'spiked' | 'hatched' | 'dotted';
+const TELEGRAPH_TEX: Partial<Record<TelegraphKind, THREE.DataTexture>> = {};
+function telegraphAlpha(kind: TelegraphKind, d: number, ang: number): number {
+  if (d >= 1) return 0;
+  const fill = 0.16 * (1 - d * 0.6);
+  switch (kind) {
+    case 'spiked': {
+      // Bright rim with radial spikes pointing inward — the stun/displace read.
+      const rim = Math.max(0, 1 - Math.abs(d - 0.9) / 0.12) * 0.95;
+      const teeth = (Math.abs((ang * 6 / Math.PI) % 1) < 0.12 && d > 0.55) ? 0.6 * (1 - d) : 0;
+      return Math.min(1, fill + rim + teeth);
+    }
+    case 'hatched': {
+      // Diagonal hatching inside a soft rim — the danger-line / wall read.
+      const rim = Math.max(0, 1 - Math.abs(d - 0.92) / 0.1) * 0.7;
+      const hatch = (Math.abs(((ang * 4 / Math.PI) + d * 6) % 1) < 0.22 && d < 0.92) ? 0.28 : 0;
+      return Math.min(1, fill + rim + hatch);
+    }
+    case 'dotted': {
+      // Dashed proximity ring — the mine/trap read.
+      const dash = (Math.abs((ang * 7 / Math.PI) % 1) < 0.5) ? 1 : 0;
+      const rim = Math.max(0, 1 - Math.abs(d - 0.9) / 0.08) * 0.95 * dash;
+      return Math.min(1, fill * 0.6 + rim);
+    }
+    default: {
+      const rim = Math.max(0, 1 - Math.abs(d - 0.9) / 0.1) * 0.9;
+      const spoke = (Math.abs((ang * 3) % 1) < 0.06 && d > 0.5) ? 0.25 : 0;
+      return Math.min(1, fill + rim + spoke);
+    }
+  }
+}
+function telegraphTexture(kind: TelegraphKind = 'ring'): THREE.DataTexture {
+  const hit = TELEGRAPH_TEX[kind];
+  if (hit) return hit;
   const s = 64;
   const data = new Uint8Array(s * s * 4);
   const c = (s - 1) / 2;
   for (let y = 0; y < s; y++) {
     for (let x = 0; x < s; x++) {
       const d = Math.min(1, Math.hypot(x - c, y - c) / c);
-      const fill = 0.16 * (1 - d * 0.6);
-      const rim = Math.max(0, 1 - Math.abs(d - 0.9) / 0.1) * 0.9;
-      const spoke = (Math.abs((Math.atan2(y - c, x - c) * 3) % 1) < 0.06 && d > 0.5) ? 0.25 : 0;
-      const a = Math.min(1, fill + rim + spoke) * (d < 1 ? 1 : 0);
+      const ang = Math.atan2(y - c, x - c);
+      const a = telegraphAlpha(kind, d, ang);
       const i = (y * s + x) * 4;
       data[i] = data[i + 1] = data[i + 2] = 255;
-      data[i + 3] = Math.floor(255 * a);
+      data[i + 3] = Math.floor(255 * Math.max(0, Math.min(1, a)));
     }
   }
   const tex = new THREE.DataTexture(data, s, s);
   tex.needsUpdate = true;
-  return (TELEGRAPH_TEX = tex);
+  return (TELEGRAPH_TEX[kind] = tex);
+}
+
+/** Pick the telegraph decal that best reads for a given vfx archetype (WS-H). */
+function telegraphKindFor(archetype: string, wall = false): TelegraphKind {
+  if (wall) return 'hatched';
+  switch (archetype) {
+    case 'mine': return 'dotted';
+    case 'stun-stars': return 'spiked';
+    case 'wall': return 'hatched';
+    default: return 'ring';
+  }
 }
 
 export class VfxManager {
@@ -191,7 +260,7 @@ export class VfxManager {
         const p = unitPos(ev.uid);
         if (p) {
           const pal = this.reactionPalette(ev.reaction);
-          this.burst(p.x, p.y, pal[0], 1.25, 0.42, pal[1]);
+          this.burst(p.x, p.y, pal[0], 1.25, 0.42, pal[1], this.reactionSprite(ev.reaction));
           this.pillar(p.x, p.y, pal[1], 0.34);
         }
         break;
@@ -371,7 +440,7 @@ export class VfxManager {
     entry.trail.geometry.attributes.position.needsUpdate = true;
   }
 
-  private burst(x: number, y: number, color: string, radiusW: number, dur: number, color2?: string): void {
+  private burst(x: number, y: number, color: string, radiusW: number, dur: number, color2?: string, sprite: SpriteKind = 'soft'): void {
     const ring = new THREE.Mesh(
       sharedGeometry(new THREE.RingGeometry(0.1, 1, 20)),
       new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending })
@@ -384,12 +453,12 @@ export class VfxManager {
       ring.scale.set(s, s, 1);
       mat.opacity = 0.85 * (1 - lifeT);
     });
-    // sparks
+    // sparks — shaped per element (ember/snow/shard) so the burst reads its type.
     const n = 14;
     const positions = new Float32Array(n * 3);
     const pts = new THREE.Points(
       new THREE.BufferGeometry(),
-      new THREE.PointsMaterial({ color: color2 ?? color, size: 0.32, map: softSprite(), transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending })
+      new THREE.PointsMaterial({ color: color2 ?? color, size: sprite === 'shard' ? 0.36 : 0.32, map: particleSprite(sprite), transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending })
     );
     pts.geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     const base = this.w(x, y, 0.4);
@@ -444,6 +513,18 @@ export class VfxManager {
       this.pillar(x, y, vfx.color, 0.6);
       return;
     }
+    if (vfx.archetype === 'vortex') {
+      this.vortex(x, y, vfx.color, vfx.color2 ?? '#ffffff', (vfx.scale ?? 1) * 2.6, 1.0);
+      return;
+    }
+    if (vfx.archetype === 'dome') {
+      this.dome(x, y, vfx.color, vfx.color2 ?? '#ffffff', (vfx.scale ?? 1) * 2.6, 0.9);
+      return;
+    }
+    if (vfx.archetype === 'mine') {
+      this.mine(x, y, vfx.color, vfx.color2 ?? '#ffffff', vfx.scale ?? 1);
+      return;
+    }
     const flash = new THREE.Mesh(
       sharedGeometry(new THREE.SphereGeometry(0.5, 8, 6)),
       new THREE.MeshBasicMaterial({ color: vfx.color, transparent: true, opacity: 0.7, depthWrite: false, blending: THREE.AdditiveBlending })
@@ -453,6 +534,105 @@ export class VfxManager {
     this.push(flash, 0.3, (_t, lifeT) => {
       flash.scale.setScalar(1 + lifeT * 1.6);
       mat.opacity = 0.7 * (1 - lifeT);
+    });
+  }
+
+  // WS-G: inward-spiraling pull. Shards converge on the center while a rim ring
+  // contracts — the "everything is being sucked in" read (Black Hole / RP / Vacuum).
+  private vortex(x: number, y: number, color: string, color2: string, radiusW: number, dur: number): void {
+    const g = new THREE.Group();
+    g.position.copy(this.w(x, y, 0.2));
+    const core = new THREE.Mesh(
+      sharedGeometry(new THREE.SphereGeometry(0.45, 12, 8)),
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending })
+    );
+    const rim = new THREE.Mesh(
+      sharedGeometry(new THREE.RingGeometry(radiusW * 0.9, radiusW, 40)),
+      new THREE.MeshBasicMaterial({ color: color2, transparent: true, opacity: 0.55, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending })
+    );
+    rim.rotation.x = -Math.PI / 2;
+    rim.position.y = 0.05;
+    g.add(core, rim);
+    const shards: THREE.Mesh[] = [];
+    for (let i = 0; i < 10; i++) {
+      const sh = new THREE.Mesh(
+        sharedGeometry(new THREE.TetrahedronGeometry(0.22)),
+        new THREE.MeshBasicMaterial({ color: color2, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending })
+      );
+      sh.userData.a0 = (i / 10) * Math.PI * 2;
+      g.add(sh);
+      shards.push(sh);
+    }
+    this.group.add(g);
+    const coreMat = core.material as THREE.MeshBasicMaterial;
+    const rimMat = rim.material as THREE.MeshBasicMaterial;
+    this.push(g, dur, (t, lifeT) => {
+      const pull = 1 - lifeT;
+      for (const sh of shards) {
+        const a = (sh.userData.a0 as number) + t * 6;
+        const r = radiusW * pull;
+        sh.position.set(Math.cos(a) * r, 0.4 + Math.sin(t * 4) * 0.2, Math.sin(a) * r);
+        sh.rotation.x = t * 4;
+        (sh.material as THREE.MeshBasicMaterial).opacity = 0.85 * pull;
+      }
+      core.scale.setScalar(0.6 + Math.sin(t * 8) * 0.15 + lifeT * 0.5);
+      coreMat.opacity = 0.85 * (1 - lifeT * 0.6);
+      rim.scale.setScalar(Math.max(0.05, pull));
+      rimMat.opacity = 0.55 * pull;
+    });
+  }
+
+  // WS-G: hemispherical containment shell (Chronosphere / Arena / Static Storm).
+  private dome(x: number, y: number, color: string, color2: string, radiusW: number, dur: number): void {
+    const g = new THREE.Group();
+    g.position.copy(this.w(x, y, 0.05));
+    const shell = new THREE.Mesh(
+      sharedGeometry(new THREE.SphereGeometry(radiusW, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2)),
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.32, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending })
+    );
+    const base = new THREE.Mesh(
+      sharedGeometry(new THREE.RingGeometry(radiusW * 0.92, radiusW, 44)),
+      new THREE.MeshBasicMaterial({ color: color2, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending })
+    );
+    base.rotation.x = -Math.PI / 2;
+    base.position.y = 0.04;
+    g.add(shell, base);
+    this.group.add(g);
+    const shellMat = shell.material as THREE.MeshBasicMaterial;
+    const baseMat = base.material as THREE.MeshBasicMaterial;
+    this.push(g, dur, (t, lifeT) => {
+      const pop = lifeT < 0.25 ? lifeT / 0.25 : 1;
+      shell.scale.setScalar(pop);
+      shell.rotation.y = t * 0.4;
+      shellMat.opacity = 0.32 * (1 - lifeT * 0.5);
+      baseMat.opacity = 0.7 * (0.6 + Math.sin(t * 6) * 0.3) * (1 - lifeT * 0.3);
+    });
+  }
+
+  // WS-G: small armed ground charge with a pulsing proximity telegraph ring.
+  private mine(x: number, y: number, color: string, color2: string, scale: number): void {
+    const g = new THREE.Group();
+    g.position.copy(this.w(x, y, 0.0));
+    const charge = new THREE.Mesh(
+      sharedGeometry(new THREE.IcosahedronGeometry(0.26 * scale, 0)),
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, depthWrite: false, blending: THREE.NormalBlending })
+    );
+    charge.position.y = 0.26 * scale;
+    const ring = new THREE.Mesh(
+      sharedGeometry(new THREE.RingGeometry(0.9 * scale, 1.0 * scale, 32)),
+      new THREE.MeshBasicMaterial({ color: color2, transparent: true, opacity: 0.5, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending })
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.04;
+    g.add(charge, ring);
+    this.group.add(g);
+    const ringMat = ring.material as THREE.MeshBasicMaterial;
+    // Armed charges linger; the proximity ring blinks faster over its short telegraph.
+    this.push(g, 1.4, (t, lifeT) => {
+      const blink = 0.4 + Math.abs(Math.sin(t * (3 + lifeT * 8))) * 0.5;
+      ringMat.opacity = blink * (1 - lifeT * 0.4);
+      ring.scale.setScalar(1 + Math.sin(t * 6) * 0.06);
+      charge.rotation.y = t * 2;
     });
   }
 
@@ -472,6 +652,17 @@ export class VfxManager {
       burning: ['#ff7a3d', '#ffd27f']
     };
     return palette[reaction] ?? ['#ffffff', '#b88cff'];
+  }
+
+  /** Shaped spark per reaction family: embers for fire, flakes for frost, shards
+   *  for shatter/overload, soft glow otherwise (WS-H spark variety). */
+  private reactionSprite(reaction: string): SpriteKind {
+    switch (reaction) {
+      case 'melt': case 'burning': case 'vaporize': return 'ember';
+      case 'freeze': case 'superconduct': return 'snow';
+      case 'crystallize': case 'overload': return 'shard';
+      default: return 'soft';
+    }
   }
 
   private cleaveSweep(from: Vec2, to: Vec2, visual: AttackVisualSpec): void {
@@ -592,7 +783,7 @@ export class VfxManager {
       // authored spike wall silhouette finishes the effect.
       const decal = new THREE.Mesh(
         sharedGeometry(new THREE.PlaneGeometry(lenW, widthW)),
-        new THREE.MeshBasicMaterial({ color, map: telegraphTexture(), transparent: true, opacity: 0.78, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending })
+        new THREE.MeshBasicMaterial({ color, map: telegraphTexture(telegraphKindFor(ev.vfx.archetype, !!spec.wall)), transparent: true, opacity: 0.78, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending })
       );
       decal.rotation.x = -Math.PI / 2;
       decal.position.y = 0.11;
@@ -626,7 +817,7 @@ export class VfxManager {
       // glows on dark ground and feeds bloom (GRAPHICS_SPEC §7 AoE read).
       const disc = new THREE.Mesh(
         sharedGeometry(new THREE.PlaneGeometry(rW * 2, rW * 2)),
-        new THREE.MeshBasicMaterial({ color, map: telegraphTexture(), transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending })
+        new THREE.MeshBasicMaterial({ color, map: telegraphTexture(telegraphKindFor(ev.vfx.archetype)), transparent: true, opacity: 0.85, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending })
       );
       disc.rotation.x = -Math.PI / 2;
       disc.position.y = 0.12;
@@ -639,16 +830,43 @@ export class VfxManager {
       rim.position.y = 0.14;
       rim.userData.rim = true;
       g.add(disc, rim);
-      if (ev.vfx.archetype === 'storm') {
-        // slow swirling shards over the area
+      if (ev.vfx.archetype === 'storm' || ev.vfx.archetype === 'vortex') {
+        // slow swirling shards over the area; vortex pulls them toward the center.
         for (let i = 0; i < 8; i++) {
           const shard = new THREE.Mesh(
             sharedGeometry(new THREE.TetrahedronGeometry(0.22)),
             new THREE.MeshBasicMaterial({ color: color2, transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending })
           );
           shard.userData.orbit = { r: rW * (0.3 + (i % 4) * 0.18), a: (i / 8) * Math.PI * 2, h: 0.6 + (i % 3) * 0.5 };
+          if (ev.vfx.archetype === 'vortex') shard.userData.pull = true;
           g.add(shard);
         }
+        if (ev.vfx.archetype === 'vortex') {
+          const core = new THREE.Mesh(
+            sharedGeometry(new THREE.SphereGeometry(0.5, 12, 8)),
+            new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.85, depthWrite: false, blending: THREE.AdditiveBlending })
+          );
+          core.position.y = 0.6;
+          core.userData.spin = true;
+          g.add(core);
+        }
+      }
+      if (ev.vfx.archetype === 'dome') {
+        const shell = new THREE.Mesh(
+          sharedGeometry(new THREE.SphereGeometry(rW, 18, 12, 0, Math.PI * 2, 0, Math.PI / 2)),
+          new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.3, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending })
+        );
+        shell.userData.spin = true;
+        g.add(shell);
+      }
+      if (ev.vfx.archetype === 'mine') {
+        const charge = new THREE.Mesh(
+          sharedGeometry(new THREE.IcosahedronGeometry(0.26, 0)),
+          new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.95, depthWrite: false })
+        );
+        charge.position.y = 0.26;
+        charge.userData.spin = true;
+        g.add(charge);
       }
       g.position.copy(this.w(ev.pos.x, ev.pos.y, 0));
     }
@@ -661,8 +879,13 @@ export class VfxManager {
         for (const child of g.children) {
           const orbit = child.userData.orbit as { r: number; a: number; h: number } | undefined;
           if (orbit) {
-            child.position.set(Math.cos(orbit.a + t * 2.2) * orbit.r, orbit.h + Math.sin(t * 3 + orbit.a) * 0.2, Math.sin(orbit.a + t * 2.2) * orbit.r);
+            // vortex shards ride a contracting radius for an inward-pull read.
+            const pull = child.userData.pull ? 0.35 + (Math.sin(t * 1.6 + orbit.a) * 0.5 + 0.5) * 0.65 : 1;
+            const spin = child.userData.pull ? 4.5 : 2.2;
+            child.position.set(Math.cos(orbit.a + t * spin) * orbit.r * pull, orbit.h + Math.sin(t * 3 + orbit.a) * 0.2, Math.sin(orbit.a + t * spin) * orbit.r * pull);
             child.rotation.x = t * 3;
+          } else if (child.userData.spin) {
+            child.rotation.y = t * 0.6;
           } else if (child.userData.tele) {
             child.rotation.z = t * 0.5; // slow charge spin
           } else if (child.userData.rim) {

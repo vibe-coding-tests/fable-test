@@ -38,8 +38,10 @@ function inferGesture(def: AbilityDef): AnimGesture {
   if (effects.some(isSelfBlink)) return 'dash';
   // Map-wide marks are an overhead global cast.
   if (arch === 'global-mark') return 'global-cast';
-  // Placed ground effects / walls / zones slam the ground.
-  if (def.targeting === 'ground-aoe' || arch === 'ground-aoe' || arch === 'wall' || hasKind(effects, 'zone')) {
+  // Placing an armed charge (mine) reads as a beckon/set-down.
+  if (arch === 'mine') return 'summon-gesture';
+  // Placed ground effects / walls / zones / containment shells slam the ground.
+  if (def.targeting === 'ground-aoe' || arch === 'ground-aoe' || arch === 'wall' || arch === 'vortex' || arch === 'dome' || hasKind(effects, 'zone')) {
     return 'ground-slam';
   }
   // Travelling shots read as ranged. 'storm' is deliberately excluded:
@@ -71,6 +73,9 @@ function inferSound(def: AbilityDef): SoundArchetype {
     case 'channel': return 'void';
     case 'global-mark': return 'void';
     case 'ground-aoe': return 'impact';
+    case 'vortex': return 'void';
+    case 'dome': return 'void';
+    case 'mine': return 'item';
     default: return 'impact';
   }
 }

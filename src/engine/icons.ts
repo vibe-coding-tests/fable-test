@@ -3,7 +3,7 @@
 // vocabulary, colored per ability/item. Data URLs cached by key.
 // ------------------------------------------------------------------
 
-import type { AbilityDef, ItemDef } from '../core/types';
+import type { AbilityDef, ItemDef, SilhouetteSpec } from '../core/types';
 
 const cache = new Map<string, string>();
 
@@ -191,6 +191,54 @@ const GLYPHS: Record<string, GlyphFn> = {
     ctx.lineTo(s * 0.6, s * 0.3);
     ctx.closePath();
     ctx.fill();
+  },
+  // WS-G archetypes
+  vortex: (ctx, s, c) => {
+    ctx.strokeStyle = c;
+    ctx.lineWidth = s * 0.07;
+    ctx.beginPath();
+    for (let i = 0; i <= 60; i++) {
+      const t = i / 60;
+      const a = t * Math.PI * 4;
+      const r = s * 0.34 * (1 - t);
+      const x = s * 0.5 + Math.cos(a) * r;
+      const y = s * 0.5 + Math.sin(a) * r;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+  },
+  dome: (ctx, s, c) => {
+    ctx.strokeStyle = c;
+    ctx.lineWidth = s * 0.07;
+    ctx.beginPath();
+    ctx.arc(s * 0.5, s * 0.66, s * 0.32, Math.PI, Math.PI * 2);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(s * 0.16, s * 0.66);
+    ctx.lineTo(s * 0.84, s * 0.66);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.ellipse(s * 0.5, s * 0.66, s * 0.32, s * 0.1, 0, 0, Math.PI * 2);
+    ctx.stroke();
+  },
+  mine: (ctx, s, c) => {
+    ctx.strokeStyle = c;
+    ctx.lineWidth = s * 0.05;
+    ctx.beginPath();
+    ctx.arc(s * 0.5, s * 0.5, s * 0.32, 0, Math.PI * 2);
+    ctx.setLineDash([s * 0.08, s * 0.06]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = c;
+    ctx.beginPath();
+    ctx.arc(s * 0.5, s * 0.5, s * 0.13, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.moveTo(s * 0.5, s * 0.18);
+    ctx.lineTo(s * 0.5, s * 0.34);
+    ctx.lineWidth = s * 0.06;
+    ctx.stroke();
   }
 };
 
@@ -444,14 +492,87 @@ const ITEM_GLYPHS: Record<string, GlyphFn> = {
   }
 };
 
+// WS-F: a small secondary mark keyed off the ability's dominant effect, so two
+// spells that share a VfxArchetype glyph (e.g. two `projectile`s) still read
+// differently in the HUD. Pure-derived; no per-ability art needed.
+type EffectMark = 'stun' | 'summon' | 'heal' | 'displace' | 'slow' | 'none';
+
+function dominantEffectMark(def: AbilityDef): EffectMark {
+  const nodes: { kind?: string; status?: string }[] = [];
+  if (def.effects) nodes.push(...(def.effects as { kind?: string; status?: string }[]));
+  if (def.channel?.tick) nodes.push(...(def.channel.tick.effects as { kind?: string; status?: string }[]));
+  if (def.toggle) nodes.push(...(def.toggle.effects as { kind?: string; status?: string }[]));
+  const has = (pred: (n: { kind?: string; status?: string }) => boolean) => nodes.some(pred);
+  if (has((n) => n.kind === 'summon')) return 'summon';
+  if (has((n) => n.kind === 'heal')) return 'heal';
+  if (has((n) => n.kind === 'status' && (n.status === 'stun' || n.status === 'hex' || n.status === 'root' || n.status === 'frozen'))) return 'stun';
+  if (has((n) => n.kind === 'displace')) return 'displace';
+  if (has((n) => n.kind === 'status' && n.status === 'slow')) return 'slow';
+  return 'none';
+}
+
+function drawEffectMark(ctx: CanvasRenderingContext2D, s: number, mark: EffectMark, color: string): void {
+  if (mark === 'none') return;
+  const cx = s * 0.2;
+  const cy = s * 0.2;
+  ctx.fillStyle = color;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = s * 0.04;
+  switch (mark) {
+    case 'stun': {
+      for (let i = 0; i < 3; i++) {
+        const a = (i / 3) * Math.PI * 2 - Math.PI / 2;
+        ctx.beginPath();
+        ctx.arc(cx + Math.cos(a) * s * 0.08, cy + Math.sin(a) * s * 0.08, s * 0.03, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      break;
+    }
+    case 'summon': {
+      for (const [dx, dy] of [[-0.06, 0.04], [0.06, 0.04], [0, -0.06]]) {
+        ctx.beginPath();
+        ctx.arc(cx + dx * s, cy + dy * s, s * 0.035, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      break;
+    }
+    case 'heal': {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - s * 0.08); ctx.lineTo(cx, cy + s * 0.08);
+      ctx.moveTo(cx - s * 0.08, cy); ctx.lineTo(cx + s * 0.08, cy);
+      ctx.stroke();
+      break;
+    }
+    case 'displace': {
+      ctx.beginPath();
+      ctx.moveTo(cx - s * 0.08, cy + s * 0.05);
+      ctx.lineTo(cx + s * 0.08, cy - s * 0.05);
+      ctx.lineTo(cx + s * 0.02, cy - s * 0.07);
+      ctx.moveTo(cx + s * 0.08, cy - s * 0.05);
+      ctx.lineTo(cx + s * 0.06, cy + s * 0.01);
+      ctx.stroke();
+      break;
+    }
+    case 'slow': {
+      ctx.beginPath();
+      ctx.arc(cx, cy, s * 0.07, Math.PI * 0.2, Math.PI * 1.6);
+      ctx.stroke();
+      break;
+    }
+  }
+}
+
 export function abilityIcon(def: AbilityDef, size = 64): string {
   const key = `ab:${def.id}:${size}`;
   const hit = cache.get(key);
   if (hit) return hit;
   const url = draw(size, (ctx, s) => {
     bg(ctx, s, def.vfx.color, '#1c2433');
-    const glyph = GLYPHS[def.vfx.archetype] ?? GLYPHS.projectile;
+    // Glyph hint wins (mirrors item glyphs); else the archetype glyph.
+    const glyph = (def.glyph && (GLYPHS[def.glyph] || ITEM_GLYPHS[def.glyph])) || GLYPHS[def.vfx.archetype] || GLYPHS.projectile;
     glyph(ctx, s, def.vfx.color);
+    // Per-ability secondary mark so same-archetype spells diverge.
+    drawEffectMark(ctx, s, dominantEffectMark(def), def.vfx.color2 ?? '#ffffff');
     if (def.ult) {
       ctx.fillStyle = '#ffd86a';
       ctx.beginPath();
@@ -484,24 +605,120 @@ export function itemIcon(def: ItemDef, size = 64): string {
   return url;
 }
 
-export function heroPortrait(palette: [string, string, string], letter: string, size = 72): string {
-  const key = `hp:${palette.join()}:${letter}:${size}`;
+// WS-F: a silhouette-derived bust. The head shape, weapon hint, and a 3-color
+// palette grade make the pick/codex/HUD portrait resemble the unit instead of a
+// letter-in-a-blob. When a hero GLB is eventually enabled this stays the single
+// seam to swap for a live rotating render (GRAPHICS_SPEC §6.1).
+export function heroPortrait(palette: [string, string, string], letter: string, size = 72, sil?: SilhouetteSpec): string {
+  const key = `hp:${palette.join()}:${letter}:${size}:${sil ? `${sil.build}/${sil.head ?? ''}/${sil.weapon ?? ''}/${(sil.extras ?? []).join('+')}` : ''}`;
   const hit = cache.get(key);
   if (hit) return hit;
+  const [p0, p1, p2] = palette;
   const url = draw(size, (ctx, s) => {
-    bg(ctx, s, palette[0], '#1a2030');
-    ctx.fillStyle = palette[0];
+    bg(ctx, s, p0, '#1a2030');
+
+    if (!sil) {
+      // Legacy letter bust (kept for callers without a silhouette).
+      ctx.fillStyle = p0;
+      ctx.beginPath();
+      ctx.arc(s * 0.5, s * 0.42, s * 0.2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(s * 0.24, s * 0.88);
+      ctx.quadraticCurveTo(s * 0.5, s * 0.5, s * 0.76, s * 0.88);
+      ctx.fill();
+      ctx.fillStyle = p2;
+      ctx.font = `bold ${s * 0.28}px ui-monospace, monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText(letter, s * 0.5, s * 0.46);
+      return;
+    }
+
+    const cx = s * 0.5;
+    // Shoulders / torso, tinted by body shape.
+    ctx.fillStyle = p1;
     ctx.beginPath();
-    ctx.arc(s * 0.5, s * 0.42, s * 0.2, 0, Math.PI * 2);
+    const shoulderW = sil.bodyShape === 'bulky' ? 0.34 : sil.bodyShape === 'robed' ? 0.3 : 0.26;
+    ctx.moveTo(cx - s * shoulderW, s * 0.96);
+    ctx.quadraticCurveTo(cx, s * 0.56, cx + s * shoulderW, s * 0.96);
+    ctx.closePath();
     ctx.fill();
+
+    // Weapon hint behind the head (diagonal).
+    if (sil.weapon && sil.weapon !== 'none') {
+      ctx.strokeStyle = p2;
+      ctx.lineWidth = s * (sil.weapon === 'staff' || sil.weapon === 'totem' ? 0.05 : 0.07);
+      ctx.beginPath();
+      ctx.moveTo(cx + s * 0.18, s * 0.92);
+      ctx.lineTo(cx + s * 0.42, s * 0.2);
+      ctx.stroke();
+      if (sil.weapon === 'cleaver' || sil.weapon === 'sword') {
+        ctx.fillStyle = p2;
+        ctx.beginPath();
+        ctx.arc(cx + s * 0.42, s * 0.2, s * 0.05, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    // Head, shaped by the silhouette head token.
+    ctx.fillStyle = p0;
+    const hy = s * 0.4;
+    const hr = s * 0.18;
     ctx.beginPath();
-    ctx.moveTo(s * 0.24, s * 0.88);
-    ctx.quadraticCurveTo(s * 0.5, s * 0.5, s * 0.76, s * 0.88);
+    switch (sil.head) {
+      case 'horned':
+      case 'helm':
+        ctx.moveTo(cx - hr, hy + hr * 0.6);
+        ctx.lineTo(cx - hr, hy - hr * 0.4);
+        ctx.lineTo(cx, hy - hr);
+        ctx.lineTo(cx + hr, hy - hr * 0.4);
+        ctx.lineTo(cx + hr, hy + hr * 0.6);
+        ctx.closePath();
+        break;
+      case 'hood':
+        ctx.moveTo(cx - hr, hy + hr);
+        ctx.quadraticCurveTo(cx, hy - hr * 1.4, cx + hr, hy + hr);
+        ctx.closePath();
+        break;
+      case 'skull':
+        ctx.ellipse(cx, hy, hr * 0.92, hr, 0, 0, Math.PI * 2);
+        break;
+      default:
+        ctx.arc(cx, hy, hr, 0, Math.PI * 2);
+    }
     ctx.fill();
-    ctx.fillStyle = palette[2];
-    ctx.font = `bold ${s * 0.28}px ui-monospace, monospace`;
-    ctx.textAlign = 'center';
-    ctx.fillText(letter, s * 0.5, s * 0.46);
+
+    // Horns / crown extras.
+    if (sil.head === 'horned' || (sil.extras ?? []).includes('horns')) {
+      ctx.fillStyle = p2;
+      for (const dir of [-1, 1]) {
+        ctx.beginPath();
+        ctx.moveTo(cx + dir * hr * 0.7, hy - hr * 0.4);
+        ctx.lineTo(cx + dir * hr * 1.5, hy - hr * 1.4);
+        ctx.lineTo(cx + dir * hr * 0.4, hy - hr * 0.8);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+    if ((sil.extras ?? []).includes('crown')) {
+      ctx.fillStyle = p2;
+      for (let i = -1; i <= 1; i++) {
+        ctx.beginPath();
+        ctx.moveTo(cx + i * hr * 0.6 - hr * 0.12, hy - hr * 0.7);
+        ctx.lineTo(cx + i * hr * 0.6, hy - hr * 1.25);
+        ctx.lineTo(cx + i * hr * 0.6 + hr * 0.12, hy - hr * 0.7);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
+
+    // Glowing eyes — the same cheap "this is a hero" read used by the 3D rig.
+    ctx.fillStyle = p2;
+    for (const dir of [-1, 1]) {
+      ctx.beginPath();
+      ctx.arc(cx + dir * hr * 0.4, hy + hr * 0.05, s * 0.022, 0, Math.PI * 2);
+      ctx.fill();
+    }
   });
   cache.set(key, url);
   return url;

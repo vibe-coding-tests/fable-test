@@ -3,7 +3,7 @@ import { registerAllContent } from '../data';
 import { REG } from '../core/registry';
 import { applyDamage } from '../core/combat';
 import { freshEchoProgress } from '../core/echo';
-import { scaledBounty } from '../core/phase3';
+import { rollLoot, scaledBounty } from '../core/phase3';
 import { overflowXpToGold } from '../core/progression';
 import { xpForLevel } from '../core/stats';
 import { TUNING } from '../data/tuning';
@@ -561,5 +561,70 @@ describe('loot overhaul curated chase and black-market sinks', () => {
 
     expect(g.salvageArmoryItem(0)).toBe(0);
     expect(g.inventoryStash.some((it) => it.id === 'broadsword')).toBe(true);
+  });
+
+  it('exposes live Black Market wheel costs through the view-model', () => {
+    const save = soloSave('juggernaut', 20);
+    save.gold = 5000;
+    const g = Game.headless(save);
+    g.activeUnit()!.pos = { ...g.region.town.pos };
+
+    const view = g.blackMarketView();
+    expect(view.inTown).toBe(true);
+    expect(view.gold).toBe(5000);
+    expect(view.recipeCost).toBe(TUNING.blackMarket.recipeWheelCost);
+    expect(view.relicCost).toBe(TUNING.blackMarket.relicWheelBaseCost);
+    expect(view.relicCeiling).toBe('legendary');
+    expect(view.recipeRarities).toContain('rare');
+  });
+
+  it('relic-wheel copies can come pre-upgraded but never above the collectible grades', () => {
+    let sawQuality = false;
+    for (let s = 0; s < 80 && !sawQuality; s++) {
+      const save = soloSave('juggernaut', 20);
+      save.gold = 999999;
+      const g = Game.headless(save);
+      g.activeUnit()!.pos = { ...g.region.town.pos };
+      g.goldSinks.gambleRolls = s; // vary the seeded quality salt
+      const relic = g.blackMarketRelicWheel('legendary');
+      expect(relic).not.toBeNull();
+      if (relic!.quality) {
+        sawQuality = true;
+        // The wheel tops out below the reserved prestige grade.
+        expect(relic!.quality).not.toBe('unusual');
+        expect(relic!.bound).toBe(true);
+      }
+    }
+    expect(sawQuality).toBe(true);
+  });
+});
+
+describe('quality at the source (L5)', () => {
+  it('raid anchors can drop an upgraded-quality copy on some seed', () => {
+    const raid = REG.raid('roshan-pit');
+    expect(raid.loot.qualityOdds).toBeDefined();
+
+    let sawQuality = false;
+    for (let s = 1; s <= 200 && !sawQuality; s++) {
+      const roll = rollLoot(raid.loot, 'hell', 0, s);
+      if (roll.assembled?.quality) sawQuality = true;
+    }
+    expect(sawQuality).toBe(true);
+  });
+
+  it('boss anchors carry modest source quality odds but never roll the reserved Unusual grade', () => {
+    const boss = REG.boss('boss-phantom-assassin');
+    expect(boss.loot.qualityOdds).toBeDefined();
+    expect(boss.loot.qualityOdds!.unusual ?? 0).toBe(0);
+
+    let sawQuality = false;
+    for (let s = 1; s <= 400 && !sawQuality; s++) {
+      const roll = rollLoot(boss.loot, 'hell', 0, s);
+      if (roll.assembled?.quality) {
+        sawQuality = true;
+        expect(roll.assembled.quality).not.toBe('unusual');
+      }
+    }
+    expect(sawQuality).toBe(true);
   });
 });

@@ -1437,7 +1437,7 @@ export class Game {
       this.audio.handleEvent(ev);
       if (ev.t === 'kill-credit') {
         const victim = dungeon.sim.unit(ev.victimUid);
-        if (victim?.kind === 'creep' && victim.tier) this.rollItemDropsForCreep(victim.creepId, victim.tier, ev.victimUid);
+        if (victim?.kind === 'creep' && victim.tier) this.rollItemDropsForCreep(victim.creepId, victim.tier, ev.victimUid, dungeon.tier);
       }
     }
     for (const room of dungeon.drainCompletedRooms()) {
@@ -1920,10 +1920,10 @@ export class Game {
     this.msg(`Neutral drop: ${drop.name} (→ stash)`, 'good');
   }
 
-  private rollItemDropsForCreep(creepId: string | undefined, tier: CreepTier, salt: number): void {
+  private rollItemDropsForCreep(creepId: string | undefined, tier: CreepTier, salt: number, difficulty: DifficultyTier = 'normal'): void {
     const table = (creepId ? REG.creep(creepId).drops : undefined) ?? DEFAULT_CREEP_DROP_TABLES[tier];
-    const seed = stableContentSeed(`${this.region.id}:creep-drops:${tier}`, Math.round(this.sim.time * 1000) + salt);
-    const roll = rollItemDrops(table, 'normal', {}, new Rng(seed));
+    const seed = stableContentSeed(`${this.region.id}:creep-drops:${tier}:${difficulty}`, Math.round(this.sim.time * 1000) + salt);
+    const roll = rollItemDrops(table, difficulty, {}, new Rng(seed));
     if (roll.items.length === 0) return;
     this.addDroppedItems(roll.items);
     const names = roll.items.map((it) => REG.item(it.id).name).join(', ');
@@ -2199,6 +2199,39 @@ export class Game {
     return TUNING.blackMarket.relicWheelBaseCost + this.goldSinks.gambleRolls * TUNING.blackMarket.relicWheelStepCost;
   }
 
+  /** Seeded quality roll for a gambled copy; Unusual stays out of any gamble pool. */
+  private rollGambleQuality(odds: Partial<Record<ItemQuality, number>>, seed: number): ItemQuality | undefined {
+    const order: ItemQuality[] = ['corrupted', 'inscribed', 'frozen', 'genuine'];
+    const r = new Rng(seed).next();
+    let acc = 0;
+    for (const q of order) {
+      acc += odds[q] ?? 0;
+      if (r < acc) return q;
+    }
+    return undefined;
+  }
+
+  /** Town Black Market view-model: live wheel costs and the reserved relic ceiling. */
+  blackMarketView(): {
+    inTown: boolean;
+    gold: number;
+    essence: number;
+    recipeCost: number;
+    recipeRarities: ItemRarity[];
+    relicCost: number;
+    relicCeiling: ItemRarity;
+  } {
+    return {
+      inTown: this.inTown(),
+      gold: Math.floor(this.gold),
+      essence: this.essence,
+      recipeCost: this.blackMarketCost('recipe'),
+      recipeRarities: ['uncommon', 'rare', 'mythical'],
+      relicCost: this.blackMarketCost('relic'),
+      relicCeiling: TUNING.blackMarket.relicRarityCeiling
+    };
+  }
+
   private itemRarity(id: string): ItemRarity {
     return REG.item(id).rarity ?? 'common';
   }
@@ -2271,11 +2304,17 @@ export class Game {
       this.msg(`No relics are available below ${maxRarity}`, 'bad');
       return null;
     }
+    const quality = this.rollGambleQuality(
+      TUNING.blackMarket.relicQualityOdds,
+      stableContentSeed(`black-market:relic-quality:${maxRarity}`, this.goldSinks.gambleRolls)
+    );
     this.gold -= cost;
     this.goldSinks.gambleRolls += 1;
     const item: ItemSave = { id, bound: true };
+    if (quality) item.quality = quality;
     this.addDroppedItems([item]);
-    this.msg(`Relic wheel: ${REG.item(id).name} (bound, → Armory)`, 'good', this.dropAccent([item]));
+    const qTag = quality ? ` (${QUALITY_GRADES[quality].name})` : '';
+    this.msg(`Relic wheel: ${REG.item(id).name}${qTag} (bound, → Armory)`, 'good', this.dropAccent([item]));
     return item;
   }
 
