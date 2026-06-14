@@ -22,12 +22,12 @@ never imports `three` or reads renderer-only fields.
 | Surface | State |
 |---------|-------|
 | Hero likeness profiles | **122 / 122** unique, no duplicates (`engine/models.ts`) |
-| Hero GLBs enabled | **6 / 122** — `juggernaut, crystal-maiden, pudge, earthshaker, sniper, lich` (`ENABLED_HERO_MODELS`) |
+| Hero GLBs enabled | **6 / 122** — `juggernaut, crystal-maiden, pudge, earthshaker, sniper, lich` (`ENABLED_HERO_MODELS`). Shared-base scaffolding shipped: `HERO_BASE` (122→16 cohorts) + runtime `recolorToPalette` + per-base loader cache, gated by `ENABLED_HERO_BASES` (empty until base art ships) |
 | Ability VFX coverage | **488 / 488** authored; archetypes incl. `vortex`/`dome`/`mine` |
 | Attack animation | weapon-driven (`attackStyleFor`): 8 styles incl. `bird-dive`, `creature-lunge` |
 | Cast/anim gestures | `AnimGesture` ×9, auto-resolved + hand-set on signatures |
-| Item visuals | **81 / 145** items have `appearance`/`attackVisual`; **64** do not |
-| Creature GLBs | 20 Quaternius creatures vendored, mounted on creeps (static pose) |
+| Item visuals | D1+D2 shipped: `appearance` on **76** items, `attackVisual` on **28**; the remaining ~52 are intentionally invisible consumables/components (§6.1) |
+| Creature GLBs | 20 Quaternius creatures vendored, mounted on creeps and **animated off sim state** via the shared `mountHeroModel` + `animateAuthoredRig` path (not a static pose) |
 | Env assets | terrain PBR (ambientCG), 2 HDRIs (Poly Haven), foliage + town (Quaternius) |
 | VFX textures | original `/assets/vfx/vfx_atlas.webp` for sprites/telegraphs, with procedural `DataTexture` fallback |
 | Audio | synth-only (`SoundArchetype` ×11), no sampled SFX, no music beds |
@@ -177,10 +177,15 @@ bespoke generated GLB is a later, optional upgrade per hero.
 > candidates for a **bespoke** retextured GLB over a shared base.
 
 ### 3.7 Batches
-- **A0 — migrate to shared base + runtime recolor.** Convert the 6 starters from
-  baked files to the shared-base path; ship the 4 KayKit base files; add the
-  `HERO_BASE` map + runtime tint helper. Gate: model-cache + data-lint, no-asset
-  boot, theme smoke.
+- **A0 — shared base + runtime recolor scaffolding. Engineering shipped; base art
+  pending.** `HERO_BASE` maps all 122 heroes to a base (16 cohorts + 11 procedural
+  holdouts), `recolorToPalette` tints a cloned base to a hero's three colors at
+  runtime (materials cloned so cohort members don't share tint), and
+  `HeroAssetLoader.loadBase` caches **per base** (≈16 loads for 122 heroes). The
+  path is gated by `ENABLED_HERO_BASES` (empty until the CC0 base GLBs ship), so it
+  is inert and 404-free today; the 6 starters keep their dedicated retextured GLBs.
+  Remaining: vendor the 4 KayKit base files, enable them, and wire the scene mount
+  to prefer base+recolor. Gate: model-cache base-coverage + recolor tests — green.
 - **A1 — Knight + Mage cohorts** (the two biggest, 47 heroes) on shared bases.
 - **A2 — Barbarian + Rogue cohorts** (33 heroes).
 - **A3 — creature cohort** (31 heroes) reusing the vendored creature GLBs +
@@ -190,24 +195,30 @@ bespoke generated GLB is a later, optional upgrade per hero.
 
 ---
 
-## 4. WS-B — Sockets & attachments
+## 4. WS-B — Sockets & attachments — **shipped**
 
-`HeroAssetManifestEntry.sockets` exists (`weapon`/`back`/`shoulder`) but
-`mountHeroModel` ignores it and `applyItemAppearances` attaches to the
-procedural `itemLayer`, which is hidden once a GLB mounts. Work:
+`mountHeroModel` now resolves named sockets and re-homes worn gear so item geo
+rides the authored model instead of the hidden procedural rig.
 
-1. **Resolve named sockets** on the mounted GLB (KayKit rigs expose hand/back
-   bones) and expose them on `UnitRig` (`rig.sockets`).
-2. **Attach the per-hero weapon GLB** (KayKit `sword_1handed`, `staff`, `wand`,
-   `crossbow`, `axe_2handed`, `dagger`, etc., all CC0 in the same repo) to the
-   hand socket, picked from the hero's `silhouette.weapon`.
-3. **Re-parent the likeness overlay** (eyes, horns, crest, wings) and the item
-   `appearance` geo from `itemLayer` to head/shoulder/back sockets so they ride
-   the authored model instead of floating.
-4. **Fallback intact:** with no GLB, sockets resolve to the procedural rig's
-   existing mount points (today's behavior), so nothing regresses.
+1. **Named sockets resolved (done).** `resolveSockets` walks the mounted GLB and
+   matches `weapon`/`head`/`back`/`shoulder` by normalized bone-name fragments
+   (KayKit/Quaternius/Mixamo naming, right-hand wins for the weapon); resolved
+   points are exposed on `UnitRig.sockets`.
+2. **Worn weapon rides the hand (done).** The resolved weapon bone becomes the
+   `rightHand` target, and `replaceWeapon` counter-scales the weapon by the model
+   height-fit factor so it sits at rig size on the GLB hand. The scene re-applies
+   `applyItemAppearances` after a mount so the weapon re-homes off the hidden
+   procedural arm. **Attaching a per-hero weapon GLB** to the same socket is the
+   remaining art-pass step (needs the CC0 weapon GLBs vendored).
+3. **Likeness re-parent (deferred):** for the enabled GLB heroes the authored
+   model *is* the likeness, so the procedural overlay stays hidden (current
+   behavior). Re-parenting individual overlay parts to head/shoulder sockets is a
+   later refinement once shared bases need procedural accents on top.
+4. **Fallback intact:** with no GLB, or a base that exposes no matching bone, the
+   weapon falls back to the right hand / item layer (always visible) and nothing
+   throws.
 
-Gate: model-cache socket test, render smoke, no-asset boot.
+Gate: model-cache socket test (resolve + counter-scale + no-bone fallback) — green.
 
 ---
 
@@ -220,10 +231,13 @@ wiring for authored models**:
   set down to `idle/run/attack/cast/channel/death`, choosing melee vs ranged vs
   spell `attack` by `silhouette.weapon`. Extend the `heroes.json` pattern to a
   shared per-base default with per-hero `attack`/`cast` overrides.
-- **Creature clips (new):** the 22 creature heroes (and the existing creeps,
-  which currently mount a **static** pose) need their Quaternius clips
-  (`Idle`/`Walk`/`Attack`/`Death`) mapped through the same `findClip` synonyms.
-  One change in the creep/hero mount path drives all of them off sim state.
+- **Creature clips (already wired):** creeps mount their Quaternius GLB through
+  `mountHeroModel` with `asset.animations`, so they get a mixer, and
+  `animateAuthoredRig` drives `idle/run/attack/cast/channel/death` off sim state
+  for **any** rig with a mixer — the `findClip` synonyms already cover
+  `Idle`/`Walk`/`Attack`/`Death`/`bite`/`claw`. So creeps and creature-base heroes
+  animate off sim state today (not a static pose). Remaining is per-base clip-name
+  overrides where a base ships oddly-named clips.
 - **Cast/channel coupling:** when a GLB has a spell clip, fire it on `cast`
   events and loop it during `channel` (mixer path already exists; just route the
   event). Toggle ults flip a held stance.
@@ -367,19 +381,31 @@ are fine when they improve the theme and load safely.
 
 ## 11. Delivery batches (each ships green)
 
-0. **A0** — shared base + runtime recolor + `HERO_BASE` map; migrate 6 starters.
-1. **A1** — Knight + Mage cohorts (47) on shared bases.
-2. **B**  — sockets + weapon attachments + likeness re-parenting.
-3. **A2** — Barbarian + Rogue cohorts (33).
-4. **C-creatures** — creature clip wiring (heroes + existing creeps off static).
-5. **A3** — creature-base heroes (31).
+0. **A0** — shared base + runtime recolor + `HERO_BASE` map. **Engineering shipped**
+   (map + `recolorToPalette` + per-base cache, gated by `ENABLED_HERO_BASES`); base
+   GLB art + scene wiring remain.
+1. **A1** — Knight + Mage cohorts (47) on shared bases. *Art pass:* vendor `knight`/
+   `mage` base GLBs, enable in `ENABLED_HERO_BASES`, wire mount→base+recolor.
+2. **B**  — sockets + weapon attachment + re-parenting. **Shipped** (socket resolve,
+   weapon re-home + counter-scale, scene re-apply); per-hero weapon GLBs are art.
+3. **A2** — Barbarian + Rogue cohorts (33). *Art pass.*
+4. **C-creatures** — creature clip wiring. **Effectively shipped** (shared
+   `mountHeroModel` + `animateAuthoredRig` already drives creeps/creatures off sim
+   state); only odd per-base clip-name overrides remain.
+5. **A3** — creature-base heroes (31). *Art pass* (reuses vendored creature GLBs).
 6. **D1** — core item visuals (the ~29), widen coverage lint. **Shipped.**
 7. **D2** — small basics + any costed new part/kind. **Shipped.**
-8. **E**  — VFX sprite + telegraph texture atlas. **Shipped.**
-9. **F1** — sampled-audio loader + music beds (data + small engine).
+8. **E**  — VFX sprite + telegraph texture atlas. **Shipped** (atlas vendored + wired).
+9. **F1** — sampled-audio loader + music beds (data + small engine). *Art pass:*
+   needs sourced CC0 loops; synth stays the floor.
 10. **F2** — signature `sound` reassignments (pure data).
-11. **G**  — water normals, HDRIs, font, prop dressing.
-12. **A4** — bespoke marquee hero retextures, one at a time.
+11. **G**  — water normals, HDRIs, font, prop dressing. *Mostly art pass.*
+12. **A4** — bespoke marquee hero retextures, one at a time. *Art pass.*
+
+> **Status:** the renderer/engine for every workstream is now in place. What
+> remains is the **art-acquisition pass** — vendoring CC0 base meshes (A1–A4),
+> weapon GLBs (B step 2), music beds (F1), and HDRIs/font/water normals (G). Each
+> drops into a gated, tested hook with no further engine work.
 
 Procedural batches and asset batches run in parallel: the floor never depends on
 an asset landing.

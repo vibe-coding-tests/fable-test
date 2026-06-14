@@ -911,6 +911,9 @@ export class GameScene {
       void this.heroAssets.loadHero(assetEntry).then((asset) => {
         if (asset && this.isLive() && token === this.sceneToken && this.views.get(u.uid)?.rig === rig) {
           mountHeroModel(rig, cloneModel(asset.scene), asset.animations, assetEntry.clips);
+          // WS-B: re-apply worn items now that sockets resolved, so the weapon hangs
+          // off the authored hand bone instead of the hidden procedural one.
+          applyItemAppearances(rig, this.itemAppearancesFor(u));
         }
       });
     }

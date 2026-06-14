@@ -27,7 +27,10 @@ export interface UnitRig {
   actions?: Partial<Record<AuthoredActionName, THREE.AnimationAction>>;
   activeAction?: AuthoredActionName;
   authoredModel?: THREE.Object3D;
+  sockets?: Partial<Record<HeroSocket, THREE.Object3D>>;
 }
+
+export type HeroSocket = 'weapon' | 'head' | 'back' | 'shoulder';
 
 export type AuthoredActionName = 'idle' | 'run' | 'attack' | 'cast' | 'channel' | 'death';
 
@@ -63,6 +66,38 @@ function findClip(
     if (fuzzy) return fuzzy;
   }
   return null;
+}
+
+// WS-B: name fragments used to recognise rig sockets across CC0 base meshes
+// (KayKit/Quaternius/Mixamo bone naming). Matched against normalised node names;
+// the first hit wins, so more specific fragments come first. Missing socket →
+// the caller falls back to the model root, so a base without bones never throws.
+const SOCKET_SYNONYMS: Record<HeroSocket, string[]> = {
+  weapon: ['handslotr', 'handslot', 'weaponr', 'weapon', 'gripr', 'grip', 'handr', 'righthand', 'wristr', 'palmr', 'fistr', 'hand', 'wrist', 'palm'],
+  head: ['headtop', 'headslot', 'head', 'skull', 'helm', 'neck'],
+  back: ['backslot', 'back', 'spine2', 'spine1', 'spine', 'cape', 'jetpack'],
+  shoulder: ['shoulderr', 'shoulder', 'clavicler', 'clavicle', 'upperarmr']
+};
+
+/** Resolve named attachment points on a mounted base mesh (WS-B). Right-side wins
+ *  for the weapon hand; anything unresolved is simply absent (caller defaults to root). */
+function resolveSockets(model: THREE.Object3D): Partial<Record<HeroSocket, THREE.Object3D>> {
+  const nodes: { obj: THREE.Object3D; norm: string }[] = [];
+  model.traverse((o) => {
+    if (o !== model && o.name) nodes.push({ obj: o, norm: normClipName(o.name) });
+  });
+  const sockets: Partial<Record<HeroSocket, THREE.Object3D>> = {};
+  for (const socket of Object.keys(SOCKET_SYNONYMS) as HeroSocket[]) {
+    for (const frag of SOCKET_SYNONYMS[socket]) {
+      const exact = nodes.find((n) => n.norm === frag);
+      const hit = exact ?? nodes.find((n) => n.norm.includes(frag));
+      if (hit) {
+        sockets[socket] = hit.obj;
+        break;
+      }
+    }
+  }
+  return sockets;
 }
 
 function collectStandardMaterials(rig: UnitRig, model: THREE.Object3D): void {
@@ -569,6 +604,14 @@ export function mountHeroModel(
   rig.body.add(model);
   rig.authoredModel = model;
 
+  // WS-B: expose the base mesh's attachment points so worn weapons + item geo can
+  // ride the authored model instead of the now-hidden procedural rig. The resolved
+  // weapon bone becomes the rightHand target (replaceWeapon counter-scales for the
+  // model fit); with no resolvable bone the weapon falls back to the body. The
+  // itemLayer stays on root so part offsets keep their rig-space positions.
+  rig.sockets = resolveSockets(model);
+  rig.rightHand = rig.sockets.weapon;
+
   if (clips.length > 0) {
     const mixer = new THREE.AnimationMixer(model);
     const actions: Partial<Record<AuthoredActionName, THREE.AnimationAction>> = {};
@@ -593,6 +636,55 @@ export function mountHeroModel(
       rig.activeAction = actions.idle ? 'idle' : actions.run ? 'run' : 'channel';
     }
   }
+}
+
+type PaletteRole = 'primary' | 'secondary' | 'accent';
+
+/**
+ * WS-A0 runtime recolor: tint a cloned base mesh to a hero's three-color palette,
+ * the renderer-side twin of the build script's `recolorToPalette`. Each material
+ * is mapped to a role by a `materialMap` keyword on its name, else bucketed by the
+ * luminance of its current color (dark → secondary/metal, light → accent/trim, mid
+ * → primary/cloth). Materials are cloned before tinting so cohort members sharing a
+ * base atlas never stomp each other's colors. No GL context needed (headless-safe).
+ */
+export function recolorToPalette(
+  model: THREE.Object3D,
+  palette: readonly [string, string, string] | readonly string[],
+  materialMap?: Record<string, PaletteRole>
+): void {
+  const roleColor: Record<PaletteRole, string> = {
+    primary: palette[0] ?? '#888888',
+    secondary: palette[1] ?? '#444444',
+    accent: palette[2] ?? '#dddddd'
+  };
+  const keywords = Object.entries(materialMap ?? {});
+  const clones = new Map<THREE.Material, THREE.Material>();
+  const recolorOne = (mat: THREE.Material): THREE.Material => {
+    const existing = clones.get(mat);
+    if (existing) return existing;
+    const next = mat.clone();
+    const colored = next as THREE.Material & { color?: THREE.Color };
+    if (colored.color) {
+      const name = (mat.name || '').toLowerCase();
+      let role: PaletteRole | null = null;
+      for (const [kw, r] of keywords) {
+        if (name.includes(kw.toLowerCase())) { role = r; break; }
+      }
+      if (!role) {
+        const l = 0.2126 * colored.color.r + 0.7152 * colored.color.g + 0.0722 * colored.color.b;
+        role = l < 0.18 ? 'secondary' : l > 0.62 ? 'accent' : 'primary';
+      }
+      colored.color.set(roleColor[role]);
+    }
+    clones.set(mat, next);
+    return next;
+  };
+  model.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh || !m.material) return;
+    m.material = Array.isArray(m.material) ? m.material.map(recolorOne) : recolorOne(m.material);
+  });
 }
 
 export function applyHeroLikeness(rig: UnitRig, heroId: string): void {
@@ -2312,13 +2404,25 @@ function replaceWeapon(rig: UnitRig, weapon: ItemAppearanceSpec['weapon'] | unde
   const matA = lam(weapon.emissive ?? '#ffe27d', weapon.emissive ? 0x181818 : 0);
   const next = buildWeapon(weapon.kind, rig.scale, matS, matA);
   if (!next) return;
+  // WS-B: when a base mesh resolved a weapon bone, hang the weapon off it; that
+  // socket lives inside the height-fitted model, so counter-scale by the fit factor
+  // to keep the weapon at rig size. With no hand bone (procedural rig, or a base
+  // that exposed none) the weapon rides the right hand / item layer as before.
+  const handSocket = rig.sockets?.weapon;
+  const onAuthoredHand = !!handSocket && rig.rightHand === handSocket;
   const host = rig.rightHand ?? rig.itemLayer;
-  next.position.set(
-    rig.rightHand ? 0.15 * rig.scale : 0.42 * rig.scale,
-    rig.rightHand ? -0.72 * rig.scale : rig.height * 0.52,
-    rig.rightHand ? 0 : -0.56 * rig.scale
-  );
-  if (!rig.rightHand) next.rotation.z = -0.45;
+  if (onAuthoredHand) {
+    const k = rig.authoredModel?.scale.x || 1;
+    next.scale.setScalar(1 / k);
+    next.position.set(0, 0, 0);
+  } else {
+    next.position.set(
+      rig.rightHand ? 0.15 * rig.scale : 0.42 * rig.scale,
+      rig.rightHand ? -0.72 * rig.scale : rig.height * 0.52,
+      rig.rightHand ? 0 : -0.56 * rig.scale
+    );
+    if (!rig.rightHand) next.rotation.z = -0.45;
+  }
   host.add(next);
   rig.weapon = next;
 }
