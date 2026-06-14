@@ -1,4 +1,4 @@
-import { expect, type Page, type TestInfo } from '@playwright/test';
+import { expect, type Locator, type Page, type TestInfo } from '@playwright/test';
 
 // Thin wrappers over the in-page ?test harness (src/systems/test-harness.ts).
 // All gameplay assertions go through window.__test / window.__game, which the
@@ -56,6 +56,15 @@ export interface GameState {
     exitsUnlocked: boolean;
     done: boolean;
   };
+  quests: {
+    total: number;
+    locked: number;
+    active: number;
+    complete: number;
+    claimed: number;
+    cooldown: number;
+    board: { id: string; status: string; claimable: boolean }[];
+  };
 }
 
 /** Navigate to the game in test mode and wait for the harness to be live. */
@@ -90,6 +99,18 @@ export async function waitForPlayableUi(page: Page): Promise<void> {
     const loading = document.getElementById('loading-screen');
     return Boolean((window as any).__game) || !loading || getComputedStyle(loading).display === 'none';
   }, null, { timeout: 60_000 });
+}
+
+/**
+ * Headless-safe cinematic clear. The game loop early-returns while a cut-scene
+ * is active, so `fastForward` does NOT advance the sim until the cinematic is
+ * gone. Any headless spec that steps combat/time must call this right after
+ * `boot`. Prefer this over `skipActiveCinematic` (which also pokes the DOM) for
+ * pure `render=headless` specs.
+ */
+export async function clearCinematics(page: Page): Promise<void> {
+  await page.waitForFunction(() => Boolean((window as any).__test?.ready?.()), null, { timeout: 30_000 });
+  await page.evaluate(() => (window as any).__test.skipCinematics());
 }
 
 export async function skipActiveCinematic(page: Page): Promise<void> {
@@ -129,6 +150,27 @@ export async function skipActiveCinematic(page: Page): Promise<void> {
 export async function attachScreenshot(page: Page, testInfo: TestInfo, name: string): Promise<string> {
   const path = testInfo.outputPath(`${name}.png`);
   await page.screenshot({ path });
+  await testInfo.attach(name, { path, contentType: 'image/png' });
+  return path;
+}
+
+/**
+ * Screenshot a single element (its bounding box) rather than the whole page.
+ *
+ * Under the software (SwiftShader) renderer a full-page capture composites the
+ * live WebGL canvas, which is very slow. For DOM-overlay states (modals/panels)
+ * the canvas behind them is irrelevant, so capturing just the element is both
+ * faster and produces a tighter, more useful artifact.
+ */
+export async function attachElementScreenshot(
+  page: Page,
+  testInfo: TestInfo,
+  name: string,
+  target: string | Locator
+): Promise<string> {
+  const locator = typeof target === 'string' ? page.locator(target) : target;
+  const path = testInfo.outputPath(`${name}.png`);
+  await locator.screenshot({ path });
   await testInfo.attach(name, { path, contentType: 'image/png' });
   return path;
 }

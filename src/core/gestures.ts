@@ -63,7 +63,20 @@ function inferSound(def: AbilityDef): SoundArchetype {
   const effects = effectsOf(def);
   const heals = hasKind(effects, 'heal');
   const damages = hasKind(effects, 'damage') || effects.some((e) => e.kind === 'projectile');
+  if (hasKind(effects, 'summon') || def.vfx.archetype === 'summon-pop') return 'summon';
   if (heals && !damages) return 'heal';
+  if (def.attackMod || def.targeting === 'attack-modifier') return 'blade';
+  switch (def.element) {
+    case 'pyro': return 'fire';
+    case 'cryo': return 'frost';
+    case 'electro': return 'lightning';
+    case 'anemo': return 'storm';
+    case 'hydro': return 'storm';
+    case 'dendro': return heals ? 'heal' : 'summon';
+    case 'geo': return 'impact';
+    default:
+      break;
+  }
   switch (def.vfx.archetype) {
     case 'projectile': return 'bow';
     case 'beam': return 'storm';
@@ -72,7 +85,6 @@ function inferSound(def: AbilityDef): SoundArchetype {
     case 'cyclone': return 'storm';
     case 'hook': return 'impact';
     case 'wall': return 'frost';
-    case 'summon-pop': return 'summon';
     case 'shield': return heals ? 'heal' : 'item';
     case 'stun-stars': return 'impact';
     case 'channel': return 'void';

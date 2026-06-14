@@ -57,6 +57,9 @@ test.describe('story and cinematics', () => {
       (window as any).__test.step();
     });
     await page.waitForFunction(() => document.getElementById('cinematic-layer')?.classList.contains('hidden'), null, { timeout: 5_000 });
+    await expect(page.locator('#hero-panel')).toContainText('Facet:');
+    await expect(page.locator('#hero-panel')).toContainText(/HP \+\d/);
+    await expect(page.locator('#hero-panel')).toContainText(/MP \+\d/);
 
     expect(errors).toEqual([]);
   });

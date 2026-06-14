@@ -1,10 +1,32 @@
-import type { DamageType, GameSave, SimEvent, SoundArchetype, StingerId } from '../core/types';
+import type { DamageType, GameSave, SimEvent, SoundArchetype, StatusId, StingerId } from '../core/types';
 import { TUNING } from '../data/tuning';
-import { SampledAudioBank, type SfxKey } from './sampled-audio';
+import { CAST_SFX_BY_SOUND, SampledAudioBank, type SfxKey } from './sampled-audio';
 
 type AudioSettings = GameSave['settings'];
 type Channel = 'sfx' | 'voice' | 'stinger' | 'music';
 export type CinematicMixMode = 'normal' | 'duck' | 'silence';
+
+// Only hard crowd-control lands an audible cue. The frequent/soft carriers
+// (buff, slow, invis, break, disarm, blind, silence, magic-immune) stay silent
+// so the mix never clatters on every stat tick or periodic DoT.
+const AUDIBLE_STATUSES: ReadonlySet<StatusId> = new Set<StatusId>([
+  'stun', 'frozen', 'hex', 'sleep', 'fear', 'root', 'taunt', 'cyclone'
+]);
+
+const CAST_SAMPLE_VOLUME: Record<SoundArchetype, number> = {
+  blade: 0.16,
+  bow: 0.16,
+  impact: 0.22,
+  frost: 0.18,
+  fire: 0.2,
+  storm: 0.18,
+  void: 0.2,
+  heal: 0.16,
+  summon: 0.18,
+  item: 0.14,
+  roar: 0.24,
+  lightning: 0.2
+};
 
 export interface AudioEnvironment {
   biome: string;
@@ -49,11 +71,11 @@ export class ProceduralAudio {
   private samples: SampledAudioBank | null = null;
   private samplesEnabled = false;
   private sampleMusic: { biome: string; src: AudioBufferSourceNode; gain: GainNode } | null = null;
-  // Background music bed is disabled by request: the sustained synth drone +
-  // filtered-noise ambience read as a constant "hum" with no way to turn it down
-  // (music shares the stinger channel, there is no music slider). Gameplay SFX,
-  // cast voices, impacts, and stingers are unaffected — only the continuous bed
-  // is gone. Flip to true to restore the procedural/sampled score.
+  // The *synth* music bed stays off: its sustained drone + filtered-noise
+  // ambience read as a constant "hum". The composed, sampled biome beds
+  // (`updateSampleMusic`) DO play on medium+ now that they have a dedicated
+  // `music` volume slider to turn down. Flip this to true to also layer the
+  // procedural drone under the sampled bed.
   private musicEnabled = false;
   private combatHotUntil = 0;
   private cinematicMix: CinematicMixMode = 'normal';
@@ -62,6 +84,11 @@ export class ProceduralAudio {
   private damageSoundTimes: number[] = [];
   // Same idea for projectile arrival ticks (piercing / multi-hit shots).
   private projHitTimes: number[] = [];
+  // And for crowd-control landings, summon materializes, and AoE whoomps so a
+  // mass-stun, a wave of summons, or a multi-zone ult reads as one event.
+  private statusSoundTimes: number[] = [];
+  private summonSoundTimes: number[] = [];
+  private burstSoundTimes: number[] = [];
 
   // Voice pool (§3.12, §3.16): per-entity cast/bark voices, hard-capped.
   private voiceCap: number;
@@ -135,6 +162,9 @@ export class ProceduralAudio {
     this.voiceEnds.length = 0;
     this.damageSoundTimes.length = 0;
     this.projHitTimes.length = 0;
+    this.statusSoundTimes.length = 0;
+    this.summonSoundTimes.length = 0;
+    this.burstSoundTimes.length = 0;
   }
 
   setSettings(settings: AudioSettings): void {
@@ -173,8 +203,9 @@ export class ProceduralAudio {
         this.barkBlip(ev.uid);
         break;
       case 'attack-impact':
-        // Weapon-contact tick. The body of the hit comes from the `damage` event
-        // that fires alongside it, so a melee basic attack reads as clink + thud.
+        // Landed basic attacks need their own audible contact cue. Damage events
+        // can be throttled during crowded creep fights; crits bypass that path,
+        // so keep the ordinary auto-attack sound here instead of relying on them.
         this.attackTick();
         break;
       case 'attack-launch':
@@ -211,12 +242,43 @@ export class ProceduralAudio {
       case 'capture-complete':
         this.playStinger('capture');
         break;
+      case 'capture-start':
+        // Pokémon-style engage: a rising "lock-on" so the player hears the
+        // capture window open (the throbbing progress is carried by the UI).
+        this.sweep(330, 880, 0.18, 'triangle', 0.07, 'stinger');
+        this.tone(660, 0.1, 'sine', 0.05, 'stinger');
+        break;
+      case 'capture-interrupt':
+        // Broke off: a short downward fizzle so a failed capture reads as a loss.
+        this.sweep(720, 180, 0.22, 'sawtooth', 0.06, 'stinger');
+        break;
       case 'levelup':
         this.playStinger('levelup');
         break;
+      case 'skill-spend':
+        this.skillSpend(ev.kind);
+        break;
       case 'death':
-        this.sweep(140, 48, 0.32, 'sawtooth', 0.2);
+        this.sweep(140, 48, 0.32, 'sawtooth', 0.2, 'sfx', 0.3);
         setTimeout(() => this.noise(0.1, 0.08), 70);
+        break;
+      case 'revive':
+        this.reviveSwell();
+        break;
+      case 'immune-block':
+        this.immuneClang();
+        break;
+      case 'blink':
+        this.blinkPop();
+        break;
+      case 'summon':
+        this.summonPop();
+        break;
+      case 'aoe-burst':
+        this.aoeBurst(ev.radius);
+        break;
+      case 'status-apply':
+        this.statusCue(ev.status);
         break;
       case 'item-used':
         this.sweep(260, 520, 0.08, 'square', 0.14);
@@ -230,25 +292,30 @@ export class ProceduralAudio {
    *  Continuous, file-free, and cheap: a biome drone, a combat layer, filtered
    *  noise ambience, and a generated reverb bus. */
   update(env: AudioEnvironment): void {
-    // No background music bed: keep any previously-started drone/bed torn down so
-    // the only thing the player hears is gameplay SFX, voices, and stingers.
-    if (!this.unlocked || this.settings.audio.muted || !this.musicEnabled) {
+    if (!this.unlocked || this.settings.audio.muted) {
       this.stopMusic();
       this.stopSampleMusic();
       return;
     }
     const ctx = this.ensure();
     if (!ctx) return;
-    if (!this.music || this.music.biome !== env.biome) this.startMusic(env.biome);
-    if (!this.music) return;
-
     const now = ctx.currentTime;
     const night = env.dayTime >= 0.5;
     const combat = env.inCombat || now < this.combatHotUntil;
+    // The composed, sampled biome bed leads (medium+); the synth drone below is
+    // off by default. With no decoded file / on low tier this is a no-op and the
+    // game stays SFX-only.
+    const sampleActive = this.updateSampleMusic(env, ctx, now, night, combat);
+    if (!this.musicEnabled) {
+      this.stopMusic(); // keep the procedural drone torn down
+      return;
+    }
+    if (!this.music || this.music.biome !== env.biome) this.startMusic(env.biome);
+    if (!this.music) return;
+
     // When a sampled ambient bed is playing, duck the synth drone so the real
     // bed leads and the synth just thickens it (synth stays the sole layer
     // whenever the file is absent/undecoded).
-    const sampleActive = this.updateSampleMusic(env, ctx, now, night, combat);
     const drone = sampleActive ? 0.28 : 1;
     const cinMult = this.cinematicMix === 'silence' ? 0 : this.cinematicMix === 'duck' ? 0.35 : 1;
     const base = this.volume(0.11, 'music') * cinMult;
@@ -270,6 +337,7 @@ export class ProceduralAudio {
       case 'projectile-spawn':
       case 'projectile-hit':
       case 'cast':
+      case 'aoe-burst':
       case 'death':
         this.combatHotUntil = Math.max(this.combatHotUntil, this.now() + 5.5);
         break;
@@ -327,6 +395,7 @@ export class ProceduralAudio {
     const dur = 0.18;
     if (!this.requestVoice(dur)) return; // pool saturated; drop this voice
     const p = this.timbrePitch(timbre);
+    if (sound) this.playSample(CAST_SFX_BY_SOUND[sound], CAST_SAMPLE_VOLUME[sound], 'voice');
     // Big-shape spells (zones, walls, vortices, domes, ground slams) get a
     // sampled air-whoosh on medium+; pooled above so it never machine-guns.
     if (archetype === 'ground-aoe' || archetype === 'wall' || archetype === 'vortex' || archetype === 'dome' || archetype === 'cyclone') {
@@ -407,6 +476,17 @@ export class ProceduralAudio {
       default:
         this.tone(420 * p, 0.08, 'triangle', 0.16, 'voice');
     }
+  }
+
+  private skillSpend(kind: 'ability' | 'talent' | 'attribute'): void {
+    const shape = kind === 'attribute'
+      ? [392, 494, 659]
+      : kind === 'talent'
+        ? [523, 659, 988]
+        : [440, 660, 880];
+    this.arp(shape, 0.045, kind === 'talent' ? 0.12 : 0.1);
+    if (kind === 'ability') this.sweep(760, 1220, 0.08, 'triangle', 0.08, 'stinger');
+    if (kind === 'attribute') this.tone(220, 0.08, 'sine', 0.08, 'stinger');
   }
 
   private barkBlip(uid: number): void {
@@ -663,14 +743,24 @@ export class ProceduralAudio {
   private channelGain(chan: Channel): number {
     const a = this.settings.audio;
     if (a.muted) return 0;
-    return a.master * (chan === 'voice' ? a.voice : chan === 'stinger' || chan === 'music' ? a.stinger : a.sfx);
+    const sub = chan === 'voice' ? a.voice : chan === 'stinger' ? a.stinger : chan === 'music' ? a.music : a.sfx;
+    return a.master * sub;
   }
 
   private volume(mult: number, chan: Channel): number {
     return this.channelGain(chan) * mult;
   }
 
-  private tone(freq: number, dur: number, type: OscillatorType, vol: number, chan: Channel = 'sfx'): void {
+  /** Route a per-sound gain to the shared reverb bus so a cue reads with space
+   *  instead of bone-dry. No-op until the reverb exists (headless skips this). */
+  private sendReverb(node: AudioNode, amount: number): void {
+    if (amount <= 0 || !this.ctx || !this.reverb) return;
+    const send = this.ctx.createGain();
+    send.gain.value = amount;
+    node.connect(send).connect(this.reverb);
+  }
+
+  private tone(freq: number, dur: number, type: OscillatorType, vol: number, chan: Channel = 'sfx', reverbSend = 0): void {
     const ctx = this.ensure();
     if (!ctx) return;
     const osc = ctx.createOscillator();
@@ -680,11 +770,12 @@ export class ProceduralAudio {
     gain.gain.setValueAtTime(this.volume(vol, chan), ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
     osc.connect(gain).connect(this.master ?? ctx.destination);
+    this.sendReverb(gain, reverbSend);
     osc.start();
     osc.stop(ctx.currentTime + dur);
   }
 
-  private sweep(start: number, end: number, dur: number, type: OscillatorType, vol: number, chan: Channel = 'sfx'): void {
+  private sweep(start: number, end: number, dur: number, type: OscillatorType, vol: number, chan: Channel = 'sfx', reverbSend = 0): void {
     const ctx = this.ensure();
     if (!ctx) return;
     const osc = ctx.createOscillator();
@@ -695,11 +786,12 @@ export class ProceduralAudio {
     gain.gain.setValueAtTime(this.volume(vol, chan), ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
     osc.connect(gain).connect(this.master ?? ctx.destination);
+    this.sendReverb(gain, reverbSend);
     osc.start();
     osc.stop(ctx.currentTime + dur);
   }
 
-  private thump(dur: number, vol: number, filterHz: number): void {
+  private thump(dur: number, vol: number, filterHz: number, reverbSend = 0): void {
     const ctx = this.ensure();
     if (!ctx) return;
     const buffer = ctx.createBuffer(1, Math.max(1, Math.floor(ctx.sampleRate * dur)), ctx.sampleRate);
@@ -717,10 +809,11 @@ export class ProceduralAudio {
     gain.gain.setValueAtTime(this.volume(vol, 'sfx'), ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
     src.connect(filter).connect(gain).connect(this.master ?? ctx.destination);
+    this.sendReverb(gain, reverbSend);
     src.start();
   }
 
-  private noise(dur: number, vol: number): void {
+  private noise(dur: number, vol: number, reverbSend = 0): void {
     const ctx = this.ensure();
     if (!ctx) return;
     const buffer = ctx.createBuffer(1, Math.max(1, Math.floor(ctx.sampleRate * dur)), ctx.sampleRate);
@@ -732,6 +825,7 @@ export class ProceduralAudio {
     gain.gain.setValueAtTime(this.volume(vol, 'sfx'), ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + dur);
     src.connect(gain).connect(this.master ?? ctx.destination);
+    this.sendReverb(gain, reverbSend);
     src.start();
   }
 
@@ -749,6 +843,7 @@ export class ProceduralAudio {
     const size = Math.min(1, Math.log2(Math.max(2, amount)) / 9);
     const vol = 0.09 + size * 0.12 + (reason === 'lasthit' ? 0.04 : 0);
 
+    this.playSample('coin', 0.08 + size * 0.08);
     this.coinRing(base, vol, 0);
     if (amount >= 45 || reason === 'echo') this.coinRing(base * 1.122, vol * 0.75, 0.075);
     if (amount >= 140 || reason === 'echo') this.coinRing(base * 1.26, vol * 0.65, 0.15);
@@ -799,11 +894,12 @@ export class ProceduralAudio {
 
   // ---------- per-hit impacts (every hit on a unit is audible) ----------
 
-  /** Light weapon-contact tick for a basic attack; the `damage` event layers the body. */
+  /** Weapon-contact cue for a landed basic attack, audible even when damage SFX are throttled. */
   private attackTick(): void {
     const j = 0.9 + Math.random() * 0.2;
-    this.tone(540 * j, 0.03, 'square', 0.06);
-    this.noise(0.02, 0.04);
+    this.tone(620 * j, 0.035, 'square', 0.08);
+    this.thump(0.035, 0.055, 460 * j);
+    this.noise(0.024, 0.055);
   }
 
   /** Ranged release: a quick down-pluck + airy whoosh so every ranged attack is
@@ -814,6 +910,7 @@ export class ProceduralAudio {
     // brighter than a lobbed throw, without needing per-hero data.
     const snap = Math.min(1, Math.max(0, (speed - 500) / 1300));
     const top = (820 + snap * 520) * j;
+    this.playSample('whoosh', 0.08 + snap * 0.04);
     this.sweep(top, top * 0.5, 0.07, 'square', 0.07);
     this.noise(0.03, 0.035 + snap * 0.02);
   }
@@ -828,12 +925,14 @@ export class ProceduralAudio {
     if (this.projHitTimes.length >= 3) return;
     this.projHitTimes.push(t);
     const j = 0.9 + Math.random() * 0.2;
+    this.playSample('projectile-hit', 0.1);
     this.tone(360 * j, 0.025, 'triangle', 0.04);
   }
 
   /** Soft airy whiff so a missed swing still reads. */
   private missWhoosh(): void {
     const j = 0.9 + Math.random() * 0.2;
+    this.playSample('whoosh', 0.1);
     this.sweep(760 * j, 280 * j, 0.1, 'sine', 0.045);
   }
 
@@ -870,9 +969,9 @@ export class ProceduralAudio {
     // Medium+ tiers get a real sampled crit ring; the synth body still layers
     // under it so a crit reads identically when the sample is absent.
     this.playSample('crit', 0.42 + weight * 0.12);
-    this.sweep(2200, 760, 0.08, 'sawtooth', 0.12 + weight * 0.08);
+    this.sweep(2200, 760, 0.08, 'sawtooth', 0.12 + weight * 0.08, 'sfx', 0.16);
     this.tone(3100, 0.045, 'square', 0.08 + weight * 0.05);
-    this.thump(0.04, 0.1 + weight * 0.08, 760);
+    this.thump(0.04, 0.1 + weight * 0.08, 760, 0.12);
     setTimeout(() => this.noise(0.04, 0.045 + weight * 0.03), 18);
   }
 
@@ -888,7 +987,105 @@ export class ProceduralAudio {
       burning: [260, 520]
     };
     const [a, b] = palette[reaction] ?? [620, 930];
-    this.sweep(a, b, 0.12, reaction === 'overload' ? 'sawtooth' : 'triangle', 0.22);
+    this.sweep(a, b, 0.12, reaction === 'overload' ? 'sawtooth' : 'triangle', 0.22, 'sfx', 0.18);
     setTimeout(() => this.tone(b * 1.25, 0.07, 'sine', 0.12), 70);
+  }
+
+  /** Aegis / Reincarnation: a rising shimmer that blooms into a reverberant tail
+   *  so a resurrection lands as the high point it is. Stinger channel + reverb. */
+  private reviveSwell(): void {
+    [392, 523, 659, 880, 1175].forEach((f, i) =>
+      setTimeout(() => this.tone(f, 0.16, 'sine', 0.12, 'stinger', 0.35), i * 70)
+    );
+    this.thump(0.2, 0.12, 200, 0.25);
+    setTimeout(() => this.tone(1568, 0.6, 'sine', 0.06, 'stinger', 0.5), 360);
+  }
+
+  /** BKB / magic-immunity deflect: a bright metallic clang so a rejected spell
+   *  reads as a hard, satisfying bounce rather than nothing happening. */
+  private immuneClang(): void {
+    const j = 0.97 + Math.random() * 0.06;
+    this.tone(1760 * j, 0.12, 'square', 0.07, 'sfx', 0.22);
+    this.tone(2640 * j, 0.1, 'sine', 0.05, 'sfx', 0.22);
+    this.tone(990 * j, 0.16, 'triangle', 0.05, 'sfx', 0.18);
+    this.noise(0.05, 0.05);
+  }
+
+  /** Teleport: a quick vacuum out then a brighter snap back in (blink/jaunt). */
+  private blinkPop(): void {
+    this.sweep(900, 220, 0.09, 'sine', 0.07);
+    setTimeout(() => this.sweep(320, 1200, 0.07, 'triangle', 0.06, 'sfx', 0.15), 60);
+    this.noise(0.03, 0.03);
+  }
+
+  /** Soft materialize pop when a summoned unit appears. Throttled so a wave of
+   *  eidolons/treants/zombies reads as one swell, not a string of pops. */
+  private summonPop(): void {
+    const t = this.now();
+    this.summonSoundTimes = this.summonSoundTimes.filter((at) => t - at < 0.18);
+    if (this.summonSoundTimes.length >= 3) return;
+    this.summonSoundTimes.push(t);
+    const j = 0.9 + Math.random() * 0.2;
+    this.sweep(180 * j, 520 * j, 0.12, 'triangle', 0.06);
+    this.tone(760 * j, 0.06, 'sine', 0.04);
+    this.thump(0.06, 0.05, 360);
+  }
+
+  /** Low whoomp for an AoE detonation, scaled by radius and throttled so a
+   *  multi-zone ult gives weight without machine-gunning. Per-target damage
+   *  impacts still carry the hits; this is just the body of the blast. */
+  private aoeBurst(radius: number): void {
+    const t = this.now();
+    this.burstSoundTimes = this.burstSoundTimes.filter((at) => t - at < 0.1);
+    if (this.burstSoundTimes.length >= 2) return;
+    this.burstSoundTimes.push(t);
+    const w = Math.min(1, Math.max(0.2, radius / 700));
+    this.thump(0.12 + w * 0.08, 0.06 + w * 0.1, 200 + (1 - w) * 260, 0.18 * w);
+    this.noise(0.06 + w * 0.04, 0.03 + w * 0.04);
+    if (w > 0.6) this.sweep(150, 60, 0.2, 'sawtooth', 0.05 * w, 'sfx', 0.2);
+  }
+
+  /** Crowd-control landing cue, per status. Only hard CC is audible (see
+   *  AUDIBLE_STATUSES) and the window is throttled so a mass-stun reads once. */
+  private statusCue(status: StatusId): void {
+    if (!AUDIBLE_STATUSES.has(status)) return;
+    const t = this.now();
+    this.statusSoundTimes = this.statusSoundTimes.filter((at) => t - at < 0.1);
+    if (this.statusSoundTimes.length >= 3) return;
+    this.statusSoundTimes.push(t);
+    const j = 0.92 + Math.random() * 0.16;
+    switch (status) {
+      case 'stun': // a dull body thud capped by a ringing daze
+        this.thump(0.06, 0.1, 300 * j);
+        this.tone(1400 * j, 0.18, 'sine', 0.05, 'sfx', 0.22);
+        break;
+      case 'frozen': // brittle high shimmer cracking down
+        this.sweep(2400 * j, 900 * j, 0.14, 'triangle', 0.06, 'sfx', 0.2);
+        this.noise(0.05, 0.04);
+        break;
+      case 'hex': // comic descending poof
+        this.sweep(1100 * j, 240 * j, 0.2, 'square', 0.06);
+        this.tone(180 * j, 0.12, 'sine', 0.04);
+        break;
+      case 'sleep': // slow, soft descent
+        this.sweep(540 * j, 200 * j, 0.3, 'sine', 0.05, 'sfx', 0.18);
+        break;
+      case 'fear': // low ominous fall
+        this.sweep(300 * j, 90 * j, 0.28, 'sawtooth', 0.06, 'sfx', 0.18);
+        break;
+      case 'root': // woody snap into the ground
+        this.thump(0.05, 0.07, 220 * j);
+        this.noise(0.04, 0.04);
+        break;
+      case 'taunt': // short brassy provocation
+        this.tone(330 * j, 0.16, 'sawtooth', 0.06);
+        this.tone(440 * j, 0.16, 'square', 0.04);
+        break;
+      case 'cyclone': // rising airy whirl
+        this.sweep(240 * j, 1200 * j, 0.26, 'triangle', 0.05, 'sfx', 0.22);
+        break;
+      default:
+        break;
+    }
   }
 }

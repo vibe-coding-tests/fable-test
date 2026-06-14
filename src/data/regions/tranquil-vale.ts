@@ -16,30 +16,11 @@ export const TRANQUIL_VALE: RegionDef = {
     'tango', 'healing-salve', 'clarity', 'dust-of-appearance',
     'iron-branch', 'circlet', 'crown', 'gauntlets-of-strength', 'slippers-of-agility', 'mantle-of-intelligence',
     'belt-of-strength', 'band-of-elvenskin', 'robe-of-the-magi',
-    'blades-of-attack', 'broadsword', 'claymore', 'mithril-hammer', 'quarterstaff',
-    'ogre-axe', 'staff-of-wizardry', 'blade-of-alacrity',
-    'boots-of-speed', 'gloves-of-haste', 'sages-mask', 'ring-of-regen', 'void-stone',
-    'energy-booster', 'vitality-booster', 'chainmail', 'cloak', 'shadow-amulet', 'morbid-mask',
-    'hyperstone', 'platemail', 'ultimate-orb', 'magic-stick',
-    'ring-of-protection', 'ring-of-health', 'gem-of-true-sight', 'helm-of-iron-will',
-    'oblivion-staff', 'talisman-of-evasion', 'javelin', 'blitz-knuckles', 'perseverance',
-    'headdress', 'buckler', 'ring-of-basilius',
-    'bracer', 'wraith-band', 'null-talisman', 'magic-wand', 'arcane-boots',
-    'power-treads', 'phase-boots', 'tranquil-boots', 'boots-of-travel',
-    'yasha', 'sange', 'kaya', 'dragon-lance', 'mask-of-madness',
-    'blink-dagger', 'black-king-bar', 'euls-scepter', 'force-staff', 'glimmer-cape',
-    'mekansm', 'battlefury', 'crystalys', 'diffusal-blade', 'maelstrom',
-    'drum-of-endurance', 'vladmirs-offering',
-    'guardian-greaves', 'vanguard', 'hood-of-defiance', 'pipe-of-insight', 'crimson-guard',
-    'shivas-guard', 'lotus-orb', 'linkens-sphere', 'aeon-disk', 'eternal-shroud',
-    'manta-style', 'sange-and-yasha', 'kaya-and-sange', 'yasha-and-kaya',
-    'desolator', 'daedalus', 'monkey-king-bar', 'skull-basher', 'mjollnir',
-    'silver-edge', 'echo-sabre', 'orchid-malevolence', 'nullifier',
-    'medallion-of-courage', 'solar-crest', 'urn-of-shadows', 'spirit-vessel',
-    'holy-locket', 'helm-of-the-dominator', 'helm-of-the-overlord',
-    'veil-of-discord', 'rod-of-atos', 'gleipnir', 'dagon', 'ghost-scepter',
-    'ethereal-blade', 'wind-waker', 'hand-of-midas', 'aether-lens',
-    'meteor-hammer', 'heavens-halberd', 'moon-shard', 'bloodstone', 'soul-ring'
+    'blades-of-attack', 'quarterstaff', 'ogre-axe', 'staff-of-wizardry', 'blade-of-alacrity',
+    'boots-of-speed', 'gloves-of-haste', 'sages-mask', 'ring-of-regen', 'chainmail', 'cloak',
+    'magic-stick', 'ring-of-protection', 'headdress', 'buckler', 'ring-of-basilius',
+    'bracer', 'wraith-band', 'null-talisman', 'magic-wand',
+    'power-treads', 'phase-boots', 'tranquil-boots', 'soul-ring'
   ],
   camps: [
     { id: 'tv-kobold-tutorial', creepId: 'kobold', count: 2, pos: { x: 7050, y: 7300 }, radius: 220, respawnSec: 45 },
@@ -70,12 +51,12 @@ export const TRANQUIL_VALE: RegionDef = {
     { heroId: 'marci', pos: { x: 9800, y: 8400 } }
   ],
   echoSpawns: [
-    { id: 'tv-echo-juggernaut', heroId: 'juggernaut', pos: { x: 8750, y: 9100 }, level: 10, respawnSec: 160 },
-    { id: 'tv-echo-pudge', heroId: 'pudge', pos: { x: 7000, y: 7850 }, level: 10, respawnSec: 160 },
-    { id: 'tv-echo-sven', heroId: 'sven', pos: { x: 2500, y: 7400 }, level: 10, respawnSec: 160 },
-    { id: 'tv-echo-axe', heroId: 'axe', pos: { x: 7900, y: 2700 }, level: 11, respawnSec: 160 },
-    { id: 'tv-echo-dawnbreaker', heroId: 'dawnbreaker', pos: { x: 10300, y: 6100 }, level: 12, respawnSec: 180 },
-    { id: 'tv-echo-marci', heroId: 'marci', pos: { x: 10100, y: 8900 }, level: 12, respawnSec: 180 }
+    { id: 'tv-echo-juggernaut', heroId: 'juggernaut', pos: { x: 8750, y: 9100 }, level: 7, respawnSec: 300, minPlayerLevel: 6 },
+    { id: 'tv-echo-pudge', heroId: 'pudge', pos: { x: 7650, y: 8450 }, level: 5, respawnSec: 240 },
+    { id: 'tv-echo-sven', heroId: 'sven', pos: { x: 2500, y: 7400 }, level: 6, respawnSec: 240 },
+    { id: 'tv-echo-axe', heroId: 'axe', pos: { x: 7900, y: 2700 }, level: 8, respawnSec: 260 },
+    { id: 'tv-echo-dawnbreaker', heroId: 'dawnbreaker', pos: { x: 10300, y: 6100 }, level: 9, respawnSec: 300 },
+    { id: 'tv-echo-marci', heroId: 'marci', pos: { x: 10100, y: 8900 }, level: 9, respawnSec: 300 }
   ],
   gates: [
     { id: 'tv-to-nw', name: 'North Pass to Nightsilver Woods', pos: { x: 6000, y: 850 }, radius: 520, toRegionId: 'nightsilver-woods', toPos: { x: 5600, y: 11050 }, requiresRecruits: 1 }

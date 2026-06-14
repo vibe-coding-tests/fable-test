@@ -20,6 +20,7 @@ export class InputController {
   mouseX = 0;
   mouseY = 0;
   hoverUid = -1;
+  hoverItemUid = -1;
   hoverGround: Vec2 | null = null;
   targeting: TargetingState = { kind: 'none' };
 
@@ -85,14 +86,18 @@ export class InputController {
         ? 'crosshair'
         : this.targeting.kind !== 'none'
           ? 'cell'
-          : '';
+          : this.hoverItemUid >= 0
+            ? 'pointer'
+            : '';
   }
 
   /** re-pick at the current mouse position (also called on mousedown so
    *  clicks use exact click coords, not last frame's cached hover) */
   private refreshPick(): void {
-    const pick = this.game.scene.pick(this.mouseX, this.mouseY, this.game.inputSim());
+    const pickableDrops = this.game.liveGym || this.game.liveRaid ? [] : this.game.visibleGroundItemDrops();
+    const pick = this.game.scene.pick(this.mouseX, this.mouseY, this.game.inputSim(), pickableDrops);
     this.hoverUid = pick.uid ?? -1;
+    this.hoverItemUid = pick.itemUid ?? -1;
     this.hoverGround = pick.ground ?? null;
   }
 
@@ -126,36 +131,40 @@ export class InputController {
     if (e.button === 2) {
       this.targeting = { kind: 'none' };
       this.attackMovePending = false;
-      this.rightClick();
-      this.rmbHeld = true;
+      this.rmbHeld = this.rightClick();
       this.lastMoveOrderAt = performance.now();
     } else if (e.button === 0) {
       this.leftClick();
     }
   }
 
-  private rightClick(): void {
+  private rightClick(): boolean {
     const g = this.game;
     const sim = g.inputSim();
     const driver = g.controlledUnit();
+    if (this.hoverItemUid >= 0 && g.pickupGroundItem(this.hoverItemUid)) return true;
     if (this.hoverUid >= 0) {
       const target = sim.unit(this.hoverUid);
-      if (!target) return;
+      if (!target) return false;
       if (g.liveGym && target.team === 0) {
         g.selectLiveGymUnit(target.uid);
-        return;
+        return false;
       }
       // npc hero -> recruit
       if (!g.liveGym && g.npcAt(this.hoverUid)) {
         g.tryRecruit(this.hoverUid);
-        return;
+        return false;
       }
       if (driver && target.team !== 0 && target.alive) {
         g.orderAttack(this.hoverUid, this.clickQueued);
-        return;
+        return false;
       }
     }
-    if (driver && this.hoverGround) g.orderMove(this.hoverGround, this.clickQueued);
+    if (driver && this.hoverGround) {
+      g.orderMove(this.hoverGround, this.clickQueued);
+      return true;
+    }
+    return false;
   }
 
   private leftClick(): void {
@@ -177,6 +186,10 @@ export class InputController {
       return;
     }
     // select hovered unit (info only; control stays on the hero)
+    if (this.hoverItemUid >= 0) {
+      g.pickupGroundItem(this.hoverItemUid);
+      return;
+    }
     if (this.hoverUid >= 0) {
       if (g.liveGym) g.selectLiveGymUnit(this.hoverUid);
       g.scene.selectedUid = this.hoverUid;
@@ -245,6 +258,10 @@ export class InputController {
     const g = this.game;
     const u = g.controlledUnit();
     const queued = e.shiftKey;
+
+    // Browser key-repeat should not keep re-issuing casts at the moving cursor.
+    // This matters for ranged/channeled item quickcasts such as Meteor Hammer.
+    if (e.repeat && (ABILITY_KEYS.includes(key) || ITEM_KEYS.includes(key))) return;
 
     // hero swap
     if (key >= '1' && key <= '5') {

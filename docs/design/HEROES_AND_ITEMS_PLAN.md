@@ -531,7 +531,7 @@ lint arrays and a quick coverage test.
 | Vocabulary | Entries today | Source of truth | Renderer/synth |
 |------------|---------------|-----------------|----------------|
 | `AnimGesture` | 9: melee-swing, ranged-shot, staff-cast, ground-slam, dash, channel-loop, summon-gesture, item-use, global-cast | `types.ts` | `engine/animator.ts` |
-| `SoundArchetype` | 11: blade, bow, impact, frost, fire, storm, void, heal, summon, item, roar | `types.ts` | `engine/audio.ts` |
+| `SoundArchetype` | 12: blade, bow, impact, frost, fire, storm, void, heal, summon, item, roar, lightning | `types.ts` | `engine/audio.ts` + `engine/sampled-audio.ts` |
 | `VfxArchetype` | 12: projectile, ground-aoe, chain, beam, summon-pop, shield, stun-stars, channel, global-mark, hook, wall, storm | `types.ts` | `engine/vfx.ts` |
 | `SilhouetteSpec` | build ×7, bodyShape ×3, head ×6, weapon ×7, extras ×8 | `types.ts` | `engine/models.ts` |
 | `AttackVisualKind` | 5: cleave-sweep, ranged-conversion, lightning-bounce, tinted-impact, crit-lunge | `types.ts` | `engine/animator.ts`/`vfx.ts` |
@@ -610,14 +610,17 @@ vocabularies is that 99% of new content is pure data.
 
 ### 7.5 Sound specifics
 
-`engine/audio.ts` synthesizes per ability `sound` archetype, with the owner's
-`voiceTimbre` shifting pitch so a kit "sounds like its caster". New heroes inherit
-this automatically. Stingers (capture/levelup/merge/badge/raid-clear) are a fixed
-set and need no per-hero work. If a signature ability wants a distinct timbre,
-either reuse a better-fitting archetype (e.g. `fire` for Pyro spells, `frost` for
-Cryo, `roar` for big STR ults) or add a `SoundArchetype` entry as in §7.4. The
-mute path and voice-pool cap (tests 20–21) must keep passing — new content cannot
-add raw audio imports (the no-asset guard, test 21).
+`engine/audio.ts` synthesizes each ability `sound` archetype, with the owner's
+`voiceTimbre` shifting pitch so a kit sounds like its caster. `engine/sampled-audio.ts`
+also maps every `SoundArchetype` through `CAST_SFX_BY_SOUND`, so each hero spell
+gets a sampled cast cue on medium+ tiers. New heroes inherit this automatically.
+Stingers (capture/levelup/merge/badge/raid-clear) are a fixed set and need no
+per-hero work. If a signature ability wants a distinct timbre, reuse a
+better-fitting archetype (for example `fire` for pyro spells, `frost` for cryo,
+`lightning` for electro chains, `roar` for big STR ults) or add a
+`SoundArchetype` entry as in §7.4. The mute path and voice-pool cap (tests
+20–21) must keep passing. New content cannot add raw audio imports because the
+no-asset guard in test 21 enforces runtime string URLs.
 
 ---
 

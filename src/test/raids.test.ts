@@ -271,9 +271,9 @@ describe('roshan-aegis (test 15)', () => {
     g.playtime = respawnAt + 1;
     const second = g.runRaid('roshan-pit', 'normal');
     expect(second.won).toBe(true);
-    const stash = g.inventoryStash.map((i) => i.id);
-    expect(stash).toContain('refresher-shard');
-    expect(stash).toContain('cheese');
+    const ground = g.groundItemDrops.map((drop) => drop.item.id);
+    expect(ground).toContain('refresher-shard');
+    expect(ground).toContain('cheese');
   });
 });
 

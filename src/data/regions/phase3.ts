@@ -252,7 +252,7 @@ export const HIDDEN_WOOD: RegionDef = {
   arrivalBeat: 'arrival-hidden-wood',
   town: { name: 'Canopy Court', pos: { x: 5600, y: 6500 }, radius: 840 },
   shrine: { pos: { x: 5600, y: 6200 } },
-  shopInventory: [...SHOP, 'vladmirs-offering', 'mekansm', 'assault-cuirass'],
+  shopInventory: [...SHOP, 'vladmirs-offering', 'mekansm', 'helm-of-the-dominator'],
   secretShop: { pos: { x: 9800, y: 9000 }, inventory: ['eaglesong', 'reaver', 'demon-edge'] },
   camps: camps('hw', [
     ['wolf', 'giant-wolf', 3, 3300, 4500],
@@ -312,7 +312,7 @@ export const MOUNT_JOERLAK: RegionDef = {
   arrivalBeat: 'arrival-mount-joerlak',
   town: { name: 'Peakhold', pos: { x: 6000, y: 6400 }, radius: 830 },
   shrine: { pos: { x: 6000, y: 6100 } },
-  shopInventory: [...SHOP, 'battlefury', 'assault-cuirass', 'reaver', 'eaglesong'],
+  shopInventory: [...SHOP, 'battlefury', 'platemail', 'reaver', 'eaglesong'],
   secretShop: { pos: { x: 10100, y: 2500 }, inventory: ['sacred-relic', 'eaglesong', 'reaver', 'mystic-staff'] },
   camps: camps('mj', [
     ['centaur', 'centaur-conqueror', 2, 3200, 4500],
@@ -375,7 +375,7 @@ export const MAD_MOON_CRATER: RegionDef = {
   arrivalBeat: 'arrival-mad-moon-crater',
   town: { name: 'Tower Approach', pos: { x: 7000, y: 7300 }, radius: 900 },
   shrine: { pos: { x: 7000, y: 7000 } },
-  shopInventory: [...SHOP, 'black-king-bar', 'assault-cuirass', 'point-booster'],
+  shopInventory: [...SHOP, 'black-king-bar', 'bloodstone', 'point-booster'],
   secretShop: { pos: { x: 12200, y: 2700 }, inventory: ['demon-edge', 'sacred-relic', 'mystic-staff', 'ultimate-orb'] },
   camps: camps('mm', [
     ['ancient-golem', 'granite-golem', 1, 3600, 5200],

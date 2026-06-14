@@ -124,6 +124,29 @@ export const RARITY_COLORS: Record<ItemRarity, string> = {
   arcana: '#ade55c'
 };
 
+/**
+ * Colorblind-safe rarity palette (OPTIMIZATION 2.0 §F.3). Derived from the
+ * Okabe–Ito qualitative set, which stays distinguishable across deuteranopia,
+ * protanopia, and tritanopia by leaning on luminance steps and blue/orange
+ * opponency rather than the red/green/purple ramp the default palette uses.
+ */
+export const RARITY_COLORS_COLORBLIND: Record<ItemRarity, string> = {
+  common: '#cfd6dd',
+  uncommon: '#56b4e9',
+  rare: '#0072b2',
+  mythical: '#9a6dd7',
+  legendary: '#cc79a7',
+  immortal: '#e69f00',
+  arcana: '#f0e442'
+};
+
+let activeRarityColors: Record<ItemRarity, string> = RARITY_COLORS;
+
+/** Swap the rarity/loot palette for the colorblind-safe set (renderer-only, no sim effect). */
+export function setColorblindPalette(on: boolean): void {
+  activeRarityColors = on ? RARITY_COLORS_COLORBLIND : RARITY_COLORS;
+}
+
 export function rarityColor(rarity: ItemRarity | undefined): string {
-  return RARITY_COLORS[rarity ?? 'common'] ?? RARITY_COLORS.common;
+  return activeRarityColors[rarity ?? 'common'] ?? activeRarityColors.common;
 }

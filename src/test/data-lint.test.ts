@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { registerAllContent, ALL_HEROES, ALL_REGIONS, ALL_DUNGEONS, ALL_ROOM_TEMPLATES } from '../data/index';
 import { ALL_GYMS } from '../data/gyms/index';
 import { ALL_QUESTS, ALL_TRIALS } from '../data/quests/index';
+import { ALL_QUEST_DEFS } from '../data/quests/board';
 import { ALL_ITEMS } from '../data/items/index';
 import { ALL_CREEPS } from '../data/creeps/index';
 import { ALL_NEUTRAL_ITEMS } from '../data/neutral-items';
@@ -18,6 +19,7 @@ import { ACTIVE_ELEMENTS, elementForAbility, elementForHero, elementForItemHit }
 import { PHASE5_STARTER_ASSETS, ENABLED_HERO_COHORTS, heroBaseId } from '../engine/assets';
 import { HERO_LIKENESS_PROFILES } from '../engine/models';
 import { PERFORMANCE_BUDGET } from '../engine/performance';
+import { TUNING } from '../data/tuning';
 import type { AbilityDef, AnimGesture, AttackVisualKind, DropSource, EffectNode, ItemAppearancePart, ItemWeaponVisualKind, SoundArchetype, ValueRef, VfxArchetype } from '../core/types';
 import { abilityMaxLevel } from '../core/values';
 import { gestureForAbility, soundForAbility } from '../core/gestures';
@@ -46,7 +48,7 @@ const STINGER_IDS = ['capture', 'merge', 'levelup', 'badge', 'raid-clear', 'loot
 const CUTSCENE_SHOT_ANGLES = ['wide', 'close', 'low', 'high', 'bird-eye', 'over-shoulder', 'through-objects', 'reflection', 'title-card'];
 const CUTSCENE_SHOT_MOVES = ['hold', 'push-in', 'pull-back', 'crane', 'snap', 'rack-focus', 'orbit'];
 const CUTSCENE_TEMPLATE_KEYS = new Set(['hero', 'heroId', 'bark', 'badge', 'boss', 'bossLine', 'raid', 'echoLine', 'trial', 'speaker', 'trialLine', 'closing', 'item', 'itemLore', 'claimant', 'event', 'legend']);
-const GATED_TOP_TIER = ['divine-rapier', 'butterfly', 'scythe-of-vyse', 'heart-of-tarrasque', 'eye-of-skadi', 'refresher-orb', 'aghanims-scepter', 'abyssal-blade', 'bloodthorn', 'radiance', 'satanic', 'octarine-core', 'aghanims-blessing', 'aghanims-shard', 'aegis-of-the-immortal', 'refresher-shard', 'cheese'];
+const GATED_TOP_TIER = ['assault-cuirass', 'divine-rapier', 'butterfly', 'scythe-of-vyse', 'heart-of-tarrasque', 'eye-of-skadi', 'refresher-orb', 'aghanims-scepter', 'lotus-orb', 'linkens-sphere', 'manta-style', 'daedalus', 'monkey-king-bar', 'abyssal-blade', 'mjollnir', 'bloodthorn', 'nullifier', 'radiance', 'satanic', 'helm-of-the-overlord', 'gleipnir', 'wind-waker', 'octarine-core', 'aghanims-blessing', 'aghanims-shard', 'aegis-of-the-immortal', 'refresher-shard', 'cheese'];
 const RARITY_RANK = { common: 0, uncommon: 1, rare: 2, mythical: 3, legendary: 4, immortal: 5, arcana: 6 } as const;
 const RESERVED_DROP_SOURCES: DropSource[] = ['boss', 'raid', 'dungeon', 'special-battle'];
 const CODED_DROP_HOMES: Record<string, DropSource[]> = {
@@ -553,6 +555,18 @@ describe('data lint: regions', () => {
     expect(ALL_REGIONS.length).toBeGreaterThanOrEqual(10);
   });
 
+  it('keeps Tranquil Vale Echoes in the onboarding band and out of Dawnshade leash reach', () => {
+    const region = ALL_REGIONS.find((r) => r.id === 'tranquil-vale')!;
+    expect(region.echoSpawns?.length).toBeGreaterThan(0);
+    for (const echo of region.echoSpawns ?? []) {
+      expect(echo.level, echo.id).toBeGreaterThanOrEqual(5);
+      expect(echo.level, echo.id).toBeLessThanOrEqual(9);
+      const dTown = Math.hypot(echo.pos.x - region.town.pos.x, echo.pos.y - region.town.pos.y);
+      expect(dTown, echo.id).toBeGreaterThan(region.town.radius + TUNING.echoLeashRadius);
+    }
+    expect(region.echoSpawns?.find((e) => e.id === 'tv-echo-juggernaut')?.minPlayerLevel).toBe(6);
+  });
+
   for (const region of ALL_REGIONS) {
     it(`${region.id} cross-references resolve`, () => {
       for (const camp of region.camps) {
@@ -631,10 +645,15 @@ describe('data lint: regions', () => {
     });
   }
 
-  it('every shop sells the demo-critical items', () => {
+  it('keeps the starter shop scoped to early-game items', () => {
     const tv = REG.region('tranquil-vale');
-    expect(tv.shopInventory).toContain('blink-dagger');
     expect(tv.shopInventory).toContain('tango');
+    expect(tv.shopInventory).toContain('magic-wand');
+    expect(tv.shopInventory).not.toContain('blink-dagger');
+    expect(tv.shopInventory).not.toContain('black-king-bar');
+    for (const itemId of tv.shopInventory) {
+      expect(['consumable', 'component', 'basic'].includes(REG.item(itemId).tier), `${itemId} should stay starter-scoped`).toBe(true);
+    }
   });
 });
 
@@ -941,5 +960,78 @@ describe('data lint: lore + esports denylist (test 23)', () => {
     expect(denylistHit('and a wild Dendi appears mid')).toBe('Dendi');
     expect(denylistHit('they lift the Aegis of Champions')).toBe('Aegis of Champions');
     expect(denylistHit('a fully original homage line about a booming caster')).toBeNull();
+  });
+
+  // QUEST.md: bounties + chapters reference real content and obey kind invariants.
+  it('quest defs resolve every reward/objective/chain reference and obey kind invariants', () => {
+    expect(ALL_QUEST_DEFS.length).toBeGreaterThan(0);
+    const ids = new Set(ALL_QUEST_DEFS.map((q) => q.id));
+    const kinds = new Set(ALL_QUEST_DEFS.map((q) => q.kind));
+    expect(kinds.has('recurring'), 'ships recurring bounties').toBe(true);
+    expect(kinds.has('event'), 'ships event chapters').toBe(true);
+    // An objective targetId narrows counting to one boss/raid/dungeon/region/badge/
+    // hero/creep; a typo would make the quest silently uncompletable, so guard it
+    // like a recipe reference (QUEST.md §7).
+    const targetable = new Set<string>([
+      ...REG.bosses.keys(),
+      ...REG.raids.keys(),
+      ...REG.dungeons.keys(),
+      ...REG.regions.keys(),
+      ...REG.heroes.keys(),
+      ...REG.creeps.keys(),
+      ...[...REG.gyms.values()].map((g) => g.badgeId)
+    ]);
+    for (const def of ALL_QUEST_DEFS) {
+      expect(def.objectives.length, `${def.id} objectives`).toBeGreaterThan(0);
+      for (const obj of def.objectives) {
+        expect(obj.count, `${def.id}:${obj.kind} count`).toBeGreaterThan(0);
+        if (obj.targetId) expect(targetable.has(obj.targetId), `${def.id}:${obj.kind} targetId ${obj.targetId}`).toBe(true);
+        if (obj.regionId) expect(REG.regions.has(obj.regionId), `${def.id}:${obj.kind} regionId ${obj.regionId}`).toBe(true);
+      }
+      expect(def.rewards.length, `${def.id} rewards`).toBeGreaterThan(0);
+      if (def.kind === 'recurring') expect(def.repeatable, `${def.id} recurring repeatable`).toBe(true);
+      if (def.kind === 'event') expect(def.repeatable ?? false, `${def.id} event not repeatable`).toBe(false);
+      for (const r of def.rewards) {
+        if (r.kind === 'item') expect(REG.items.has(r.itemId), `${def.id} reward item ${r.itemId}`).toBe(true);
+        if (r.kind === 'recruit') expect(REG.heroes.has(r.heroId), `${def.id} reward recruit ${r.heroId}`).toBe(true);
+      }
+      if (def.next) expect(ids.has(def.next), `${def.id} next ${def.next}`).toBe(true);
+      for (const q of def.prereq?.quests ?? []) expect(ids.has(q), `${def.id} prereq quest ${q}`).toBe(true);
+      if (def.prereq?.region) expect(REG.regions.has(def.prereq.region), `${def.id} prereq region`).toBe(true);
+      for (const branch of def.prereq?.anyOf ?? []) {
+        if (branch.region) expect(REG.regions.has(branch.region), `${def.id} anyOf region`).toBe(true);
+        for (const q of branch.quests ?? []) expect(ids.has(q), `${def.id} anyOf prereq quest ${q}`).toBe(true);
+      }
+      for (const obj of def.objectives) {
+        if (obj.kind === 'reach-region' && obj.targetId) expect(REG.regions.has(obj.targetId), `${def.id} reach-region target ${obj.targetId}`).toBe(true);
+      }
+      if (def.regionId) expect(REG.regions.has(def.regionId), `${def.id} home region ${def.regionId}`).toBe(true);
+    }
+  });
+
+  // `next` is the authoritative chain link, so it must agree with the
+  // successor's `prereq.quests`, point at a unique target, and not cycle.
+  it('quest `next` chains are unique, acyclic, and consistent with prereqs', () => {
+    const byId = new Map(ALL_QUEST_DEFS.map((q) => [q.id, q]));
+    const claimedBy = new Map<string, string>(); // next target -> predecessor id
+    for (const def of ALL_QUEST_DEFS) {
+      if (!def.next) continue;
+      expect(def.next, `${def.id} next must not self-loop`).not.toBe(def.id);
+      expect(claimedBy.has(def.next), `${def.next} is the next of both ${claimedBy.get(def.next)} and ${def.id}`).toBe(false);
+      claimedBy.set(def.next, def.id);
+      const successor = byId.get(def.next)!;
+      expect(successor.prereq?.quests ?? [], `${def.id} -> ${def.next}: successor must gate on predecessor`).toContain(def.id);
+    }
+    // Walk every chain from its root; a revisit means a cycle.
+    for (const root of ALL_QUEST_DEFS) {
+      if (claimedBy.has(root.id)) continue; // not a chain root
+      const seen = new Set<string>();
+      let cursor: string | undefined = root.id;
+      while (cursor) {
+        expect(seen.has(cursor), `quest chain cycle at ${cursor}`).toBe(false);
+        seen.add(cursor);
+        cursor = byId.get(cursor)?.next;
+      }
+    }
   });
 });

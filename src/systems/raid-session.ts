@@ -40,7 +40,7 @@ export class LiveRaid {
     this.def = def;
     this.tier = tier;
     this.festivalMode = opts?.festivalMode;
-    if (this.festivalMode === 'linear-crawl' || this.festivalMode === 'wave-defense') this.nextFestivalPressureAt = 4;
+    if (this.festivalMode === 'linear-crawl' || this.festivalMode === 'wave-defense' || this.festivalMode === 'roshan-candy') this.nextFestivalPressureAt = 4;
     else if (this.festivalMode === 'damage-race') this.nextFestivalPressureAt = 6;
     this.festivalCtx = { defId: `festival:${opts?.festivalMode ?? def.id}`, level: def.boss.level ?? 30, vfx: { archetype: 'summon-pop', color: '#ffd86a' } };
     const rs = raidSetupFromDef(def, party, tier, seed);

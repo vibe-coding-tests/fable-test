@@ -1,4 +1,5 @@
 import type { HeroDef } from '../../core/types';
+import { loopTurnLabel } from './loop-note';
 
 export const JUGGERNAUT: HeroDef = {
   id: 'juggernaut',
@@ -7,7 +8,7 @@ export const JUGGERNAUT: HeroDef = {
   attribute: 'agi',
   roles: ['carry', 'pusher', 'escape'],
   region: 'tranquil-vale',
-  lore: 'A masked swordsman of the drowned Isle of Masks, sworn to a blade-dance no fragment of the Mad Moon can interrupt.',
+  lore: `A masked swordsman of the drowned Isle of Masks, sworn to a blade-dance no fragment of the Mad Moon can interrupt. His Echo last fought on turn ${loopTurnLabel('juggernaut')} of the Loop, where every cut was another verse of the same hymn.`,
   baseStats: {
     str: 20, agi: 28, int: 16,
     strGain: 2.4, agiGain: 2.8, intGain: 1.6,
@@ -121,6 +122,7 @@ export const JUGGERNAUT: HeroDef = {
       targeting: 'unit-target',
       affects: 'enemy',
       ult: true,
+      piercesImmunity: true,
       castRange: 350,
       castPoint: 0.3,
       manaCost: [200, 275, 350],

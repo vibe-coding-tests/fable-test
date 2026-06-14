@@ -1,4 +1,5 @@
 import type { HeroDef } from '../../core/types';
+import { loopTurnLabel } from './loop-note';
 
 export const LUNA: HeroDef = {
   id: 'luna',
@@ -7,7 +8,7 @@ export const LUNA: HeroDef = {
   attribute: 'agi',
   roles: ['carry', 'nuker', 'pusher'],
   region: 'nightsilver-woods',
-  lore: 'A mounted knight of Selemene, riding ahead of the Nightsilver host to hunt the Mad Moon shards that answer the wrong goddess.',
+  lore: `A mounted knight of Selemene, riding ahead of the Nightsilver host to hunt the Mad Moon shards that answer the wrong goddess. Her Echo last fought on turn ${loopTurnLabel('luna')} of the Loop, under a moon torn between Selemene and the Mad one.`,
   baseStats: {
     str: 21, agi: 24, int: 23,
     strGain: 2.4, agiGain: 3.4, intGain: 1.9,

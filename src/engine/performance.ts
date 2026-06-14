@@ -30,7 +30,7 @@ export interface QualityPreset {
   bloomRadius: number;
   /** Color-grade + vignette pass. */
   grade: boolean;
-  /** Reserved for a future AO pass; keep false until the composer actually wires one. */
+  /** Ground-contact ambient occlusion (GTAO) pass; ultra-only by default, fill-rate heavy. */
   ao: boolean;
   /** Post-AA pass (SMAA) inside the composer. */
   smaa: boolean;
@@ -111,7 +111,7 @@ export const QUALITY_PRESETS: Record<QualityTier, QualityPreset> = {
     bloomStrength: 0.55,
     bloomRadius: 0.55,
     grade: true,
-    ao: false,
+    ao: true,
     smaa: true,
     weatherDensity: 1
   }

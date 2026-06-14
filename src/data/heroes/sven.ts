@@ -1,4 +1,5 @@
 import type { HeroDef } from '../../core/types';
+import { loopTurnLabel } from './loop-note';
 
 export const SVEN: HeroDef = {
   id: 'sven',
@@ -7,7 +8,7 @@ export const SVEN: HeroDef = {
   attribute: 'str',
   roles: ['carry', 'durable', 'initiator'],
   region: 'tranquil-vale',
-  lore: 'A Vigil knight by blood and an oath-breaker by choice, Sven follows no law that cannot survive his sword.',
+  lore: `A Vigil knight by blood and an oath-breaker by choice, Sven follows no law that cannot survive his sword. His Echo last fought on turn ${loopTurnLabel('sven')} of the Loop, breaking an oath so someone else could keep one.`,
   baseStats: {
     str: 22, agi: 21, int: 16,
     strGain: 3.2, agiGain: 2.2, intGain: 1.5,

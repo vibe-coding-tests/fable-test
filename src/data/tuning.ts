@@ -242,7 +242,7 @@ export const TUNING = {
   relocationShardFloor: 1,        // failed trial drops Find shards to this floor, never locks out
   findShardsNeeded: 2,            // default echo kills to reveal a trial marker
   echoHpTaxPct: 0.4,              // overworld/trial echoes lose this fraction of max HP (×0.6, §3.2)
-  echoLeashRadius: 2200,          // gambit echo tether so it does not roam the region
+  echoLeashRadius: 1600,          // gambit echo tether so it does not roam the region
   trialDefaultSec: 45,            // default trial time limit for timed/endure templates
 
   // --- reputation / karma (Phase 6 §3.2) ---
@@ -334,6 +334,11 @@ export const TUNING = {
     normal: { hp: 1.0, damage: 1.0, armor: 1.0 },
     nightmare: { hp: 1.65, damage: 1.28, armor: 1.18 },
     hell: { hp: 2.45, damage: 1.65, armor: 1.35 }
+  },
+  bossBkbByTier: {
+    normal: { duration: 4, cooldown: 90 },
+    nightmare: { duration: 5, cooldown: 75 },
+    hell: { duration: 6, cooldown: 60 }
   },
   // AI-depth difficulty lever (AI_OVERHAUL §6): higher tiers dial boss opportunism
   // and raid-party reaction timing, beside bossTierScale rather than instead of it.

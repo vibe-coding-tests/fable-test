@@ -1,8 +1,9 @@
 import { REG } from '../core/registry';
+import { xpForLevel } from '../core/stats';
 import { getAssetCacheStats, type AssetCacheStats } from '../engine/asset-loaders';
 import { newGameSave } from './game';
 import type { Game } from './game';
-import type { DifficultyTier, GameSave } from '../core/types';
+import type { DifficultyTier, GameSave, GraphicsQuality } from '../core/types';
 import type { GraphicsRenderStats } from '../engine/scene';
 
 // ------------------------------------------------------------------
@@ -54,12 +55,22 @@ export function testSeed(): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
+const QUALITY_VALUES: readonly GraphicsQuality[] = ['auto', 'low', 'medium', 'high', 'ultra'];
+
+/** Optional graphics-quality override (?quality=...). 'low' skips the env/vfx/
+ *  holdout/party-model preload chain, so WebGL smoke tests boot far faster. */
+export function testQuality(): GraphicsQuality | undefined {
+  const q = params().get('quality');
+  return q && (QUALITY_VALUES as readonly string[]).includes(q) ? (q as GraphicsQuality) : undefined;
+}
+
 export interface NewGameOpts {
   hero?: string;
   region?: string;
   seed?: number;
   gold?: number;
   headless?: boolean;
+  quality?: GraphicsQuality;
 }
 
 export interface TestState {
@@ -98,6 +109,18 @@ export interface TestState {
     exitsUnlocked: boolean;
     done: boolean;
   };
+  quests: TestQuestState;
+}
+
+/** Quest snapshot for QA: status tallies plus the visible (non-locked, non-claimed) board. */
+export interface TestQuestState {
+  total: number;
+  locked: number;
+  active: number;
+  complete: number;
+  claimed: number;
+  cooldown: number;
+  board: { id: string; status: string; claimable: boolean }[];
 }
 
 export interface TestPerfFightResult {
@@ -137,8 +160,21 @@ export interface TestApi {
   /** Kill every hostile in the sim currently receiving input. Returns the count. */
   clearHostiles(): number;
   teleportActive(x: number, y: number): void;
+  /** Clear any active/queued cut-scene so `fastForward` advances the live sim.
+   *  Headless-safe (no DOM). The main loop early-returns while a cinematic is
+   *  active, so sim-advancing specs must call this first. Returns true if a
+   *  cinematic was cleared. */
+  skipCinematics(): boolean;
+  /** Pad the party up to 5 heroes (for gym/raid/dungeon flows that require a full
+   *  party) and optionally set every member's level. Returns the party size. */
+  fillParty(opts?: { heroIds?: string[]; level?: number }): number;
   /** Build a deterministic same-creep crowd around the active hero for browser perf baselines. */
   spawnPerfFight(opts?: { units?: number; creepId?: string; radius?: number }): TestPerfFightResult | null;
+  /** Spawn `count` wild creeps adjacent to the active hero so combat/reward specs
+   *  don't depend on a hardcoded world coordinate that drifts with data edits. */
+  spawnWildCreepNearActive(opts?: { count?: number; creepId?: string }): TestPerfFightResult | null;
+  /** Feed a normalized quest progression beat into the live quest tracker. */
+  advanceQuest(ev: { kind: string; amount?: number; regionId?: string; tier?: string; targetId?: string }): void;
   /** Current real-renderer graphics stats, or null in headless mode. */
   graphicsStats(): GraphicsRenderStats | null;
   /** Graphics + asset cache counters used by the browser perf smoke route. */
@@ -169,6 +205,7 @@ function buildNewGameSave(opts: NewGameOpts): GameSave {
   }
   if (opts.seed !== undefined) save.worldSeed = opts.seed;
   if (opts.gold !== undefined) save.gold = opts.gold;
+  if (opts.quality && save.settings.graphics) save.settings.graphics.quality = opts.quality;
   save.savedAt = Date.now();
   return save;
 }
@@ -211,11 +248,11 @@ export function makeTestApi(deps: HarnessDeps): TestApi {
       if (!rec || !u) return;
       const gained = u.addXp(n);
       if (gained > 0) {
-        u.autoLevelAbilities(REG.hero(rec.heroId).skillOrder);
         u.refresh(game.sim.time);
       }
       rec.level = u.level;
       rec.xp = u.xp;
+      rec.abilityLevels = u.abilities.map((a) => a.level);
     },
     healParty: () => {
       const game = deps.getGame();
@@ -250,7 +287,56 @@ export function makeTestApi(deps: HarnessDeps): TestApi {
         u.prevPos = { x, y };
       }
     },
+    skipCinematics: () => {
+      const game = deps.getGame();
+      if (!game) return false;
+      const wasActive = game.cinematic.active;
+      let guard = 0;
+      while (game.cinematic.active && guard++ < 200) game.cinematicSkip();
+      game.cinematic.clear();
+      return wasActive;
+    },
+    fillParty: (opts = {}) => {
+      const game = deps.getGame();
+      if (!game) return 0;
+      const pool =
+        opts.heroIds && opts.heroIds.length
+          ? opts.heroIds
+          : ['pudge', 'earthshaker', 'sven', 'axe', 'lich', 'luna', 'sniper', 'crystal-maiden', 'juggernaut'];
+      const recruit = (game as unknown as { recruitHero(h: string): boolean }).recruitHero.bind(game);
+      for (const id of pool) {
+        if (game.party.length >= 5) break;
+        if (!REG.heroes.has(id)) continue;
+        if (game.party.some((r) => r.heroId === id)) continue;
+        recruit(id);
+      }
+      if (opts.level !== undefined) {
+        const lvl = Math.max(1, Math.floor(opts.level));
+        const targetXp = xpForLevel(lvl);
+        for (const rec of game.party) {
+          const u = rec.unit;
+          if (u) {
+            if (u.xp < targetXp) {
+              u.addXp(targetXp - u.xp);
+              u.refresh(game.sim.time);
+            }
+            rec.level = u.level;
+            rec.xp = u.xp;
+            rec.abilityLevels = u.abilities.map((a) => a.level);
+          } else {
+            rec.level = Math.max(rec.level, lvl);
+            rec.xp = Math.max(rec.xp, targetXp);
+          }
+        }
+      }
+      return game.party.length;
+    },
     spawnPerfFight: (opts = {}) => spawnPerfFight(deps.getGame(), opts),
+    spawnWildCreepNearActive: (opts = {}) => spawnWildCreepNearActive(deps.getGame(), opts),
+    advanceQuest: (ev) => {
+      const game = deps.getGame() as unknown as { advanceQuests?: (e: unknown) => void } | null;
+      game?.advanceQuests?.({ amount: 1, ...ev });
+    },
     graphicsStats: () => {
       const scene = deps.getGame()?.scene as unknown as { graphicsStats?: () => GraphicsRenderStats } | undefined;
       return scene?.graphicsStats?.() ?? null;
@@ -321,6 +407,61 @@ function spawnPerfFight(game: Game | null, opts: { units?: number; creepId?: str
   };
 }
 
+function spawnWildCreepNearActive(
+  game: Game | null,
+  opts: { count?: number; creepId?: string }
+): TestPerfFightResult | null {
+  if (!game) return null;
+  const sim = game.sim;
+  const hero = game.activeUnit();
+  if (!hero) return null;
+  const count = Math.max(1, Math.floor(opts.count ?? 3));
+  const fallbackCreepId = game.region.camps[0]?.creepId ?? [...REG.creeps.keys()][0];
+  if (!fallbackCreepId) return null;
+  const creepId = opts.creepId && REG.creeps.has(opts.creepId) ? opts.creepId : fallbackCreepId;
+  const def = REG.creep(creepId);
+  const center = { ...hero.pos };
+  for (let i = 0; i < count; i++) {
+    const angle = (i / count) * Math.PI * 2;
+    const pos = { x: center.x + Math.cos(angle) * 140, y: center.y + Math.sin(angle) * 140 };
+    sim.spawnCreep(def, { team: 1, pos, wild: true, homePos: { ...center }, regionId: game.region.id });
+  }
+  return {
+    requestedUnits: count + 1,
+    totalUnits: sim.unitsArr.filter((u) => u.alive).length,
+    hostiles: count,
+    creepId
+  };
+}
+
+const EMPTY_QUESTS: TestQuestState = {
+  total: 0,
+  locked: 0,
+  active: 0,
+  complete: 0,
+  claimed: 0,
+  cooldown: 0,
+  board: []
+};
+
+function questSummary(game: Game): TestQuestState {
+  const g = game as unknown as {
+    questBoard?: () => { id: string; status: string; claimable: boolean }[];
+    quests?: Record<string, { status?: string }>;
+  };
+  if (typeof g.questBoard !== 'function') return EMPTY_QUESTS;
+  // questBoard() refreshes availability, so locked->active unlocks are reflected.
+  const board = g.questBoard().map((q) => ({ id: q.id, status: q.status, claimable: q.claimable }));
+  const counts = { locked: 0, active: 0, complete: 0, claimed: 0, cooldown: 0 };
+  let total = 0;
+  for (const def of REG.questDefs.values()) {
+    total++;
+    const status = g.quests?.[def.id]?.status ?? 'locked';
+    if (status in counts) counts[status as keyof typeof counts]++;
+  }
+  return { total, ...counts, board };
+}
+
 function snapshot(game: Game | null, mode: 'headless' | 'webgl'): TestState {
   const empty: TestState = {
     ready: false,
@@ -339,7 +480,8 @@ function snapshot(game: Game | null, mode: 'headless' | 'webgl'): TestState {
     badges: 0,
     caught: 0,
     stash: 0,
-    dungeon: null
+    dungeon: null,
+    quests: EMPTY_QUESTS
   };
   if (!game) return empty;
   try {
@@ -384,7 +526,8 @@ function snapshot(game: Game | null, mode: 'headless' | 'webgl'): TestState {
             exitsUnlocked: dungeon.exitsUnlocked(),
             done: dungeon.done
           }
-        : null
+        : null,
+      quests: questSummary(game)
     };
   } catch {
     return { ...empty, ready: true };

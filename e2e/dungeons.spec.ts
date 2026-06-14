@@ -8,7 +8,6 @@ test.describe('dungeons', () => {
 
     const s0 = await state(page);
     expect(s0.regionId).toBe('icewrack');
-    const stashBefore = s0.stash;
 
     // Drive the whole descent inside the page: enter, then per room fast-forward
     // a beat, force-clear the spawned pack, and take an exit once one unlocks.
@@ -21,9 +20,14 @@ test.describe('dungeons', () => {
 
       let guard = 0;
       let exitsTaken = 0;
+      // Loot now spawns as ground drops you walk over (loot rehaul), so watch the
+      // dungeon-context ground pile grow during the descent instead of the stash.
+      let maxGroundDrops = 0;
+      const goldBefore = g.gold;
       while (g.liveDungeon && guard++ < 600) {
         t.fastForward(0.6);
         t.clearHostiles();
+        maxGroundDrops = Math.max(maxGroundDrops, g.groundItemDrops?.length ?? 0);
         const d = g.liveDungeon;
         if (d && d.exitsUnlocked()) {
           const exits = d.availableExits();
@@ -37,7 +41,10 @@ test.describe('dungeons', () => {
         guard,
         exitsTaken,
         clears: progress?.clears ?? 0,
-        bestDepth: progress?.bestDepth ?? 0
+        bestDepth: progress?.bestDepth ?? 0,
+        maxGroundDrops,
+        // either loot dropped on the ground, or resin ran dry and it converted to gold
+        gotLoot: maxGroundDrops > 0 || g.gold > goldBefore
       } as const;
     });
 
@@ -45,10 +52,10 @@ test.describe('dungeons', () => {
     expect(result.finished).toBe(true);
     expect(result.clears).toBeGreaterThanOrEqual(1);
     expect(result.bestDepth).toBeGreaterThan(0);
+    expect(result.gotLoot).toBe(true); // guaranteed room/guardian drops landed
 
     const s1 = await state(page);
     expect(s1.dungeon).toBeNull();
-    expect(s1.stash).toBeGreaterThan(stashBefore); // guaranteed room/guardian drops
   });
 
   test('a dungeon cannot start outside its region', async ({ page }) => {

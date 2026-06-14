@@ -248,11 +248,11 @@ describe('dungeon generation D0', () => {
     grant(def, 'hell', room);
     grant(def, 'hell', room);
     expect(game.dungeonProgress[def.id].dryStreaks?.['guardian-pity-test']).toBe(3);
-    expect(game.inventoryStash.some((it) => it.id === 'black-king-bar')).toBe(false);
+    expect(game.groundItemDrops.some((drop) => drop.item.id === 'black-king-bar')).toBe(false);
 
     grant(def, 'hell', room);
     expect(game.dungeonProgress[def.id].dryStreaks?.['guardian-pity-test']).toBe(0);
-    expect(game.inventoryStash.some((it) => it.id === 'black-king-bar')).toBe(true);
+    expect(game.groundItemDrops.some((drop) => drop.item.id === 'black-king-bar')).toBe(true);
   });
 
   it('forces modifier affixes when legal', () => {
@@ -363,7 +363,7 @@ describe('dungeon session D1/D2', () => {
 
   it('enters from a portal, grants room rewards on clear, clears a multi-room run, and exits', () => {
     const g = Game.headless(dungeonSave());
-    const before = g.inventoryStash.length;
+    const before = g.groundItemDrops.length;
 
     expect(g.tryInteract()).toBe(true);
     expect(g.liveDungeon).toBeTruthy();
@@ -379,13 +379,13 @@ describe('dungeon session D1/D2', () => {
         continue;
       }
       clearCurrentRoom(g);
-      if (g.liveDungeon && g.inventoryStash.length > before) sawMidRunReward = true;
+      if (g.liveDungeon && g.groundItemDrops.length > before) sawMidRunReward = true;
     }
 
     expect(g.liveDungeon).toBeNull();
     expect(visited.size).toBeGreaterThan(1);
     expect(sawMidRunReward).toBe(true);
-    expect(g.inventoryStash.length).toBeGreaterThan(before);
+    expect(g.groundItemDrops.length).toBeGreaterThan(before);
     expect(g.toasts.some((t) => t.text.includes('Frost Hollow cleared'))).toBe(true);
     expect(g.toasts.some((t) => t.text.includes(`${depth}/${depth} rooms`))).toBe(true);
   });
@@ -404,7 +404,7 @@ describe('dungeon session D1/D2', () => {
 
   it('starts a modified tiered dungeon and records progress on clear', () => {
     const g = Game.headless(dungeonSave());
-    const before = g.inventoryStash.length;
+    const before = g.groundItemDrops.length;
     expect(g.startDungeon('frost-hollow', 'nightmare', { seed: 2027, modifiers: ['deep-map', 'frozen-oath'] })).toBe(true);
     expect(g.liveDungeon!.tier).toBe('nightmare');
     expect(g.liveDungeon!.selectedModifiers()).toEqual(['deep-map', 'frozen-oath']);
@@ -420,7 +420,7 @@ describe('dungeon session D1/D2', () => {
     expect(progress.bestDepth).toBe(depth);
     expect(progress.bestTier).toBe('nightmare');
     expect(progress.lastModifiers).toEqual(['deep-map', 'frozen-oath']);
-    expect(g.inventoryStash.length).toBeGreaterThan(before);
+    expect(g.groundItemDrops.length).toBeGreaterThan(before);
   });
 
   it('persists guardian pity across runs so the anchor drops within its pity window', () => {
@@ -440,9 +440,9 @@ describe('dungeon session D1/D2', () => {
     // never stall forever the way an empty per-run streak would.
     let anchorsDropped = 0;
     for (let run = 0; run < 4; run++) {
-      const before = g.inventoryStash.filter((it) => guardianAnchors.has(it.id)).length;
+      const before = g.groundItemDrops.filter((drop) => guardianAnchors.has(drop.item.id)).length;
       runToClear(7100 + run);
-      const after = g.inventoryStash.filter((it) => guardianAnchors.has(it.id)).length;
+      const after = g.groundItemDrops.filter((drop) => guardianAnchors.has(drop.item.id)).length;
       anchorsDropped += after - before;
       // The streak map is threaded through and saved, not reset each run.
       expect(g.buildSave().dungeonProgress['frost-hollow']).toBeDefined();

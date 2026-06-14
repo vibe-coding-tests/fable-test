@@ -116,11 +116,11 @@ export function mountDebugPanel(game: Game): () => void {
         const rec = game.party[game.activeIdx];
         const gained = u.addXp(1200);
         if (gained > 0) {
-          u.autoLevelAbilities(REG.hero(rec.heroId).skillOrder);
           u.refresh(game.sim.time);
         }
         rec.level = u.level;
         rec.xp = u.xp;
+        rec.abilityLevels = u.abilities.map((a) => a.level);
         game.msg(`[debug] +1200 XP -> level ${u.level}`, 'info');
         break;
       }

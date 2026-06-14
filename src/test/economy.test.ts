@@ -122,10 +122,10 @@ describe('boss-rerun-live (test 9)', () => {
     expect(g.bossUnlockedTiers(BOSS)).toEqual(['normal']);
 
     // A Normal clear delivers the guaranteed component(s) and opens Nightmare.
-    const stashBefore = g.inventoryStash.length;
+    const groundBefore = g.groundItemDrops.length;
     const normal = g.runBossFight(BOSS, 'normal');
     expect(normal.won).toBe(true);
-    expect(g.inventoryStash.length).toBeGreaterThan(stashBefore);
+    expect(g.groundItemDrops.length).toBeGreaterThan(groundBefore);
     expect(g.bossUnlockedTiers(BOSS)).toContain('nightmare');
     expect(g.bossUnlockedTiers(BOSS)).not.toContain('hell'); // Hell still gated after a Normal clear
 
@@ -136,8 +136,10 @@ describe('boss-rerun-live (test 9)', () => {
     expect(night.won).toBe(true);
     expect(night.loot?.pityUsed).toBe(true);
     expect(night.loot?.assembled).toBeDefined();
-    // the scaled loot lands in the player's inventory + held-uniques ledger
-    expect(g.inventoryStash.some((it) => it.id === night.loot!.assembled!.id)).toBe(true);
+    // The scaled loot lands on the ground first, then pickup enters ownership.
+    const assembledDrop = g.groundItemDrops.find((drop) => drop.item.id === night.loot!.assembled!.id);
+    expect(assembledDrop).toBeDefined();
+    expect(g.pickupGroundItem(assembledDrop!.uid)).toBe(true);
     expect(g.heldUniques.length).toBeGreaterThan(uniquesBefore);
 
     // A pity-cleared Nightmare resets the dry streak and finally opens Hell.
@@ -224,21 +226,21 @@ describe('neutral-items-live (test 11)', () => {
     expect(got.dropFromTier).toBe('ancient');
   });
 
-  it('drops consumables and components from wild creeps into the Armory stash', () => {
+  it('drops consumables and components from wild creeps onto the ground', () => {
     const g = Game.headless(soloSave('juggernaut', 12));
     g.sim.events.captureAll = true;
     const small = creepOfTier('small');
     const large = creepOfTier('large');
 
-    for (let i = 0; i < 80 && !g.inventoryStash.some((it) => REG.item(it.id).tier === 'consumable'); i++) {
+    for (let i = 0; i < 80 && !g.groundItemDrops.some((drop) => REG.item(drop.item.id).tier === 'consumable'); i++) {
       killWildCreep(g, small);
     }
-    expect(g.inventoryStash.some((it) => REG.item(it.id).tier === 'consumable')).toBe(true);
+    expect(g.groundItemDrops.some((drop) => REG.item(drop.item.id).tier === 'consumable')).toBe(true);
 
-    for (let i = 0; i < 80 && !g.inventoryStash.some((it) => REG.item(it.id).tier === 'component'); i++) {
+    for (let i = 0; i < 80 && !g.groundItemDrops.some((drop) => REG.item(drop.item.id).tier === 'component'); i++) {
       killWildCreep(g, large);
     }
-    expect(g.inventoryStash.some((it) => REG.item(it.id).tier === 'component')).toBe(true);
+    expect(g.groundItemDrops.some((drop) => REG.item(drop.item.id).tier === 'component')).toBe(true);
   });
 
   it('slots a neutral into the dedicated slot, keeps it unsellable, and reclaims to the stash', () => {
@@ -339,6 +341,51 @@ describe('neutral-items-live (test 11)', () => {
     const gained = g.disenchantNeutral('trusty-shovel');
     expect(gained).toBeGreaterThan(0);
     expect(g.essence).toBe(beforeEssence + gained);
+  });
+});
+
+describe('ground item pickups', () => {
+  it('spawns loot on the ground, picks it into the active hero inventory, and saves remaining drops', () => {
+    const g = Game.headless(soloSave('juggernaut', 20));
+    const pos = { x: g.activeUnit()!.pos.x + 80, y: g.activeUnit()!.pos.y + 20 };
+
+    const [drop] = g.spawnGroundItems([{ id: 'broadsword' }], pos, { source: 'creep' });
+
+    expect(g.activeUnit()!.items.some((it) => it?.defId === 'broadsword')).toBe(false);
+    expect(g.buildSave().groundItemDrops).toHaveLength(1);
+    expect(g.pickupGroundItem(drop.uid)).toBe(true);
+    expect(g.groundItemDrops).toHaveLength(0);
+    expect(g.activeUnit()!.items.some((it) => it?.defId === 'broadsword')).toBe(true);
+    expect(g.buildSave().groundItemDrops).toHaveLength(0);
+  });
+
+  it('leaves a pickup on the ground when the active hero inventory is full', () => {
+    const save = soloSave('juggernaut', 20);
+    save.roster[0].items = rosterItems(['broadsword', 'mithril-hammer', 'ogre-axe', 'platemail', 'chainmail', 'hyperstone']);
+    const g = Game.headless(save);
+    const [drop] = g.spawnGroundItems([{ id: 'magic-wand' }], g.activeUnit()!.pos, { source: 'creep' });
+
+    expect(g.pickupGroundItem(drop.uid)).toBe(false);
+    expect(g.groundItemDrops).toHaveLength(1);
+    expect(g.activeUnit()!.items.some((it) => it?.defId === 'magic-wand')).toBe(false);
+  });
+
+  it('drops an equipped hero item back to the ground and can pick it up again after save/load', () => {
+    const save = soloSave('juggernaut', 20);
+    save.roster[0].items = rosterItems(['broadsword']);
+    const g = Game.headless(save);
+    const slot = g.activeUnit()!.items.findIndex((it) => it?.defId === 'broadsword');
+
+    expect(g.dropHeroItemToGround(slot, { x: g.activeUnit()!.pos.x + 120, y: g.activeUnit()!.pos.y })).toBe(true);
+    expect(g.activeUnit()!.items.some((it) => it?.defId === 'broadsword')).toBe(false);
+    expect(g.groundItemDrops).toHaveLength(1);
+
+    const saved = g.buildSave();
+    expect(saved.groundItemDrops[0].item.id).toBe('broadsword');
+    const loaded = Game.headless(saved);
+    expect(loaded.groundItemDrops).toHaveLength(1);
+    expect(loaded.pickupGroundItem(loaded.groundItemDrops[0].uid)).toBe(true);
+    expect(loaded.activeUnit()!.items.some((it) => it?.defId === 'broadsword')).toBe(true);
   });
 });
 
@@ -574,6 +621,8 @@ describe('gold-sinks-faithful (test 12)', () => {
     for (const id of GATED_TOP_TIER) {
       expect(REG.items.has(id), id).toBe(true);
       expect(shopItems.has(id), `${id} listed in a shop`).toBe(false);
+      expect(itemAllowedFromSource(id, 'shop'), `${id} should not be shop-sourced`).toBe(false);
+      expect(itemAllowedFromSource(id, 'gamble'), `${id} should not be gamble-sourced`).toBe(false);
       // ...and the buy path itself refuses to vend it even when asked directly
       expect(g.shopSells(id)).toBe(false);
       const hero = g.activeUnit()!;
@@ -678,23 +727,22 @@ describe('loot overhaul curated chase and black-market sinks', () => {
     expect(g.buildSave().lootMarks.early).toBe(0);
   });
 
-  it('assembles a specific Legendary from Armory components plus essence', () => {
+  it('assembles a loot-built Legendary from Armory components plus essence', () => {
     const save = soloSave('juggernaut', 20);
-    save.inventoryStash = [{ id: 'hyperstone' }, { id: 'platemail' }, { id: 'chainmail' }];
+    save.inventoryStash = [{ id: 'ogre-axe' }, { id: 'mithril-hammer' }];
     save.essence = TUNING.blackMarket.assemblyEssence;
     const g = Game.headless(save);
     g.activeUnit()!.pos = { ...g.region.town.pos };
 
-    const quote = g.legendaryAssemblyOptions().find((o) => o.itemId === 'assault-cuirass');
+    const quote = g.legendaryAssemblyOptions().find((o) => o.itemId === 'black-king-bar');
     expect(quote?.canCraft).toBe(true);
     const marksBefore = { ...g.lootMarks };
-    const assembled = g.assembleLegendary('assault-cuirass');
+    const assembled = g.assembleLegendary('black-king-bar');
 
-    expect(assembled).toMatchObject({ id: 'assault-cuirass', bound: true });
-    expect(g.inventoryStash.some((it) => it.id === 'hyperstone')).toBe(false);
-    expect(g.inventoryStash.some((it) => it.id === 'platemail')).toBe(false);
-    expect(g.inventoryStash.some((it) => it.id === 'chainmail')).toBe(false);
-    expect(g.inventoryStash.find((it) => it.id === 'assault-cuirass')?.bound).toBe(true);
+    expect(assembled).toMatchObject({ id: 'black-king-bar', bound: true });
+    expect(g.inventoryStash.some((it) => it.id === 'ogre-axe')).toBe(false);
+    expect(g.inventoryStash.some((it) => it.id === 'mithril-hammer')).toBe(false);
+    expect(g.inventoryStash.find((it) => it.id === 'black-king-bar')?.bound).toBe(true);
     expect(g.essence).toBe(0);
     expect(g.lootMarks).toEqual(marksBefore);
   });

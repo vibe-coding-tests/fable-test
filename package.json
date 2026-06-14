@@ -18,6 +18,7 @@
     "test:e2e:headed": "playwright test --headed",
     "test:full": "npm run test && npm run build && npm run assets:check && npm run test:e2e",
     "typecheck": "tsc --noEmit",
+    "generate:audio": "node scripts/assets/generate_audio.mjs",
     "generate:hero-weapons": "node scripts/assets/generate_hero_weapons.mjs",
     "generate:holdout-signatures": "node scripts/assets/generate_holdout_signatures.mjs",
     "generate:ui-assets": "node scripts/assets/generate_ui_assets.mjs",

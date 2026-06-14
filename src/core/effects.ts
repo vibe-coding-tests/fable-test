@@ -19,6 +19,13 @@ export interface EffectCtx {
   chargeCount?: number;
 }
 
+/**
+ * How long a self blink-strike holds the airborne "dash" pose after landing.
+ * Sized above the densest repeat-blink cadence (Omnislash, 0.34s) so each slash
+ * re-extends the lock and a mid-sequence item tap can never ground the hero.
+ */
+const SELF_DISPLACE_PRESENTATION = 0.45;
+
 export interface EffectPrimary {
   target?: Unit;
   point?: Vec2;
@@ -38,6 +45,12 @@ function V(ctx: EffectCtx, ref: ValueRef | undefined, fallback = 0): number {
 
 function centerOf(caster: Unit, primary: EffectPrimary): Vec2 {
   return primary.point ?? primary.target?.pos ?? caster.pos;
+}
+
+function enemySpellBlocked(sim: Sim, caster: Unit, ctx: EffectCtx, target: Unit): boolean {
+  if (target.team === caster.team || !target.summary.magicImmune || ctx.piercesImmunity) return false;
+  sim.events.emit({ t: 'immune-block', uid: target.uid });
+  return true;
 }
 
 function selectUnits(sim: Sim, caster: Unit, ctx: EffectCtx, sel: TargetSel, radiusRef: ValueRef | undefined, primary: EffectPrimary): Unit[] {
@@ -99,7 +112,7 @@ function execNode(sim: Sim, caster: Unit, ctx: EffectCtx, node: EffectNode, prim
       if ((node.target === 'enemies-in-radius' || node.target === 'units-in-radius') && node.radius) {
         sim.events.emit({ t: 'aoe-burst', pos: centerOf(caster, effPrimary), radius: V(ctx, node.radius, 0), vfx: ctx.vfx });
       }
-      for (const u of units) applyDamage(sim, caster, u, amount, node.dtype, { element: ctx.element });
+      for (const u of units) applyDamage(sim, caster, u, amount, node.dtype, { element: ctx.element, piercesImmunity: ctx.piercesImmunity });
       break;
     }
     case 'heal': {
@@ -116,13 +129,14 @@ function execNode(sim: Sim, caster: Unit, ctx: EffectCtx, node: EffectNode, prim
       let amount = V(ctx, node.amount);
       if (node.perCharge) amount *= ctx.chargeCount ?? 0;
       for (const u of units) {
+        if (node.op !== 'restore' && enemySpellBlocked(sim, caster, ctx, u)) continue;
         if (node.op === 'restore') {
           u.mana = Math.min(u.stats.maxMana, u.mana + amount);
         } else {
           const burned = Math.min(u.mana, amount);
           u.mana -= burned;
           if (node.burnedAsDamagePct && burned > 0) {
-            applyDamage(sim, caster, u, burned * (node.burnedAsDamagePct / 100), 'magical');
+            applyDamage(sim, caster, u, burned * (node.burnedAsDamagePct / 100), 'magical', { piercesImmunity: ctx.piercesImmunity });
           }
         }
       }
@@ -138,7 +152,10 @@ function execNode(sim: Sim, caster: Unit, ctx: EffectCtx, node: EffectNode, prim
     }
     case 'displace': {
       const units = selectUnits(sim, caster, ctx, node.target, node.radius, primary);
-      for (const u of units) execDisplace(sim, caster, ctx, node, u, primary);
+      for (const u of units) {
+        if (enemySpellBlocked(sim, caster, ctx, u)) continue;
+        execDisplace(sim, caster, ctx, node, u, primary);
+      }
       break;
     }
     case 'zone': {
@@ -173,9 +190,10 @@ function execNode(sim: Sim, caster: Unit, ctx: EffectCtx, node: EffectNode, prim
       break;
     }
     case 'repeat': {
+      const count = Math.max(1, Math.round(V(ctx, node.count, 1)));
       sim.addRepeater({
         casterUid: caster.uid,
-        remaining: Math.max(1, Math.round(V(ctx, node.count, 1))),
+        remaining: count,
         interval: node.interval,
         nextAt: sim.time, // first iteration fires this tick
         effects: node.effects,
@@ -194,6 +212,7 @@ function execNode(sim: Sim, caster: Unit, ctx: EffectCtx, node: EffectNode, prim
     case 'purge': {
       const units = selectUnits(sim, caster, ctx, node.target, undefined, primary);
       for (const u of units) {
+        if (enemySpellBlocked(sim, caster, ctx, u)) continue;
         const removeDebuffs = u.team === caster.team;
         const removed = u.dispel(removeDebuffs);
         for (const r of removed) sim.events.emit({ t: 'status-expire', uid: u.uid, status: r.status });
@@ -242,6 +261,10 @@ function execDisplace(
       u.prevPos = { ...dest };
       sim.disjointProjectiles(u.uid);
       sim.events.emit({ t: 'blink', uid: u.uid, from, to: { ...dest } });
+      // Self blink-strikes (Omnislash, Phantom Strike, Swashbuckle) read as an
+      // airborne dash. Hold that pose so a mid-sequence item tap can't ground us;
+      // repeated slashes re-extend it, single blinks just get a brief tail.
+      if (u === caster) u.setCastGesture('dash', { now: sim.time, lockUntil: sim.time + SELF_DISPLACE_PRESENTATION });
       break;
     }
     case 'knockback': {
@@ -285,7 +308,10 @@ function execDisplace(
           dir = fromAngle(u.facing);
       }
       const speed = V(ctx, node.speed, Math.max(400, distance / 0.5));
-      u.forced.push({ kind: 'forced', dir, speed, until: sim.time + (distance > 0 ? distance / speed : 0.4) });
+      const forcedDuration = distance > 0 ? distance / speed : 0.4;
+      u.forced.push({ kind: 'forced', dir, speed, until: sim.time + forcedDuration });
+      // A self forced-move (charge-style) holds the dash pose for its travel.
+      if (u === caster) u.setCastGesture('dash', { now: sim.time, lockUntil: sim.time + forcedDuration + 0.15 });
       break;
     }
   }

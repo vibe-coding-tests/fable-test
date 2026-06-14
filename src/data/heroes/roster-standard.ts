@@ -1,5 +1,6 @@
 import type { AbilityDef, HeroBaseStats, HeroDef, StatModMap, VfxArchetype } from '../../core/types';
 import { gestureForAbility, soundForAbility } from '../../core/gestures';
+import { echoLoopNote } from './loop-note';
 
 type HeroInput = {
   id: string;
@@ -40,18 +41,6 @@ function vfx(archetype: VfxArchetype, color: string, color2?: string, scale = 0.
   return { archetype, color, color2, scale };
 }
 
-// STORY §2.6 — a one-line "cycle note" so a bound roster Echo reads as a recovered memory
-// from a specific turn of the Loop, not generated filler. Deterministic from the hero id.
-function cycleNote(id: string): string {
-  let h = 2166136261;
-  for (let i = 0; i < id.length; i++) {
-    h ^= id.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  const turn = 1000 + (Math.abs(h) % 8800);
-  return ` Its Echo last fought on the ${turn.toLocaleString('en-US')}th turn of the Loop, and remembers every blow.`;
-}
-
 function tagged(a: AbilityDef): AbilityDef {
   return { ...a, anim: a.anim ?? gestureForAbility(a), sound: a.sound ?? soundForAbility(a) };
 }
@@ -79,7 +68,7 @@ function hero(input: HeroInput): HeroDef {
     attribute: input.attribute,
     roles: input.roles,
     region: input.region,
-    lore: `${input.name} joins Ancients with a compact kit built around the same battlefield decisions that define the Dota hero.${cycleNote(input.id)}`,
+    lore: `${input.name} joins Ancients with a compact kit built around the same battlefield decisions that define the Dota hero.${echoLoopNote(input.id)}`,
     baseStats: baseStats(input.attribute, ranged),
     abilities,
     skillOrder: [0, 1, 2],

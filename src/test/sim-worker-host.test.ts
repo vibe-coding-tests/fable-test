@@ -163,4 +163,17 @@ describe('sim worker host boundary', () => {
     const illusions = sim.unitsArr.filter((u) => u.alive && u.ownerUid === owner.uid && u.name === ILLUSION_SPEC.name);
     expect(illusions).toHaveLength(TUNING.scaleCeilings.illusions);
   });
+
+  it('scales the summon ceiling by the overworld battle-scale dial (§F.2)', () => {
+    const sim = buildDuel(6262);
+    // The dial defaults to 1 (no change) so macro sims that never set it are unaffected.
+    expect(sim.summonCapScale).toBe(1);
+    sim.summonCapScale = 0.5; // overworld "lower for perf"
+    const owner = sim.unitsArr[0];
+    for (let i = 0; i < TUNING.scaleCeilings.summons + 3; i++) {
+      sim.spawnSummon(SUMMON_SPEC, owner, { x: owner.pos.x + i, y: owner.pos.y }, SUMMON_CTX);
+    }
+    const summons = sim.unitsArr.filter((u) => u.alive && u.ownerUid === owner.uid && u.name === SUMMON_SPEC.name);
+    expect(summons).toHaveLength(Math.round(TUNING.scaleCeilings.summons * 0.5));
+  });
 });

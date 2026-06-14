@@ -64,6 +64,25 @@ describe('echo fidelity', () => {
 // Test 2: echo kills advance the shard-gated Find (Phase 2 §3.1)
 // ----------------------------------------------------------------
 describe('echo-advances-find', () => {
+  it('delays the owned starter echo until the lead hero reaches the onboarding gate', () => {
+    const g = Game.headless(newGameSave('juggernaut'));
+    while (g.cinematic.active) g.cinematicSkip();
+
+    const echoes = (g as unknown as { echoHeroes: Map<number, string> }).echoHeroes;
+    expect([...echoes.values()]).not.toContain('tv-echo-juggernaut');
+
+    const rec = g.party[0];
+    expect(rec.heroId).toBe('juggernaut');
+    rec.level = 6;
+    if (rec.unit) rec.unit.level = 6;
+
+    for (let i = 0; i < 110; i++) g.update(0.1);
+
+    const echoUid = [...echoes.entries()].find(([, sid]) => sid === 'tv-echo-juggernaut')?.[0];
+    expect(echoUid).toBeDefined();
+    expect(g.sim.unit(echoUid!)?.level).toBe(7);
+  });
+
   it('banks shards on echo death and only reveals the trial marker at the threshold', () => {
     const g = Game.headless(newGameSave('juggernaut'));
     const heroId = 'sven';
@@ -84,6 +103,70 @@ describe('echo-advances-find', () => {
     for (let i = 1; i < needed; i++) advance(heroId);
     expect(g.questProgress[questId].attunement).toBeGreaterThanOrEqual(needed);
     expect(g.questProgress[questId].stage).toBe('found');
+  });
+});
+
+// ----------------------------------------------------------------
+// Test 2b: right-clicking a recruit from just outside range completes on arrival
+// ----------------------------------------------------------------
+describe('recruit interaction intent', () => {
+  function recruitNpc(g: Game, heroId: string): { npcUid: number; npc: NonNullable<ReturnType<Sim['unit']>> } {
+    const npcs = (g as unknown as { npcHeroes: Map<number, string> }).npcHeroes;
+    const npcUid = [...npcs.entries()].find(([, id]) => id === heroId)?.[0];
+    expect(npcUid).toBeDefined();
+    const npc = g.sim.unit(npcUid!)!;
+    return { npcUid: npcUid!, npc };
+  }
+
+  function foundRecruit(g: Game, heroId: string): { npcUid: number; npc: NonNullable<ReturnType<Sim['unit']>> } {
+    const questId = REG.hero(heroId).recruitmentQuestId!;
+    const needed = REG.quest(questId).findShardsNeeded ?? TUNING.findShardsNeeded;
+    g.questProgress[questId] = { stage: 'found', attunement: needed, trialCompletions: 0 };
+    return recruitNpc(g, heroId);
+  }
+
+  it('starts a visible recruit trial even before echo shards reveal the rumor', () => {
+    const g = Game.headless(newGameSave('juggernaut'));
+    const heroId = 'sven';
+    const questId = REG.hero(heroId).recruitmentQuestId!;
+    const { npcUid, npc } = recruitNpc(g, heroId);
+    const player = g.activeUnit()!;
+    player.pos = { x: npc.pos.x + 80, y: npc.pos.y };
+
+    expect(g.questProgress[questId]?.stage ?? 'unfound').toBe('unfound');
+    g.tryRecruit(npcUid);
+
+    expect(g.questProgress[questId].stage).toBe('found');
+    expect(g.activeTrial).not.toBeNull();
+  });
+
+  it('starts the recruitment trial after walking into range', () => {
+    const g = Game.headless(newGameSave('juggernaut'));
+    const { npcUid, npc } = foundRecruit(g, 'sven');
+    const player = g.activeUnit()!;
+    player.pos = { x: npc.pos.x + 370, y: npc.pos.y };
+
+    g.tryRecruit(npcUid);
+    expect(g.activeTrial).toBeNull();
+
+    player.pos = { x: npc.pos.x + 80, y: npc.pos.y };
+    g.update(0.05);
+
+    expect(g.activeTrial).not.toBeNull();
+  });
+
+  it('cancels a pending recruit when another move order is issued', () => {
+    const g = Game.headless(newGameSave('juggernaut'));
+    const { npcUid, npc } = foundRecruit(g, 'sven');
+    const player = g.activeUnit()!;
+    player.pos = { x: npc.pos.x + 370, y: npc.pos.y };
+
+    g.tryRecruit(npcUid);
+    g.orderMove({ x: player.pos.x + 600, y: player.pos.y });
+    player.pos = { x: npc.pos.x + 80, y: npc.pos.y };
+    g.update(0.05);
+
+    expect(g.activeTrial).toBeNull();
   });
 });
 
@@ -304,6 +387,54 @@ describe('recruit-ceiling', () => {
   });
 });
 
+describe('manual hero skill points', () => {
+  it('level-ups create a pending skill point without auto-changing ability ranks', () => {
+    const game = Game.headless(newGameSave('juggernaut'));
+    const rec = game.party[0];
+    const hero = game.activeUnit()!;
+    const startingRanks = hero.abilities.map((a) => a.level);
+
+    expect(game.pendingSkillPoints(rec)).toBe(0);
+    hero.addXp(xpForLevel(2));
+    rec.level = hero.level;
+    rec.xp = hero.xp;
+
+    expect(game.pendingSkillPoints(rec)).toBe(1);
+    expect(hero.abilities.map((a) => a.level)).toEqual(startingRanks);
+    expect(game.levelAbility(0, 1)).toBe(true);
+    expect(game.pendingSkillPoints(rec)).toBe(0);
+    expect(hero.abilities[1].level).toBe(1);
+  });
+
+  it('gates ultimate ranks at Dota levels and allows attributes as a spend target', () => {
+    const lockedSave = newGameSave('juggernaut');
+    lockedSave.roster[0].level = 5;
+    lockedSave.roster[0].xp = xpForLevel(5);
+    lockedSave.roster[0].abilityLevels = [2, 2, 0, 0];
+    const locked = Game.headless(lockedSave);
+    expect(locked.pendingSkillPoints(locked.party[0])).toBe(1);
+    expect(locked.canLevelAbility(0, 3)).toBe(false);
+
+    const openSave = newGameSave('juggernaut');
+    openSave.roster[0].level = 6;
+    openSave.roster[0].xp = xpForLevel(6);
+    openSave.roster[0].abilityLevels = [2, 2, 1, 0];
+    const open = Game.headless(openSave);
+    expect(open.pendingSkillPoints(open.party[0])).toBe(1);
+    expect(open.canLevelAbility(0, 3)).toBe(true);
+
+    const attrSave = newGameSave('juggernaut');
+    attrSave.roster[0].level = 2;
+    attrSave.roster[0].xp = xpForLevel(2);
+    attrSave.roster[0].abilityLevels = [1, 0, 0, 0];
+    const attr = Game.headless(attrSave);
+    const strBefore = attr.activeUnit()!.stats.str;
+    expect(attr.applyAttributePoint(0)).toBe(true);
+    expect(attr.pendingSkillPoints(attr.party[0])).toBe(0);
+    expect(attr.activeUnit()!.stats.str).toBe(strBefore + 2);
+  });
+});
+
 // ----------------------------------------------------------------
 // TV -> Nightsilver requires the first recruit (Phase 2 §3.4)
 // ----------------------------------------------------------------
@@ -316,6 +447,7 @@ describe('TV->Nightsilver recruit gate', () => {
     // stand on the gate with only the starter recruited
     g.activeUnit()!.pos = { ...gate.pos };
     expect(g.recruitedCount()).toBe(0);
+    expect(g.gateTravelBlockReason(gate)).toBe('requires recruiting 1 hero first');
     expect(g.tryTravel()).toBe(false);
     expect(g.toasts.at(-1)!.text.toLowerCase()).toContain('recruit');
 
@@ -323,5 +455,6 @@ describe('TV->Nightsilver recruit gate', () => {
     g.recruited.add('sven');
     expect(g.recruitedCount()).toBe(1);
     expect(g.recruitedCount()).toBeGreaterThanOrEqual(gate.requiresRecruits!);
+    expect(g.gateTravelBlockReason(gate)).toBe(null);
   });
 });

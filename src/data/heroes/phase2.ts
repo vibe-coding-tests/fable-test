@@ -1,6 +1,7 @@
 import type { AbilityDef, HeroBaseStats, HeroDef, StatModMap } from '../../core/types';
 import { gestureForAbility, soundForAbility } from '../../core/gestures';
 import { buildSeedAghanim } from './seed-aghanim';
+import { echoLoopNote } from './loop-note';
 
 type HeroSeed = {
   id: string;
@@ -64,7 +65,7 @@ function hero(seed: HeroSeed, talentA: [string, string], talentB: [string, strin
     attribute: seed.attribute,
     roles: seed.roles,
     region: seed.region,
-    lore: seed.lore,
+    lore: `${seed.lore}${echoLoopNote(seed.id)}`,
     baseStats: seed.baseStats,
     skillOrder: [0, 1, 2],
     abilities,

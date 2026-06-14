@@ -1,4 +1,5 @@
 import type { HeroDef } from '../../core/types';
+import { loopTurnLabel } from './loop-note';
 
 export const PUDGE: HeroDef = {
   id: 'pudge',
@@ -7,7 +8,7 @@ export const PUDGE: HeroDef = {
   attribute: 'str',
   roles: ['disabler', 'durable', 'initiator'],
   region: 'tranquil-vale',
-  lore: 'He wandered down from the Reaches following a smell only he could name. The vale tolerates him because his hook points the right way.',
+  lore: `He wandered down from the Reaches following a smell only he could name. The vale tolerates him because his hook points the right way. His Echo last fought on turn ${loopTurnLabel('pudge')} of the Loop, and the hook still remembers the way home.`,
   baseStats: {
     str: 25, agi: 14, int: 16,
     strGain: 3.6, agiGain: 1.4, intGain: 1.5,

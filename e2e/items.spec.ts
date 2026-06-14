@@ -46,9 +46,9 @@ test.describe('items & loot', () => {
       const g = (window as any).__game;
       (window as any).__test.addGold(3000);
       (window as any).__test.addXp(50000);
-      g.buyItem('broadsword');
+      g.buyItem('blades-of-attack');
       const u = g.activeUnit();
-      const slot = u.items.findIndex((it: any) => it && it.defId === 'broadsword');
+      const slot = u.items.findIndex((it: any) => it && it.defId === 'blades-of-attack');
       const goldBeforeSell = g.gold;
       const countBeforeSell = u.items.filter((it: any) => it).length;
       g.sellItem(slot);

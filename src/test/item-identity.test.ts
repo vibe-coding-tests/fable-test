@@ -83,6 +83,23 @@ describe('Black King Bar', () => {
     expect(me.hp).toBeLessThan(hpBefore);
   });
 
+  it('does not play another item gesture while on cooldown', () => {
+    const { sim, me } = lab();
+    const slot = give(sim, me, 'black-king-bar');
+
+    sim.order(me.uid, { kind: 'item', invSlot: slot });
+    sim.run(0.2);
+    const castingUntilAfterUse = me.castingUntil;
+    const itemUseEvents = sim.events.history.filter((e) => e.t === 'item-used').length;
+
+    sim.order(me.uid, { kind: 'item', invSlot: slot });
+    sim.run(0.05);
+
+    expect(me.order.kind).toBe('stop');
+    expect(me.castingUntil).toBe(castingUntilAfterUse);
+    expect(sim.events.history.filter((e) => e.t === 'item-used')).toHaveLength(itemUseEvents);
+  });
+
   it('basic-dispels existing debuffs on pop (the classic clutch press)', () => {
     const { sim, me } = lab();
     const slot = give(sim, me, 'black-king-bar');
@@ -175,6 +192,27 @@ describe('Force Staff', () => {
   });
 });
 
+describe('Meteor Hammer', () => {
+  it('channels before landing its damage and stun at the target point', () => {
+    const { sim, me, foe } = lab();
+    const slot = give(sim, me, 'meteor-hammer');
+    me.mana = 999;
+    const hpBefore = foe.hp;
+
+    sim.order(me.uid, { kind: 'item', invSlot: slot, point: { ...foe.pos } });
+    sim.run(0.1);
+
+    expect(me.channel?.source).toBe('item');
+    expect(foe.hp).toBe(hpBefore);
+
+    sim.run(1.6);
+
+    expect(me.channel).toBeNull();
+    expect(foe.hp).toBeLessThan(hpBefore);
+    expect(foe.summary.stunned).toBe(true);
+  });
+});
+
 describe('Glimmer Cape', () => {
   it('fades an ally into invisibility', () => {
     const { sim, me, foe } = lab();
@@ -187,6 +225,17 @@ describe('Glimmer Cape', () => {
     sim.run(0.7);
     expect(ally.summary.invisible).toBe(true);
     expect(ally.isVisibleTo(foe.team, sim.time)).toBe(false);
+  });
+});
+
+describe('item active catalog', () => {
+  it('does not define visual-only active items without an executable payload', () => {
+    const inertActives = [...REG.items.values()]
+      .filter((def) => def.active)
+      .filter((def) => !def.active!.effects?.length && !def.active!.channel && !def.active!.toggle)
+      .map((def) => def.id);
+
+    expect(inertActives).toEqual([]);
   });
 });
 

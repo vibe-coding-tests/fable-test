@@ -4,6 +4,7 @@ import { REG } from '../core/registry';
 import { Sim } from '../core/sim';
 import { applyStatus } from '../core/effects';
 import { applyDamage } from '../core/combat';
+import { makeItemState } from '../core/items';
 import { dist } from '../core/math2d';
 
 // ============================================================
@@ -189,6 +190,66 @@ describe('Juggernaut', () => {
     sim.run(3);
     expect(a.alive && b.alive).toBe(false); // kobolds did not enjoy that
     expect(jug.summary.untargetable).toBe(false);
+  });
+
+  it('Omnislash can start on a spell-immune enemy hero', () => {
+    const sim = arena();
+    const jug = sim.spawnHero(REG.hero('juggernaut'), { team: 0, pos: { x: 1000, y: 1000 }, level: 12, ctrl: { kind: 'player' } });
+    jug.mana = 999;
+    const target = sim.spawnHero(REG.hero('crystal-maiden'), { team: 1, pos: { x: 1300, y: 1000 }, level: 8, ctrl: { kind: 'none' } });
+    applyStatus(sim, target, target, 'magic-immune', 10, { tag: 'test-bkb' }, { defId: 'test-bkb', level: 1, vfx: { archetype: 'shield', color: '#ffd27f' } });
+    target.refresh(sim.time);
+    const hpBefore = target.hp;
+    sim.order(jug.uid, { kind: 'cast', slot: 3, uid: target.uid });
+    sim.run(1.2);
+    expect(jug.lastAbilityCastId).toBe('jug-omnislash');
+    expect(target.hp).toBeLessThan(hpBefore);
+  });
+
+  it('item actives do not steal Omnislash dash presentation mid-sequence', () => {
+    const sim = arena();
+    const jug = sim.spawnHero(REG.hero('juggernaut'), { team: 0, pos: { x: 1000, y: 1000 }, level: 12, ctrl: { kind: 'player' } });
+    jug.mana = 999;
+    jug.items[0] = makeItemState(REG.item('black-king-bar'));
+    const targets = [
+      sim.spawnHero(REG.hero('pudge'), { team: 1, pos: { x: 1300, y: 1000 }, level: 12, ctrl: { kind: 'none' } }),
+      sim.spawnHero(REG.hero('sven'), { team: 1, pos: { x: 1500, y: 1120 }, level: 12, ctrl: { kind: 'none' } })
+    ];
+    const hpBefore = targets.reduce((sum, target) => sum + target.hp, 0);
+
+    sim.order(jug.uid, { kind: 'cast', slot: 3, uid: targets[0].uid });
+    sim.run(0.8);
+    expect(jug.summary.untargetable).toBe(true);
+    expect(jug.castGesture).toBe('dash'); // mid-slash: airborne dash pose
+
+    sim.order(jug.uid, { kind: 'item', invSlot: 0 });
+    sim.run(0.1);
+
+    // the item still fires...
+    expect(jug.summary.magicImmune).toBe(true);
+    expect(jug.items[0]?.cooldownUntil).toBeGreaterThan(sim.time);
+    // ...without grounding the slash sequence: the dash pose holds and the
+    // presentation lock keeps it past the item's own cast window.
+    expect(jug.castGesture).toBe('dash');
+    expect(jug.castGestureLockUntil).toBeGreaterThan(sim.time);
+    expect(jug.castingUntil).toBeGreaterThan(sim.time);
+    sim.run(1.5);
+    expect(targets.reduce((sum, target) => sum + target.hp, 0)).toBeLessThan(hpBefore);
+  });
+
+  it('piercing ultimates still damage and disable spell-immune heroes', () => {
+    const sim = arena();
+    const tide = sim.spawnHero(REG.hero('tidehunter'), { team: 0, pos: { x: 1000, y: 1000 }, level: 18, ctrl: { kind: 'player' } });
+    tide.mana = 999;
+    const target = sim.spawnHero(REG.hero('crystal-maiden'), { team: 1, pos: { x: 1250, y: 1000 }, level: 12, ctrl: { kind: 'none' } });
+    applyStatus(sim, target, target, 'magic-immune', 10, { tag: 'test-bkb' }, { defId: 'test-bkb', level: 1, vfx: { archetype: 'shield', color: '#ffd27f' } });
+    target.refresh(sim.time);
+    const hpBefore = target.hp;
+    sim.order(tide.uid, { kind: 'cast', slot: 3 });
+    sim.run(1.0);
+    expect(tide.lastAbilityCastId).toBe('tide-ravage');
+    expect(target.hp).toBeLessThan(hpBefore);
+    expect(target.summary.stunned).toBe(true);
   });
 
   it('Healing Ward heals percent max HP around it', () => {

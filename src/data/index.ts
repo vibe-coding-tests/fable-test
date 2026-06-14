@@ -21,6 +21,7 @@ import { ICEWRACK } from './regions/icewrack';
 import { PHASE3_REGIONS } from './regions/phase3';
 import { ALL_GYMS } from './gyms';
 import { ALL_QUESTS, ALL_TRIALS } from './quests';
+import { ALL_QUEST_DEFS } from './quests/board';
 import { ALL_NEUTRAL_ITEMS } from './neutral-items';
 import { ALL_BOSSES } from './bosses';
 import { ALL_RAIDS } from './raids';
@@ -139,6 +140,7 @@ export function registerAllContent(): void {
   for (const r of ALL_REGIONS) REG.registerRegion(r);
   for (const t of ALL_TRIALS) REG.registerTrial(t);
   for (const q of ALL_QUESTS) REG.registerQuest(q);
+  for (const q of ALL_QUEST_DEFS) REG.registerQuestDef(q);
   for (const g of ALL_GYMS) REG.registerGym(g);
   for (const n of ALL_NEUTRAL_ITEMS) REG.registerNeutralItem(n);
   for (const b of ALL_BOSSES) REG.registerBoss(b);

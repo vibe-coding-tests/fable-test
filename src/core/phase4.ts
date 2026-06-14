@@ -8,7 +8,7 @@ import type { GameSaveV3, LegacySettings } from './phase3';
 // ------------------------------------------------------------------
 
 export function defaultAudioSettings(): AudioSettings {
-  return { master: 0.8, sfx: 0.8, voice: 0.7, stinger: 0.7, muted: false };
+  return { master: 0.8, sfx: 0.8, voice: 0.7, stinger: 0.7, music: 0.6, muted: false };
 }
 
 export function defaultGraphicsSettings(): GraphicsSettings {
@@ -23,10 +23,12 @@ export function defaultGraphicsSettings(): GraphicsSettings {
     drawDistance: 'medium',
     crowdDetail: 'auto',
     vfxDensity: 1,
+    battleScale: 1,
     screenShake: 1,
     exposure: 0.92,
     grade: 1,
-    reducedMotion: false
+    reducedMotion: false,
+    colorblind: false
   };
 }
 
@@ -37,7 +39,8 @@ export function defaultCutsceneSettings(): CutsceneSettings {
 /**
  * Fold legacy loose volumes into the v4 audio channel object.
  * masterVolume -> master, sfxVolume -> sfx, musicVolume -> stinger (stingers are
- * the musical layer); voice has no v3 analogue, so it defaults. (DECISIONS.md)
+ * the musical layer) and -> music (the biome bed); voice has no v3 analogue, so
+ * it defaults. (DECISIONS.md)
  */
 export function migrateAudioSettings(old: (LegacySettings & { audio?: AudioSettings; graphics?: GraphicsSettings; cutscene?: CutsceneSettings }) | undefined): GameSave['settings'] {
   const d = defaultAudioSettings();
@@ -61,10 +64,12 @@ export function migrateAudioSettings(old: (LegacySettings & { audio?: AudioSetti
       drawDistance: gx?.drawDistance ?? gd.drawDistance,
       crowdDetail: gx?.crowdDetail ?? gd.crowdDetail,
       vfxDensity: gx?.vfxDensity ?? gd.vfxDensity,
+      battleScale: gx?.battleScale ?? gd.battleScale,
       screenShake: gx?.screenShake ?? gd.screenShake,
       exposure: gx?.exposure ?? gd.exposure,
       grade: gx?.grade ?? gd.grade,
-      reducedMotion: gx?.reducedMotion ?? gd.reducedMotion
+      reducedMotion: gx?.reducedMotion ?? gd.reducedMotion,
+      colorblind: gx?.colorblind ?? gd.colorblind
     },
     cutscene: {
       length: cx?.length ?? cd.length,
@@ -79,6 +84,7 @@ export function migrateAudioSettings(old: (LegacySettings & { audio?: AudioSetti
           sfx: existing.sfx ?? d.sfx,
           voice: existing.voice ?? d.voice,
           stinger: existing.stinger ?? d.stinger,
+          music: existing.music ?? d.music,
           muted: existing.muted ?? d.muted
         }
       : {
@@ -86,6 +92,7 @@ export function migrateAudioSettings(old: (LegacySettings & { audio?: AudioSetti
           sfx: old?.sfxVolume ?? d.sfx,
           voice: d.voice,
           stinger: old?.musicVolume ?? d.stinger,
+          music: old?.musicVolume ?? d.music,
           muted: false
         }
   };

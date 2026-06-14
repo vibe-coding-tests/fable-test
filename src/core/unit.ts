@@ -270,11 +270,20 @@ export class Unit {
     this.mana = this.stats.maxMana;
   }
 
-  setCastGesture(gesture: AnimGesture, until: number, opts: { now: number; lock?: boolean } = { now: -Infinity }): void {
-    if (!opts.lock && this.castGestureLockUntil > opts.now && this.castingUntil > opts.now) return;
+  /**
+   * Set the displayed cast pose. `windowUntil` extends `castingUntil`, the
+   * AI-visible action window (left untouched when omitted, so render-only locks
+   * never perturb deterministic AI). `lockUntil` protects the pose: while a lock
+   * is active, a lower-priority tap (item, follow-up cast) still claims its
+   * action window but cannot replace the locked gesture — that is what keeps a
+   * blink-strike (Omnislash) airborne instead of grounding mid-sequence.
+   */
+  setCastGesture(gesture: AnimGesture, opts: { now: number; windowUntil?: number; lockUntil?: number }): void {
+    if (opts.windowUntil !== undefined) this.castingUntil = Math.max(this.castingUntil, opts.windowUntil);
+    const settingLock = opts.lockUntil !== undefined;
+    if (settingLock) this.castGestureLockUntil = Math.max(this.castGestureLockUntil, opts.lockUntil!);
+    if (!settingLock && this.castGestureLockUntil > opts.now) return;
     this.castGesture = gesture;
-    this.castingUntil = Math.max(this.castingUntil, until);
-    if (opts.lock) this.castGestureLockUntil = Math.max(this.castGestureLockUntil, until);
   }
 
   // ---------- stats ----------

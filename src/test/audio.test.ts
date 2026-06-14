@@ -8,7 +8,7 @@ import { REG } from '../core/registry';
 import { Sim } from '../core/sim';
 import { soundForAbility } from '../core/gestures';
 import { ProceduralAudio } from '../engine/audio';
-import { SampledAudioBank, MUSIC_BEDS, SFX_KEYS } from '../engine/sampled-audio';
+import { CAST_SFX_BY_SOUND, SampledAudioBank, MUSIC_BEDS, SFX_KEYS } from '../engine/sampled-audio';
 import { TUNING } from '../data/tuning';
 import type { GameSave, SimEvent, SoundArchetype } from '../core/types';
 
@@ -19,7 +19,7 @@ const VALID_SOUNDS: SoundArchetype[] = [
 ];
 
 function settings(muted = false): GameSave['settings'] {
-  return { quickcast: false, audio: { master: 0.8, sfx: 0.8, voice: 0.7, stinger: 0.7, muted } };
+  return { quickcast: false, audio: { master: 0.8, sfx: 0.8, voice: 0.7, stinger: 0.7, music: 0.6, muted } };
 }
 
 function castEvent(uid: number): SimEvent {
@@ -45,6 +45,26 @@ describe('test 20 — audio-coverage + safety', () => {
     }
   });
 
+  it('maps every spell sound archetype to a sampled cast cue', () => {
+    const keys = new Set(SFX_KEYS);
+    for (const sound of VALID_SOUNDS) {
+      expect(keys, sound).toContain(CAST_SFX_BY_SOUND[sound]);
+    }
+    for (const hero of ALL_HEROES) {
+      for (const ab of hero.abilities) {
+        expect(keys, `${hero.id}/${ab.id}`).toContain(CAST_SFX_BY_SOUND[soundForAbility(ab)]);
+      }
+    }
+    for (const creep of ALL_CREEPS) {
+      for (const ab of creep.abilities ?? []) {
+        expect(keys, `${creep.id}/${ab.id}`).toContain(CAST_SFX_BY_SOUND[soundForAbility(ab)]);
+      }
+    }
+    for (const item of ALL_ITEMS) {
+      if (item.active) expect(keys, `item:${item.id}`).toContain(CAST_SFX_BY_SOUND[soundForAbility(item.active)]);
+    }
+  });
+
   it('uses the lightning archetype for electric chain signatures', () => {
     const leshrac = REG.hero('leshrac');
     const lightningStorm = leshrac.abilities.find((a) => a.id === 'lesh-lightning-storm');
@@ -59,6 +79,17 @@ describe('test 20 — audio-coverage + safety', () => {
       audio.unlock();
       audio.handleEvent(castEvent(1));
       audio.handleEvent({ t: 'bark', uid: 1, line: 'For the Isle!' });
+      // Every event type that now carries a cue should be safe to drive headless.
+      audio.handleEvent({ t: 'revive', uid: 1, pos: { x: 0, y: 0 } });
+      audio.handleEvent({ t: 'immune-block', uid: 1 });
+      audio.handleEvent({ t: 'blink', uid: 1, from: { x: 0, y: 0 }, to: { x: 9, y: 9 } });
+      audio.handleEvent({ t: 'summon', uid: 1, pos: { x: 0, y: 0 } });
+      audio.handleEvent({ t: 'aoe-burst', pos: { x: 0, y: 0 }, radius: 600, vfx: { archetype: 'ground-aoe', color: '#fff' } });
+      audio.handleEvent({ t: 'capture-start', uid: 1, target: 2, duration: 3 });
+      audio.handleEvent({ t: 'capture-interrupt', target: 2 });
+      for (const status of ['stun', 'frozen', 'hex', 'sleep', 'fear', 'root', 'taunt', 'cyclone', 'slow', 'buff'] as const) {
+        audio.handleEvent({ t: 'status-apply', uid: 1, status, duration: 2 });
+      }
       audio.playStinger('badge');
       audio.playStinger('raid-clear');
       audio.setCinematicMix('duck');
@@ -75,6 +106,10 @@ describe('test 20 — audio-coverage + safety', () => {
     const audio = new ProceduralAudio(settings(true));
     audio.unlock();
     for (let i = 0; i < 20; i++) audio.handleEvent(castEvent(i));
+    audio.handleEvent({ t: 'revive', uid: 1, pos: { x: 0, y: 0 } });
+    audio.handleEvent({ t: 'immune-block', uid: 1 });
+    audio.handleEvent({ t: 'aoe-burst', pos: { x: 0, y: 0 }, radius: 400, vfx: { archetype: 'ground-aoe', color: '#fff' } });
+    audio.handleEvent({ t: 'status-apply', uid: 1, status: 'stun', duration: 2 });
     audio.playStinger('merge');
     expect(audio.activeVoiceCount()).toBe(0);
     // muted never opens an AudioContext

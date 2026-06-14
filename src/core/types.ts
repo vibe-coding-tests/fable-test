@@ -311,6 +311,7 @@ export interface AudioSettings {
   sfx: number;
   voice: number;
   stinger: number;
+  music: number;
   muted: boolean;
 }
 
@@ -333,10 +334,12 @@ export interface GraphicsSettings {
   drawDistance: GraphicsDistance;
   crowdDetail: GraphicsCrowdDetail;
   vfxDensity: number;     // 0.5..1.5 multiplier over the tier VFX cap
+  battleScale: number;    // 0.5..1.5 overworld summon/illusion ceiling scale; macro fights ignore it
   screenShake: number;    // 0..1 multiplier; 0 disables gameplay camera shake
   exposure: number;      // tonemapping exposure, 0.5..1.5 (default 0.92)
   grade: number;         // color-grade strength, 0..1.5 (default 1)
   reducedMotion: boolean; // freezes ambient particle/water motion
+  colorblind: boolean;   // swaps the rarity/loot palette for a high-contrast colorblind-safe set
 }
 
 // Cut-scene controls (STORY §3.4): the player is always in charge of staging.
@@ -1164,6 +1167,71 @@ export interface QuestProgress {
   trialCompletions: number;
 }
 
+// ---------- Quests: bounties + event chapters (QUEST.md) ----------
+// A general objective/reward quest layer beside the recruitment chain above.
+export type QuestKind = 'recurring' | 'event';
+export type QuestObjectiveKind =
+  | 'kill-creeps'
+  | 'kill-echoes'
+  | 'capture-creeps'
+  | 'recruit-heroes'
+  | 'clear-boss'
+  | 'clear-raid'
+  | 'clear-dungeon'
+  | 'earn-badge'
+  | 'reach-region';
+
+export interface QuestObjective {
+  kind: QuestObjectiveKind;
+  count: number;
+  text: string;
+  regionId?: string;        // restrict counting to one region
+  tier?: CreepTier;         // restrict creep kills/captures to a tier
+  targetId?: string;        // a specific boss/raid/region/badge id
+}
+
+export type QuestReward =
+  | { kind: 'gold'; amount: number }
+  | { kind: 'xp'; amount: number; scope?: 'active' | 'party' }
+  | { kind: 'loot-mark'; band: LootBand; amount: number }
+  | { kind: 'item'; itemId: string; quality?: ItemQuality }
+  | { kind: 'essence'; amount: number }
+  | { kind: 'recruit'; heroId: string }
+  | { kind: 'title'; id: string; name: string; note: string };
+
+export interface QuestPrereq {
+  badges?: number;          // ≥ this many badges
+  recruited?: number;       // ≥ this many recruited heroes
+  raidClears?: number;      // ≥ this many total raid clears
+  region?: string;          // must have reached this region
+  quests?: string[];        // these quest ids must be claimed first (chain)
+  anyOf?: QuestPrereq[];     // OR-gate: at least one sub-prereq must also be met
+}
+
+export interface QuestDef {
+  id: string;
+  kind: QuestKind;
+  name: string;
+  summary: string;
+  giver?: string;           // flavor board / NPC name
+  regionId?: string;        // home region (board listing)
+  objectives: QuestObjective[];
+  rewards: QuestReward[];
+  prereq?: QuestPrereq;
+  cooldownSec?: number;     // recurring: rest this long after a claim
+  repeatable?: boolean;     // recurring quests set this; event quests do not
+  next?: string;            // questline: auto-unlocks this quest id on claim
+  dialogue?: string[];
+}
+
+export type QuestStatus = 'locked' | 'active' | 'complete' | 'claimed' | 'cooldown';
+export interface QuestSave {
+  status: QuestStatus;
+  progress: number[];
+  completions: number;
+  availableAt?: number;     // playtime sec a cooled-down recurring re-arms at
+}
+
 export interface GymDef {
   id: string;
   name: string;
@@ -1384,6 +1452,7 @@ export interface GameSave {
   recruited: string[];
   badges: string[];
   questProgress: Record<string, QuestProgress>;
+  quests: Record<string, QuestSave>;     // bounty/chapter quest state (QUEST.md)
   defeatedGyms: string[];
   echoRespawn: Record<string, number>; // echo spawn id -> seconds remaining
   campRespawn: Record<string, number>; // camp id -> seconds remaining

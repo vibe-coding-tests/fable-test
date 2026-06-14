@@ -163,7 +163,7 @@ describe('gameplay overhaul: locomotion and discovery', () => {
     expect(game.tryInteract()).toBe(true);
     expect(game.openedChests.has('tv-chest-dawn-ridge')).toBe(true);
     expect(game.gold).toBeGreaterThan(goldBefore);
-    expect(game.inventoryStash.some((item) => item.id === 'magic-wand')).toBe(true);
+    expect(game.groundItemDrops.some((drop) => drop.item.id === 'magic-wand')).toBe(true);
     expect(game.explorationFor()).toBeGreaterThan(0);
   });
 

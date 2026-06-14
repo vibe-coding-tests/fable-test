@@ -1,4 +1,4 @@
-import type { CutsceneBeat, CutsceneDef, RegionDef } from '../core/types';
+import type { CutsceneBeat, CutsceneDef, RegionDef, ShotAngle, ShotMove, StageAction } from '../core/types';
 import { compileCutsceneDsl } from '../engine/cutscene-dsl';
 import { ALL_GYMS } from './gyms';
 import { ALL_RAIDS } from './raids';
@@ -347,7 +347,216 @@ function resolveCutsceneRef(ref: string): string {
   throw new Error(`cutscene ref not found: ${ref}`);
 }
 
-function raidIntro(raid: (typeof ALL_RAIDS)[number]): CutsceneDef {
+// STORY §6.7/§6.13: every claimant gets a bespoke intro built on the same three
+// dramatic beats (withhold -> reveal -> claim) but with its own silhouette read,
+// world register, signature staging, and palette. The boss is never focused in
+// the opener; the silhouette resolves before the name, then the two shipped raid
+// lines land the reveal and the claim. RAID_INTRO_SPECS replaces the old shared
+// template; genericRaidIntro() stays only as a safety net for unlisted raids.
+interface RaidIntroBeatSpec {
+  angle: ShotAngle;
+  move: ShotMove;
+  palette: string;
+  mood: string;
+  stage: StageAction[];
+}
+interface RaidIntroSpec {
+  caption: string;
+  open: RaidIntroBeatSpec & { speaker: string; line: string };
+  reveal: RaidIntroBeatSpec;
+  claim: RaidIntroBeatSpec;
+}
+
+const RAID_INTRO_SPECS: Record<string, RaidIntroSpec> = {
+  'roshan-pit': {
+    caption: 'Director note: Dota-native register — pit gold and an empty arena that lies. Hold on the bare stone, let the Aegis-glint promise a bargain, then let Roshan rise into frame so the silhouette reads before the name.',
+    open: {
+      angle: 'high', move: 'hold', palette: 'pit gold', mood: 'baited quiet', speaker: "Roshan's Pit",
+      line: 'The Pit is empty. Empty is the only lie it ever needs to tell.',
+      stage: [{ kind: 'describe-environment', text: 'A single shard of Aegis-light hangs over bare stone, promising a bargain.' }]
+    },
+    reveal: {
+      angle: 'low', move: 'crane', palette: 'pit gold', mood: 'immortal rising',
+      stage: [{ kind: 'focus', target: 'boss' }, { kind: 'develop-character', target: 'boss', text: 'The stone itself stands up and remembers being a guardian.', gesture: 'ground-slam' }]
+    },
+    claim: {
+      angle: 'low', move: 'push-in', palette: 'pit gold', mood: 'bargain pressed',
+      stage: [{ kind: 'introduce-conflict', text: 'The Pit That Never Stays Empty', target: 'boss' }, { kind: 'vfx', archetype: 'ground-aoe', color: '#ffd86a' }]
+    }
+  },
+  'lord-of-terror': {
+    caption: 'Director note: Diablo register — lightless black kept honest by one rift-ember. The horror rises from the floor instead of walking in; the rift looks back before the Lord does.',
+    open: {
+      angle: 'high', move: 'hold', palette: 'hell-rift red', mood: 'one ember lit', speaker: 'Hell-rift',
+      line: 'The floor keeps one ember burning, like an eye that never learned to close.',
+      stage: [{ kind: 'describe-environment', text: 'A seam of rift-light splits the stone, breathing heat upward.' }]
+    },
+    reveal: {
+      angle: 'low', move: 'crane', palette: 'hell-rift red', mood: 'abyss ascending',
+      stage: [{ kind: 'focus', target: 'boss' }, { kind: 'develop-character', target: 'boss', text: 'The abyss climbs out of its own rift, wearing a crown of fear.', gesture: 'toggle-stance' }, { kind: 'vfx', archetype: 'beam', color: '#ff4c2f' }]
+    },
+    claim: {
+      angle: 'low', move: 'push-in', palette: 'hell-rift red', mood: 'terror crowned',
+      stage: [{ kind: 'introduce-conflict', text: 'Warden of the Hell-Rift', target: 'boss' }, { kind: 'vfx', archetype: 'ground-aoe', color: '#ff4c2f' }]
+    }
+  },
+  'lich-king': {
+    caption: 'Director note: Warcraft register — cryo white-blue and a backlit throne. Climb the glacier past everyone who tried, hold the king as a silhouette against the cold light, then let the summit freeze shut.',
+    open: {
+      angle: 'wide', move: 'crane', palette: 'frost crown', mood: 'frozen ascent', speaker: 'Frozen Summit',
+      line: 'Every climber who tried is still here, frozen one step short of the throne.',
+      stage: [{ kind: 'establish-history', text: 'Statues of the fallen line the glacier like a staircase of failures.' }]
+    },
+    reveal: {
+      angle: 'low', move: 'crane', palette: 'frost crown', mood: 'throne backlit',
+      stage: [{ kind: 'focus', target: 'boss' }, { kind: 'develop-character', target: 'boss', text: 'A crowned silhouette sits where the climb ends, patient as winter.', gesture: 'toggle-stance' }]
+    },
+    claim: {
+      angle: 'high', move: 'push-in', palette: 'frost crown', mood: 'summit sealing',
+      stage: [{ kind: 'introduce-conflict', text: 'Sovereign of the Frozen Summit', target: 'boss' }, { kind: 'vfx', archetype: 'storm', color: '#d8f4ff' }]
+    }
+  },
+  'queen-of-blades': {
+    caption: 'Director note: StarCraft register — fallen-star purple and a crater strung like a web. The trap is the first beat; the swarm rises before the mother does, so the room feels closed before she speaks.',
+    open: {
+      angle: 'high', move: 'hold', palette: 'fallen-star purple', mood: 'web waiting', speaker: 'Fallen-star Crater',
+      line: 'The crater is strung tight, and it has been waiting for a pulse to follow.',
+      stage: [{ kind: 'describe-environment', text: 'Threads of fallen-star silk cross the crater like a net already set.' }]
+    },
+    reveal: {
+      angle: 'wide', move: 'push-in', palette: 'fallen-star purple', mood: 'swarm closing',
+      stage: [{ kind: 'focus', target: 'boss' }, { kind: 'vfx', archetype: 'vortex', color: '#d882ff' }, { kind: 'develop-character', target: 'boss', text: 'The web tightens toward its mother, and the mother smiles.' }]
+    },
+    claim: {
+      angle: 'low', move: 'push-in', palette: 'fallen-star purple', mood: 'brood rising',
+      stage: [{ kind: 'introduce-conflict', text: 'Mother of the Fallen Star', target: 'boss' }, { kind: 'vfx', archetype: 'summon-pop', color: '#d882ff' }]
+    }
+  },
+  'renegade-marshal': {
+    caption: 'Director note: StarCraft register — gunmetal voidlight, lens-flare swagger. Open on a dead fleet and bootprints that did not run, rack from the rifle to the man, then let the wreck answer like a firing line.',
+    open: {
+      angle: 'wide', move: 'hold', palette: 'gunmetal voidlight', mood: 'dead fleet', speaker: 'Wreck of the Fallen Fleet',
+      line: 'A whole fleet died here. One set of bootprints walked toward the wreck instead of away.',
+      stage: [{ kind: 'describe-environment', text: 'Cold hulls drift in voidlight, ticking as they cool.' }]
+    },
+    reveal: {
+      angle: 'through-objects', move: 'rack-focus', palette: 'gunmetal voidlight', mood: 'dusty swagger',
+      stage: [{ kind: 'focus', target: 'boss' }, { kind: 'develop-character', target: 'boss', text: 'Focus racks off the long rifle and finds the outlaw grinning behind it.', gesture: 'ranged-shot' }]
+    },
+    claim: {
+      angle: 'low', move: 'push-in', palette: 'gunmetal voidlight', mood: 'last shot loaded',
+      stage: [{ kind: 'introduce-conflict', text: 'Outlaw of the Fallen Fleet', target: 'boss' }, { kind: 'vfx', archetype: 'beam', color: '#8fb7ff' }]
+    }
+  },
+  'void-prelate': {
+    caption: 'Director note: StarCraft register — the dark between stars. The blade is the withheld reveal: you see the place it has already chosen before you see the Prelate, so the silhouette arrives a beat after the threat.',
+    open: {
+      angle: 'close', move: 'hold', palette: 'dark between stars', mood: 'angle chosen', speaker: 'The Severed Dark',
+      line: 'You do not see the blade first. You see the place it has already decided to be.',
+      stage: [{ kind: 'reveal-mystery', text: 'A seam of violet light hangs in empty air, angled at a throat that is not there yet.' }]
+    },
+    reveal: {
+      angle: 'reflection', move: 'rack-focus', palette: 'dark between stars', mood: 'chosen blade',
+      stage: [{ kind: 'focus', target: 'boss' }, { kind: 'develop-character', target: 'boss', text: 'The Prelate resolves out of his own reflection, already mid-step.', gesture: 'dash' }]
+    },
+    claim: {
+      angle: 'low', move: 'snap', palette: 'dark between stars', mood: 'no angle left',
+      stage: [{ kind: 'introduce-conflict', text: 'Blade of the Severed Dark', target: 'boss' }, { kind: 'vfx', archetype: 'global-mark', color: '#7c6bff' }]
+    }
+  },
+  'forsaken-queen': {
+    caption: 'Director note: Warcraft register — banshee frost, mercy spent. Open on the arrow that will not thaw, hold it in dead air, then let the Queen step in colder than the shot she already fired.',
+    open: {
+      angle: 'close', move: 'hold', palette: 'banshee frost', mood: 'frozen mercy', speaker: 'Frostmourn Hollow',
+      line: 'An arrow hangs in the cold, refusing to fall, refusing to thaw.',
+      stage: [{ kind: 'reveal-mystery', text: 'The shaft is rimed white and motionless, as if the air agreed to hold it.' }]
+    },
+    reveal: {
+      angle: 'low', move: 'crane', palette: 'banshee frost', mood: 'mercy gone',
+      stage: [{ kind: 'focus', target: 'boss' }, { kind: 'develop-character', target: 'boss', text: 'The Queen walks past her own shot without slowing, colder than the frost.', gesture: 'ranged-shot' }]
+    },
+    claim: {
+      angle: 'wide', move: 'push-in', palette: 'banshee frost', mood: 'silence after',
+      stage: [{ kind: 'introduce-conflict', text: 'Banshee of the Cold Arrow', target: 'boss' }, { kind: 'vfx', archetype: 'storm', color: '#9ed8ff' }]
+    }
+  },
+  'sundered-betrayer': {
+    caption: 'Director note: Warcraft register — fel-eclipse green and the mirror question. The eclipse shows two shapes where one should stand; the betrayer chooses the side of you that you fear, then brands the room.',
+    open: {
+      angle: 'reflection', move: 'hold', palette: 'fel eclipse green', mood: 'two shapes', speaker: 'Fel-Eclipse Scar',
+      line: 'The eclipse shows two shapes where one shadow should fall. Both of them are looking at you.',
+      stage: [{ kind: 'reveal-mystery', text: 'A green eclipse splits the scar-light into a self and its mirror.' }]
+    },
+    reveal: {
+      angle: 'low', move: 'crane', palette: 'fel eclipse green', mood: 'betrayer unbound',
+      stage: [{ kind: 'focus', target: 'boss' }, { kind: 'develop-character', target: 'boss', text: 'Wings of fel-fire open as the betrayer takes the form the eclipse offered.', gesture: 'toggle-stance' }, { kind: 'vfx', archetype: 'storm', color: '#7dff72' }]
+    },
+    claim: {
+      angle: 'close', move: 'push-in', palette: 'fel eclipse green', mood: 'brand struck',
+      stage: [{ kind: 'introduce-conflict', text: 'Brand of the Fel Eclipse', target: 'boss' }, { kind: 'vfx', archetype: 'beam', color: '#7dff72' }]
+    }
+  },
+  'prime-evil': {
+    caption: 'Director note: Diablo register — worldstone ember. Open on the stone at the world heart already glowing for the wrong hand, crane the destroyer up over it, then let the Worldstone flare as if it knows him.',
+    open: {
+      angle: 'high', move: 'hold', palette: 'worldstone ember', mood: 'heart glowing', speaker: 'Worldstone Vault',
+      line: 'The stone at the world heart is already glowing for a hand that is not yours.',
+      stage: [{ kind: 'describe-environment', text: 'The Worldstone pulses in its vault, ember-light climbing the walls.' }]
+    },
+    reveal: {
+      angle: 'low', move: 'crane', palette: 'worldstone ember', mood: 'destruction crowned',
+      stage: [{ kind: 'focus', target: 'boss' }, { kind: 'develop-character', target: 'boss', text: 'The last Prime Evil rises over the stone, reaching for what burns.', gesture: 'ground-slam' }]
+    },
+    claim: {
+      angle: 'wide', move: 'push-in', palette: 'worldstone ember', mood: 'vault burning',
+      stage: [{ kind: 'introduce-conflict', text: 'Last of the Prime Evils', target: 'boss' }, { kind: 'vfx', archetype: 'beam', color: '#ff7a2c' }]
+    }
+  },
+  'lord-of-hatred': {
+    caption: 'Director note: Diablo register — the screen-darken on his name. The hall puts itself out one lamp at a time as a staged beat; the voice arrives before the shape, and the shape is mostly absence.',
+    open: {
+      angle: 'wide', move: 'hold', palette: 'lightless black', mood: 'lamps dying', speaker: 'The Lightless Hall',
+      line: 'The hall puts itself out one lamp at a time, as if hatred needs the dark to breathe.',
+      stage: [{ kind: 'set-tone', text: 'Light withdraws across the hall until only the cold remains.' }, { kind: 'vfx', archetype: 'dome', color: '#101014' }]
+    },
+    reveal: {
+      angle: 'close', move: 'snap', palette: 'lightless black', mood: 'name withheld',
+      stage: [{ kind: 'focus', target: 'boss' }, { kind: 'develop-character', target: 'boss', text: 'A shape that is mostly absence admits, at last, that it has arrived.' }]
+    },
+    claim: {
+      angle: 'low', move: 'push-in', palette: 'lightless black', mood: 'name spoken',
+      stage: [{ kind: 'introduce-conflict', text: 'Voice in the Lightless Hall', target: 'boss' }, { kind: 'vfx', archetype: 'beam', color: '#d62f44' }]
+    }
+  },
+  'last-eldwurm': {
+    caption: 'Director note: Dota-native counterpoint (the STORY §5.3 worked example) — dragonfire under a falling moon. Withhold on the wound, crane the silhouette up to the eye, then let the home-world refusal land the claim.',
+    open: {
+      angle: 'wide', move: 'hold', palette: 'dragonfire under moon', mood: 'wound shown', speaker: 'Ember Caldera',
+      line: 'Embers rise through shard-dust. One wing. Old burns. Something that should already be dead.',
+      stage: [{ kind: 'describe-environment', text: 'Heat-haze bends the moonlight over a caldera that still bleeds fire.' }]
+    },
+    reveal: {
+      angle: 'low', move: 'crane', palette: 'dragonfire under moon', mood: 'home-world refusal',
+      stage: [{ kind: 'focus', target: 'boss' }, { kind: 'develop-character', target: 'boss', text: 'The crane climbs the silhouette until a single old eye opens at the top.', gesture: 'toggle-stance' }]
+    },
+    claim: {
+      angle: 'wide', move: 'push-in', palette: 'dragonfire under moon', mood: 'last of the line',
+      stage: [{ kind: 'introduce-conflict', text: 'Ember Beneath the Mad Moon', target: 'boss' }, { kind: 'vfx', archetype: 'storm', color: '#ff7a2c' }]
+    }
+  }
+};
+
+function beatFromSpec(spec: RaidIntroBeatSpec, line: CutsceneBeat['line'], hold: number, sound?: CutsceneBeat['sound']): CutsceneBeat {
+  return {
+    shot: { angle: spec.angle, move: spec.move, palette: spec.palette, mood: spec.mood },
+    stage: spec.stage,
+    line,
+    hold,
+    ...(sound ? { sound } : {})
+  };
+}
+
+function genericRaidIntro(raid: (typeof ALL_RAIDS)[number]): CutsceneDef {
   const grade = RAID_GRADES[raid.id] ?? { palette: 'raid shadow', mood: 'withheld', reveal: raid.location, vfx: '#ffd86a' };
   const def = compileCutsceneDsl(`
     BEAT {
@@ -387,6 +596,28 @@ function raidIntro(raid: (typeof ALL_RAIDS)[number]): CutsceneDef {
     beats: def.beats.map((beat, idx) => idx === 2
       ? { ...beat, stage: [...(beat.stage ?? []), { kind: 'vfx', archetype: 'global-mark', color: grade.vfx }] }
       : beat)
+  };
+}
+
+function raidIntro(raid: (typeof ALL_RAIDS)[number]): CutsceneDef {
+  const spec = RAID_INTRO_SPECS[raid.id];
+  if (!spec) return genericRaidIntro(raid);
+  return {
+    id: `raid-intro-${raid.id}`,
+    title: raid.name,
+    tier: 'setpiece',
+    trigger: { kind: 'raid-intro', raidId: raid.id },
+    skippable: true,
+    letterbox: true,
+    music: 'duck',
+    category: 'Raids',
+    replayable: true,
+    galleryCaption: spec.caption,
+    beats: [
+      beatFromSpec(spec.open, { speaker: spec.open.speaker, text: spec.open.line }, 2.8),
+      beatFromSpec(spec.reveal, { speaker: raid.name, text: raid.dialogue[0] }, 3.2),
+      beatFromSpec(spec.claim, { speaker: raid.name, text: raid.dialogue[1] }, 3.3, 'raid-clear')
+    ]
   };
 }
 
@@ -1000,19 +1231,68 @@ const SEASONAL_INTROS: CutsceneDef[] = [
     ]
   },
   {
+    // STORY §7.2: Crownfall is a recruitment arc, not just an act-trials driver.
+    // It plays as a three-act visual novel — the crown is claimed, questioned,
+    // then walked apart — with alternating dialogue cards between the narrator,
+    // the deposed ruler, and the heir who will earn the claim by descending the
+    // act-trials route that opens underneath the festival.
     id: 'seasonal-crowns-fall',
-    title: "A Crown's Fall",
+    title: "Crownfall: A Crown's Fall",
     tier: 'setpiece',
     trigger: { kind: 'seasonal-event', eventId: 'crowns-fall' },
     skippable: true,
     letterbox: true,
     category: 'Festivals',
     replayable: true,
+    galleryCaption: "Director note: Crownfall plays as a three-act recruitment visual novel — Claim, Question, Ruin — trading dialogue cards between the narrator, the deposed ruler, and the heir before the act-trials descent opens beneath the throne.",
     beats: [
       {
         shot: { angle: 'title-card', move: 'hold', palette: 'crown gold', mood: 'act break' },
-        stage: [{ kind: 'title', text: 'Every crown is a loop someone mistook for an ending.' }],
-        line: { speaker: 'Crownfall', text: 'Acts begin when a ruler says forever. They end when the world answers.' },
+        stage: [
+          { kind: 'title', text: 'Crownfall - Act I: The Claim' },
+          { kind: 'establish-history', text: 'A ruler carves "forever" into a crown and mistakes the word for a fact.' }
+        ],
+        line: { speaker: 'Crownfall', text: 'Every crown is a loop someone mistook for an ending.' },
+        sound: 'badge',
+        hold: 3.4
+      },
+      {
+        shot: { angle: 'over-shoulder', move: 'rack-focus', palette: 'throne dust gold', mood: 'pride held' },
+        stage: [{ kind: 'develop-character', target: 'boss', text: 'The deposed ruler still sits as though the throne agrees with the claim.', gesture: 'channel-loop' }],
+        line: { speaker: 'The Deposed Crown', text: 'I ruled one perfect turn. The Loop kept every turn after it.' },
+        hold: 3.2
+      },
+      {
+        shot: { angle: 'title-card', move: 'hold', palette: 'question violet', mood: 'act break' },
+        stage: [
+          { kind: 'title', text: 'Act II: The Question' },
+          { kind: 'explore-theme', text: 'A crown only means anything while someone is still allowed to ask who deserves it.' }
+        ],
+        line: { speaker: 'Crownfall', text: 'Acts begin when a ruler says forever. Then the world asks the question again.' },
+        hold: 3.2
+      },
+      {
+        shot: { angle: 'close', move: 'push-in', palette: 'heir gold', mood: 'resolve' },
+        stage: [{ kind: 'develop-character', target: 'ally', text: 'An heir steps out of the line of mourners and does not kneel.', gesture: 'toggle-stance' }],
+        line: { speaker: 'The Heir', text: 'I am not here to wear it. I am here to learn how it ends.' },
+        hold: 3.2
+      },
+      {
+        shot: { angle: 'title-card', move: 'hold', palette: 'ruin ash', mood: 'act break' },
+        stage: [
+          { kind: 'title', text: 'Act III: The Ruin' },
+          { kind: 'establish-history', text: 'The crown comes apart act by act, until only the choice to pick it up remains.' }
+        ],
+        line: { speaker: 'Crownfall', text: 'A crown becomes a question, then an answer, then a ruin you can walk through.' },
+        hold: 3.4
+      },
+      {
+        shot: { angle: 'wide', move: 'crane', palette: 'crown gold dusk', mood: 'arc opens' },
+        stage: [
+          { kind: 'focus', target: 'region' },
+          { kind: 'vfx', archetype: 'dome', color: '#ffd86a' }
+        ],
+        line: { speaker: 'The Heir', text: 'Walk the acts with me. We take the crown apart together, and what is left is yours to bind.' },
         sound: 'badge',
         hold: 3.6
       }

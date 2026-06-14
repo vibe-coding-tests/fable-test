@@ -1,4 +1,4 @@
-import type { AbilityDef, DamageType, EffectNode, HeroDef, SoundArchetype, StatusId, SummonSpec, TargetSel, ValueRef, VfxArchetype } from '../../core/types';
+import type { AbilityDef, AghanimDef, DamageType, EffectNode, HeroDef, SoundArchetype, StatusId, SummonSpec, TargetSel, ValueRef, VfxArchetype } from '../../core/types';
 import { gestureForAbility, soundForAbility } from '../../core/gestures';
 
 type Kit = [AbilityDef, AbilityDef, AbilityDef, AbilityDef];
@@ -22,6 +22,10 @@ function tag(a: AbilityDef): AbilityDef {
 
 function withAnim(a: AbilityDef, anim: NonNullable<AbilityDef['anim']>): AbilityDef {
   return { ...a, anim };
+}
+
+function pierce(a: AbilityDef): AbilityDef {
+  return { ...a, piercesImmunity: true };
 }
 
 function kit(a: AbilityDef, b: AbilityDef, c: AbilityDef, d: AbilityDef): Kit {
@@ -139,13 +143,13 @@ export const AUTHORED_PHASE3_KITS: Partial<Record<HeroDef['id'], Kit>> = {
     nova('lc-overwhelming-odds', 'Overwhelming Odds', '#c23b2a', [{ kind: 'statmod', mods: { moveSpeed: 35 }, duration: 3, target: 'self' }], 'physical'),
     buff('lc-press-the-attack', 'Press the Attack', '#f0d48a', { attackSpeed: 60, hpRegen: 18 }, { duration: [5, 5, 5, 5] }, 'target'),
     attack('lc-moment-of-courage', 'Moment of Courage', '#642018', { procChance: 'chance', bonusDamage: 'damage', lifestealPct: 'lifesteal' }, { chance: [18, 22, 26, 30], damage: [35, 55, 75, 95], lifesteal: [25, 35, 45, 55] }),
-    sig(ultTarget('lc-duel', 'Duel', '#c23b2a', [{ kind: 'status', status: 'taunt', duration: 'disable', target: 'target' }, { kind: 'status', status: 'taunt', duration: 'disable', target: 'self' }, { kind: 'statmod', mods: { damage: 30 }, duration: 'duration', target: 'self' }], 'physical'), '#c23b2a', '#f0d48a', 1.2, 'roar')
+    pierce(sig(ultTarget('lc-duel', 'Duel', '#c23b2a', [{ kind: 'status', status: 'taunt', duration: 'disable', target: 'target' }, { kind: 'status', status: 'taunt', duration: 'disable', target: 'self' }, { kind: 'statmod', mods: { damage: 30 }, duration: 'duration', target: 'self' }], 'physical'), '#c23b2a', '#f0d48a', 1.2, 'roar'))
   ),
   'vengeful-spirit': kit(
     target('venge-magic-missile', 'Magic Missile', '#5d75ff', [status('stun', 1.4)]),
     line('venge-wave-of-terror', 'Wave of Terror', '#c7d4ff', [{ kind: 'statmod', mods: { armor: -4 }, duration: 5, target: 'target' }], 'physical'),
     passive('venge-vengeance-aura', 'Vengeance Aura', '#252a72', { damagePct: 12, attackRange: 60 }),
-    sig(ultTarget('venge-nether-swap', 'Nether Swap', '#5d75ff', [{ kind: 'displace', mode: 'blink', target: 'self', toward: 'target-unit' }, { kind: 'status', status: 'slow', duration: 'disable', target: 'target', params: { moveSlowPct: 45 } }]), '#5d75ff', '#c7d4ff', 1.15, 'void')
+    pierce(sig(ultTarget('venge-nether-swap', 'Nether Swap', '#5d75ff', [{ kind: 'displace', mode: 'blink', target: 'self', toward: 'target-unit' }, { kind: 'status', status: 'slow', duration: 'disable', target: 'target', params: { moveSlowPct: 45 } }]), '#5d75ff', '#c7d4ff', 1.15, 'void'))
   ),
   'shadow-fiend': kit(
     nova('sf-shadowraze-near', 'Shadowraze', '#d84a32', [], 'magical'),
@@ -211,7 +215,7 @@ export const AUTHORED_PHASE3_KITS: Partial<Record<HeroDef['id'], Kit>> = {
     target('tide-gush', 'Gush', '#2aa88f', [{ kind: 'statmod', mods: { armor: -5 }, duration: 4, target: 'target' }, { kind: 'status', status: 'slow', duration: 4, target: 'target', params: { moveSlowPct: 35 } }]),
     passive('tide-kraken-shell', 'Kraken Shell', '#13453e', { damageTakenReductionPct: 14, statusResistPct: 25 }),
     nova('tide-anchor-smash', 'Anchor Smash', '#b4f0dd', [{ kind: 'statmod', mods: { damagePct: -25 }, duration: 4, target: 'enemies-in-radius', radius: 'radius' }], 'physical'),
-    sig(withAnim(ultArea('tide-ravage', 'Ravage', '#2aa88f', [{ kind: 'damage', dtype: 'magical', amount: 'damage', target: 'enemies-in-radius', radius: 'radius' }, { kind: 'status', status: 'stun', duration: 'disable', target: 'enemies-in-radius', radius: 'radius' }], 'storm'), 'ground-slam'), '#2aa88f', '#b4f0dd', 1.55, 'storm')
+    pierce(sig(withAnim(ultArea('tide-ravage', 'Ravage', '#2aa88f', [{ kind: 'damage', dtype: 'magical', amount: 'damage', target: 'enemies-in-radius', radius: 'radius' }, { kind: 'status', status: 'stun', duration: 'disable', target: 'enemies-in-radius', radius: 'radius' }], 'storm'), 'ground-slam'), '#2aa88f', '#b4f0dd', 1.55, 'storm'))
   ),
   slardar: kit(
     buff('slardar-sprint', 'Guardian Sprint', '#8050d8', { moveSpeedPct: 35 }, { duration: [5, 6, 7, 8] }),
@@ -313,7 +317,7 @@ export const AUTHORED_PHASE3_KITS: Partial<Record<HeroDef['id'], Kit>> = {
     line('bm-wild-axes', 'Wild Axes', '#b8723a', [], 'physical'),
     summonSpell('bm-call-of-the-wild', 'Call of the Wild', '#f0c080', beast, 2),
     passive('bm-inner-beast', 'Inner Beast', '#3d2716', { attackSpeed: 45, damage: 12 }),
-    sig(ultTarget('bm-primal-roar', 'Primal Roar', '#b8723a', [{ kind: 'status', status: 'stun', duration: 'disable', target: 'target' }, { kind: 'displace', mode: 'knockback', target: 'target', toward: 'away-from-caster', distance: 320, speed: 1000 }], 'physical'), '#b8723a', '#f0c080', 1.4, 'roar')
+    pierce(sig(ultTarget('bm-primal-roar', 'Primal Roar', '#b8723a', [{ kind: 'status', status: 'stun', duration: 'disable', target: 'target' }, { kind: 'displace', mode: 'knockback', target: 'target', toward: 'away-from-caster', distance: 320, speed: 1000 }], 'physical'), '#b8723a', '#f0c080', 1.4, 'roar'))
   ),
   broodmother: kit(
     buff('brood-hunger', 'Insatiable Hunger', '#5b2b72', { damage: 45, lifestealPct: 35 }, { duration: [6, 7, 8, 9] }),
@@ -337,7 +341,7 @@ export const AUTHORED_PHASE3_KITS: Partial<Record<HeroDef['id'], Kit>> = {
     line('magnus-shockwave', 'Shockwave', '#7a4a32', [{ kind: 'displace', mode: 'pull', target: 'target', toward: 'caster', distance: 180, speed: 900 }]),
     buff('magnus-empower', 'Empower', '#d8b080', { damagePct: 25 }, { duration: [8, 9, 10, 11] }, 'target'),
     line('magnus-skewer', 'Skewer', '#331a14', [{ kind: 'displace', mode: 'pull', target: 'target', toward: 'caster', distance: 360, speed: 1100 }, status('stun', 0.8)], 'physical'),
-    sig(withAnim(ultArea('magnus-rp', 'Reverse Polarity', '#7a4a32', [{ kind: 'displace', mode: 'pull', target: 'enemies-in-radius', radius: 'radius', toward: 'caster', distance: 520, speed: 1200 }, { kind: 'status', status: 'stun', duration: 'disable', target: 'enemies-in-radius', radius: 'radius' }, { kind: 'damage', dtype: 'magical', amount: 'damage', target: 'enemies-in-radius', radius: 'radius' }], 'vortex'), 'ground-slam'), '#7a4a32', '#d8b080', 1.5, 'roar')
+    pierce(sig(withAnim(ultArea('magnus-rp', 'Reverse Polarity', '#7a4a32', [{ kind: 'displace', mode: 'pull', target: 'enemies-in-radius', radius: 'radius', toward: 'caster', distance: 520, speed: 1200 }, { kind: 'status', status: 'stun', duration: 'disable', target: 'enemies-in-radius', radius: 'radius' }, { kind: 'damage', dtype: 'magical', amount: 'damage', target: 'enemies-in-radius', radius: 'radius' }], 'vortex'), 'ground-slam'), '#7a4a32', '#d8b080', 1.5, 'roar'))
   ),
   'elder-titan': kit(
     nova('et-echo-stomp', 'Echo Stomp', '#8a6a4a', [{ kind: 'status', status: 'sleep', duration: 1.6, target: 'enemies-in-radius', radius: 'radius' }]),
@@ -385,13 +389,13 @@ export const AUTHORED_PHASE3_KITS: Partial<Record<HeroDef['id'], Kit>> = {
     buff('fv-time-walk', 'Time Walk', '#5a46c8', { moveSpeedPct: 45, damageTakenReductionPct: 30 }, { duration: [3, 3.5, 4, 4.5] }),
     nova('fv-time-dilation', 'Time Dilation', '#c2b8ff', [{ kind: 'status', status: 'slow', duration: 3, target: 'enemies-in-radius', radius: 'radius', params: { moveSlowPct: 35, attackSlowPct: 35 } }]),
     attack('fv-time-lock', 'Time Lock', '#1c163a', { procChance: 24, bonusDamage: 'damage', procStatus: { status: 'stun', duration: 0.6 } }, { damage: [25, 45, 65, 85] }),
-    sig(ultArea('fv-chronosphere', 'Chronosphere', '#5a46c8', [{ kind: 'exotic', id: 'chronosphere', params: { heroId: 'faceless-void' } }, { kind: 'status', status: 'frozen', duration: 'disable', target: 'enemies-in-radius', radius: 'radius' }, { kind: 'damage', dtype: 'magical', amount: 'damage', target: 'enemies-in-radius', radius: 'radius' }], 'dome'), '#5a46c8', '#c2b8ff', 1.2, 'void')
+    pierce(sig(ultArea('fv-chronosphere', 'Chronosphere', '#5a46c8', [{ kind: 'exotic', id: 'chronosphere', params: { heroId: 'faceless-void' } }, { kind: 'status', status: 'frozen', duration: 'disable', target: 'enemies-in-radius', radius: 'radius' }, { kind: 'damage', dtype: 'magical', amount: 'damage', target: 'enemies-in-radius', radius: 'radius' }], 'dome'), '#5a46c8', '#c2b8ff', 1.2, 'void'))
   ),
   terrorblade: kit(
     target('tb-reflection', 'Reflection', '#4bb8ff', [status('slow', 2.5, { moveSlowPct: 35 })]),
     summonSpell('tb-conjure-image', 'Conjure Image', '#d8f5ff', terrorImage, 'count'),
     buff('tb-metamorphosis', 'Metamorphosis', '#101426', { attackRange: 350, damage: 55 }, { duration: [8, 10, 12, 14] }),
-    sig(ultTarget('tb-sunder', 'Sunder', '#4bb8ff', [{ kind: 'heal', amount: 'damage', target: 'self' }, { kind: 'damage', dtype: 'pure', amount: 'damage', target: 'target' }], 'pure'), '#4bb8ff', '#d8f5ff', 1.2)
+    pierce(sig(ultTarget('tb-sunder', 'Sunder', '#4bb8ff', [{ kind: 'heal', amount: 'damage', target: 'self' }, { kind: 'damage', dtype: 'pure', amount: 'damage', target: 'target' }], 'pure'), '#4bb8ff', '#d8f5ff', 1.2))
   ),
   phoenix: kit(
     line('phoenix-icarus-dive', 'Icarus Dive', '#ff7a30', [status('slow', 2, { moveSlowPct: 30 })]),
@@ -405,4 +409,150 @@ export const AUTHORED_PHASE3_KITS: Partial<Record<HeroDef['id'], Kit>> = {
     buff('io-overcharge', 'Overcharge', '#7aa8ff', { attackSpeed: 70, damageTakenReductionPct: 20 }, { duration: [5, 6, 7, 8] }, 'target'),
     sig(ultArea('io-relocate', 'Relocate', '#c8f6ff', [{ kind: 'statmod', mods: { moveSpeedPct: 45, castRange: 300 }, duration: 'duration', target: 'allies-in-radius', radius: 'radius' }, { kind: 'heal', amount: 'damage', target: 'allies-in-radius', radius: 'radius' }], 'global-mark'), '#c8f6ff', '#7aa8ff', 1.35, 'heal')
   )
+};
+
+// Override an ability value array (per the resolved kit ability ids above).
+const O = (abilityId: string, valueKey: string, mode: 'add' | 'mul' | 'set', amount: number) => ({ abilityId, valueKey, mode, amount });
+// Shift an ability cooldown (negative = shorter recast).
+const C = (abilityId: string, amount: number) => ({ abilityId, amount });
+
+/**
+ * Hand-authored Aghanim's Scepter/Shard payloads for the marquee Phase 3 heroes.
+ * Unlike the generic `buildSeedAghanim` (ult damage ×1.35, −8s cd), each entry here
+ * targets the *identity-relevant* value of the real ability — the control duration,
+ * the AoE radius, the recast that defines the spell — to mirror that hero's canonical
+ * scepter/shard. Heroes not listed fall back to the seed builder. Value keys are the
+ * ones the kit's effects actually consume (verified against the templates above), so
+ * each override is a real gameplay change rather than a silent no-op.
+ */
+export const AUTHORED_PHASE3_AGHANIMS: Partial<Record<string, AghanimDef>> = {
+  invoker: {
+    name: "Invoker's Scepter",
+    description: 'Invoke recharges far faster and detonates a wider, harder elemental burst; Shard sharpens Sun Strike.',
+    implemented: true,
+    scepter: { abilityValueOverrides: [O('invoker-invoke', 'damage', 'mul', 1.4), O('invoker-invoke', 'radius', 'add', 200)], cooldownAdds: [C('invoker-invoke', -40)] },
+    shard: { abilityValueOverrides: [O('invoker-sun-strike', 'damage', 'mul', 1.5)], cooldownAdds: [C('invoker-sun-strike', -2)] }
+  },
+  lion: {
+    name: "Lion's Scepter",
+    description: 'Finger of Death splashes lethal energy in an area and recasts sooner; Shard supercharges Mana Drain.',
+    implemented: true,
+    scepter: {
+      cooldownAdds: [C('lion-finger', -30)],
+      abilityPatches: [{ abilityId: 'lion-finger', patch: { effects: [{ kind: 'damage', dtype: 'magical', amount: 'damage', target: 'target' }, { kind: 'damage', dtype: 'magical', amount: 300, target: 'enemies-in-radius', radius: 350 }] } }]
+    },
+    shard: { abilityValueOverrides: [O('lion-mana-drain', 'damage', 'mul', 1.6)] }
+  },
+  tidehunter: {
+    name: "Tidehunter's Scepter",
+    description: 'Ravage erupts across a wider field and pins enemies longer; Shard thickens the Kraken Shell.',
+    implemented: true,
+    scepter: { abilityValueOverrides: [O('tide-ravage', 'radius', 'add', 120), O('tide-ravage', 'disable', 'add', 0.6)], cooldownAdds: [C('tide-ravage', -25)] },
+    shard: { mods: { statusResistPct: 15, magicResistPct: 10 } }
+  },
+  'wraith-king': {
+    name: "Wraith King's Scepter",
+    description: 'Reincarnation returns sooner and the death-pulse slows a wider ring; Shard hardens Mortal Strike crits.',
+    implemented: true,
+    scepter: { abilityValueOverrides: [O('wk-reincarnation', 'radius', 'add', 120), O('wk-reincarnation', 'disable', 'add', 0.8)], cooldownAdds: [C('wk-reincarnation', -40)] },
+    shard: { abilityValueOverrides: [O('wk-mortal-strike', 'crit', 'add', 60)] }
+  },
+  'shadow-fiend': {
+    name: "Shadow Fiend's Scepter",
+    description: 'Requiem of Souls detonates harder over a wider radius and recasts faster; Shard amplifies Shadowraze.',
+    implemented: true,
+    scepter: { abilityValueOverrides: [O('sf-requiem', 'damage', 'mul', 1.3), O('sf-requiem', 'radius', 'add', 120)], cooldownAdds: [C('sf-requiem', -20)] },
+    shard: { abilityValueOverrides: [O('sf-shadowraze-near', 'damage', 'mul', 1.4)], cooldownAdds: [C('sf-shadowraze-near', -1)] }
+  },
+  magnus: {
+    name: "Magnus's Scepter",
+    description: 'Reverse Polarity pulls from a much wider area and stuns longer; Shard empowers Skewer.',
+    implemented: true,
+    scepter: { abilityValueOverrides: [O('magnus-rp', 'radius', 'add', 150), O('magnus-rp', 'disable', 'add', 0.5)], cooldownAdds: [C('magnus-rp', -20)] },
+    shard: { abilityValueOverrides: [O('magnus-skewer', 'damage', 'mul', 1.4)], cooldownAdds: [C('magnus-skewer', -4)] }
+  },
+  'sand-king': {
+    name: "Sand King's Scepter",
+    description: 'Epicenter quakes across a wider radius for more damage; Shard lets Sand Storm linger far longer.',
+    implemented: true,
+    scepter: { abilityValueOverrides: [O('sk-epicenter', 'radius', 'add', 150), O('sk-epicenter', 'damage', 'mul', 1.25)], cooldownAdds: [C('sk-epicenter', -20)] },
+    shard: { abilityValueOverrides: [O('sk-sand-storm', 'duration', 'add', 3), O('sk-sand-storm', 'radius', 'add', 60)] }
+  },
+  medusa: {
+    name: "Medusa's Scepter",
+    description: 'Stone Gaze petrifies a wider arena for longer and recasts sooner; Shard fattens Mystic Snake.',
+    implemented: true,
+    scepter: { abilityValueOverrides: [O('medusa-stone-gaze', 'radius', 'add', 120), O('medusa-stone-gaze', 'disable', 'add', 0.8)], cooldownAdds: [C('medusa-stone-gaze', -20)] },
+    shard: { abilityValueOverrides: [O('medusa-mystic-snake', 'damage', 'mul', 1.5)] }
+  },
+  silencer: {
+    name: "Silencer's Scepter",
+    description: 'Global Silence lasts longer and recharges much faster; Shard deepens Last Word.',
+    implemented: true,
+    scepter: { abilityValueOverrides: [O('silencer-global-silence', 'disable', 'add', 1), O('silencer-global-silence', 'radius', 'add', 100)], cooldownAdds: [C('silencer-global-silence', -25)] },
+    shard: { abilityValueOverrides: [O('silencer-last-word', 'damage', 'mul', 1.5)] }
+  },
+  'naga-siren': {
+    name: "Naga Siren's Scepter",
+    description: 'Song of the Siren lulls a wider field into a longer slumber; Shard sharpens Rip Tide.',
+    implemented: true,
+    scepter: { abilityValueOverrides: [O('naga-song', 'disable', 'add', 1), O('naga-song', 'radius', 'add', 120)], cooldownAdds: [C('naga-song', -20)] },
+    shard: { abilityValueOverrides: [O('naga-rip-tide', 'damage', 'mul', 1.4), O('naga-rip-tide', 'radius', 'add', 50)] }
+  },
+  doom: {
+    name: "Doom's Scepter",
+    description: 'Doom silences and disarms its victim for longer and recharges faster; Shard spreads Scorched Earth wider.',
+    implemented: true,
+    scepter: { abilityValueOverrides: [O('doom-doom', 'duration', 'add', 2)], cooldownAdds: [C('doom-doom', -25)] },
+    shard: { abilityValueOverrides: [O('doom-scorched-earth', 'radius', 'add', 75), O('doom-scorched-earth', 'duration', 'add', 2)] }
+  },
+  'faceless-void': {
+    name: "Faceless Void's Scepter",
+    description: 'Chronosphere traps a wider bubble for longer and recasts sooner; Shard extends Time Walk.',
+    implemented: true,
+    scepter: { abilityValueOverrides: [O('fv-chronosphere', 'radius', 'add', 120), O('fv-chronosphere', 'disable', 'add', 0.8)], cooldownAdds: [C('fv-chronosphere', -20)] },
+    shard: { abilityValueOverrides: [O('fv-time-walk', 'duration', 'mul', 1.5)], cooldownAdds: [C('fv-time-walk', -4)] }
+  },
+  'vengeful-spirit': {
+    name: "Vengeful Spirit's Scepter",
+    description: 'Nether Swap hits harder, leaves a longer slow, and recasts sooner; Shard empowers Wave of Terror.',
+    implemented: true,
+    scepter: { abilityValueOverrides: [O('venge-nether-swap', 'damage', 'mul', 1.3), O('venge-nether-swap', 'disable', 'add', 0.8)], cooldownAdds: [C('venge-nether-swap', -20)] },
+    shard: { abilityValueOverrides: [O('venge-wave-of-terror', 'damage', 'mul', 1.5)] }
+  },
+  'legion-commander': {
+    name: "Legion Commander's Scepter",
+    description: 'Duel taunts longer, grants more steal, and recharges faster; Shard lengthens Press the Attack.',
+    implemented: true,
+    scepter: { abilityValueOverrides: [O('lc-duel', 'disable', 'add', 1), O('lc-duel', 'duration', 'add', 2)], cooldownAdds: [C('lc-duel', -15)] },
+    shard: { abilityValueOverrides: [O('lc-press-the-attack', 'duration', 'mul', 1.4)], cooldownAdds: [C('lc-press-the-attack', -3)] }
+  },
+  spectre: {
+    name: "Spectre's Scepter",
+    description: 'Haunt recurs far sooner and unnerves the enemy team longer; Shard sharpens Spectral Dagger.',
+    implemented: true,
+    scepter: { abilityValueOverrides: [O('spectre-haunt', 'disable', 'add', 0.6)], cooldownAdds: [C('spectre-haunt', -30)] },
+    shard: { abilityValueOverrides: [O('spectre-dagger', 'damage', 'mul', 1.4)] }
+  },
+  'storm-spirit': {
+    name: "Storm Spirit's Scepter",
+    description: 'Ball Lightning arrives charged, striking a wider path for more; Shard supercharges Overload.',
+    implemented: true,
+    scepter: { abilityValueOverrides: [O('storm-ball-lightning', 'damage', 'mul', 1.4), O('storm-ball-lightning', 'radius', 'add', 100)], cooldownAdds: [C('storm-ball-lightning', -15)] },
+    shard: { abilityValueOverrides: [O('storm-overload', 'damage', 'mul', 1.5)] }
+  },
+  terrorblade: {
+    name: "Terrorblade's Scepter",
+    description: 'Sunder swaps a deeper share of health and recasts sooner; Shard lengthens Metamorphosis.',
+    implemented: true,
+    scepter: { abilityValueOverrides: [O('tb-sunder', 'damage', 'mul', 1.3)], cooldownAdds: [C('tb-sunder', -20)] },
+    shard: { abilityValueOverrides: [O('tb-metamorphosis', 'duration', 'mul', 1.4)], cooldownAdds: [C('tb-metamorphosis', -5)] }
+  },
+  tinker: {
+    name: "Tinker's Scepter",
+    description: 'Rearm resets faster and amplifies spells for longer; Shard extends Defense Matrix.',
+    implemented: true,
+    scepter: { abilityValueOverrides: [O('tinker-rearm', 'duration', 'add', 2)], cooldownAdds: [C('tinker-rearm', -20)] },
+    shard: { abilityValueOverrides: [O('tinker-defense-matrix', 'duration', 'mul', 1.4)], cooldownAdds: [C('tinker-defense-matrix', -3)] }
+  }
 };

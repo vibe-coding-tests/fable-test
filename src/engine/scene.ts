@@ -20,6 +20,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
+import { GTAOPass } from 'three/examples/jsm/postprocessing/GTAOPass.js';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { loadHdr, loadModelAsset, cloneModel } from './asset-loaders';
 
@@ -340,6 +341,7 @@ export class GameScene {
   private bloomPass: UnrealBloomPass | null = null;
   private gradePass: ShaderPass | null = null;
   private smaaPass: SMAAPass | null = null;
+  private gtaoPass: GTAOPass | null = null;
   private skyMat: THREE.ShaderMaterial;
   private skyDome: THREE.Mesh;
   private weather: THREE.Points | null = null;
@@ -502,6 +504,10 @@ export class GameScene {
     return !this.disposed;
   }
 
+  groundHeightAt(simX: number, simY: number): number {
+    return this.visualGroundHeightAt(simX, simY);
+  }
+
   private visualGroundHeightAt(simX: number, simY: number): number {
     return this.dungeonRoomFloorY ?? this.terrain.heightAt(simX, simY);
   }
@@ -548,6 +554,15 @@ export class GameScene {
     const h = window.innerHeight;
     const composer = new EffectComposer(this.renderer);
     composer.addPass(new RenderPass(this.scene, this.camera));
+    if (q.ao) {
+      // Ground-contact AO right after the beauty pass so bloom/grade see the
+      // occluded image. GTAO renders its own depth+normal pass internally, so
+      // it scales with resolution, not scene complexity — hence ultra-only.
+      const gtao = new GTAOPass(this.scene, this.camera, w, h);
+      gtao.output = GTAOPass.OUTPUT.Default;
+      this.gtaoPass = gtao;
+      composer.addPass(gtao);
+    }
     if (q.bloom) {
       const [bloomW, bloomH] = this.bloomSize(w, h);
       this.bloomPass = new UnrealBloomPass(new THREE.Vector2(bloomW, bloomH), q.bloomStrength, q.bloomRadius, 1.0);
@@ -641,6 +656,7 @@ export class GameScene {
       this.bloomPass.setSize(bloomW, bloomH);
     }
     this.smaaPass?.setSize(w, h);
+    this.gtaoPass?.setSize(w, h);
   }
 
   /** Pre-compile the programs for everything currently in the scene against the
@@ -671,12 +687,17 @@ export class GameScene {
       this.weatherVel = null;
     }
     this.composer?.dispose();
+    this.gtaoPass?.dispose();
     this.composer = null;
+    this.gtaoPass = null;
     this.disposeHdrEnvs();
     this.scene.environment?.dispose();
     this.scene.environment = null;
     this.disposeOwnedObjectTree(this.scene);
     this.sun.shadow.map?.dispose();
+    // NB: do NOT forceContextLoss() here. The canvas owns a single WebGL context
+    // that every region rebuild reuses via getContext; losing it would break the
+    // next GameScene. renderer.dispose() already frees this scene's GPU objects.
     this.renderer.dispose();
   }
 
@@ -838,10 +859,14 @@ export class GameScene {
 
     if (this.composer) {
       this.composer.dispose();
+      // EffectComposer.dispose() does not dispose child passes, and GTAO owns
+      // several render targets; release them explicitly so a tier switch is leak-free.
+      this.gtaoPass?.dispose();
       this.composer = null;
       this.bloomPass = null;
       this.gradePass = null;
       this.smaaPass = null;
+      this.gtaoPass = null;
     }
     if (q.postFx) this.setupComposer(q);
 

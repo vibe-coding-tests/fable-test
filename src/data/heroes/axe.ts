@@ -1,4 +1,5 @@
 import type { HeroDef } from '../../core/types';
+import { loopTurnLabel } from './loop-note';
 
 export const AXE: HeroDef = {
   id: 'axe',
@@ -7,7 +8,7 @@ export const AXE: HeroDef = {
   attribute: 'str',
   roles: ['initiator', 'durable', 'disabler'],
   region: 'tranquil-vale',
-  lore: 'A one-man army who considers strategy a polite word for being first into the fight.',
+  lore: `A one-man army who considers strategy a polite word for being first into the fight. His Echo last fought on turn ${loopTurnLabel('axe')} of the Loop, and still insists the battle ended when Axe arrived.`,
   baseStats: {
     str: 25, agi: 20, int: 18,
     strGain: 2.8, agiGain: 2.0, intGain: 1.6,

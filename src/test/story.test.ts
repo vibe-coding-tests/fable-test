@@ -4,6 +4,7 @@ import { REG } from '../core/registry';
 import { Game, HeadlessAudio, HeadlessScene, newGameSave, type AudioLike } from '../systems/game';
 import { CinematicDirector } from '../engine/cinematic';
 import { compileCutsceneDsl } from '../engine/cutscene-dsl';
+import { OUTWORLD_CLAIMANT_RAID_IDS } from '../data/cutscenes';
 import { StoryDetector } from '../engine/story-detectors';
 import type { Sim } from '../core/sim';
 import type { CutsceneDef, GameSave, SimEvent, StingerId } from '../core/types';
@@ -12,7 +13,7 @@ import type { CinematicMixMode } from '../engine/audio';
 beforeAll(() => registerAllContent());
 
 function freshGame(): Game {
-  return Game.headless(newGameSave('juggernaut'));
+  return Game.headless(newGameSave('juggernaut'), { cinematics: true });
 }
 
 class RecordingAudio implements AudioLike {
@@ -47,7 +48,7 @@ function fullPartyGame(regionId = 'tranquil-vale'): Game {
     level: 30,
     xp: 0
   }));
-  return Game.headless(save);
+  return Game.headless(save, { cinematics: true });
 }
 
 interface FakeUnit {
@@ -378,6 +379,20 @@ describe('STORY gallery, titles & content', () => {
     expect(lastCinematicId).toBe('prologue-moon-breaks');
   });
 
+  it('does not advance overworld combat while the prologue is active', () => {
+    const g = freshGame();
+    const startSimTime = g.sim.time;
+    const startPlaytime = g.playtime;
+    const startHp = g.activeUnit()?.hp;
+
+    g.update(1);
+
+    expect(g.cinematic.active).toBe(true);
+    expect(g.sim.time).toBe(startSimTime);
+    expect(g.playtime).toBe(startPlaytime);
+    expect(g.activeUnit()?.hp).toBe(startHp);
+  });
+
   it('gallery hides unseen replayable scenes spoiler-safe and replays only seen ones', () => {
     const g = freshGame();
     while (g.cinematic.active) g.cinematicSkip();
@@ -404,11 +419,11 @@ describe('STORY gallery, titles & content', () => {
     expect(g.journalSections().titles.map((t) => t.id)).toContain('true-champion');
   });
 
-  it('the Aegis carries its Champions inscription, and roster Echoes carry a Loop cycle note', () => {
+  it('the Aegis carries its Champions inscription, and every hero Echo carries a Loop turn note', () => {
     expect(REG.item('aegis-of-the-immortal').lore.toLowerCase()).toContain('inscribed');
-    const roster = [...REG.heroes.values()].filter((h) => h.lore.includes('turn of the Loop'));
-    expect(roster.length).toBeGreaterThan(10);
-    expect(REG.hero('arc-warden').lore).toContain('turn of the Loop');
+    for (const hero of REG.heroes.values()) {
+      expect(hero.lore, hero.id).toMatch(/turn [\d,]+ of the Loop/);
+    }
     expect(REG.creep('kobold').lore).toContain('Moon-stone');
     expect([...REG.bosses.values()].every((b) => b.dialogue.length >= 2)).toBe(true);
   });
@@ -472,11 +487,18 @@ describe('STORY gallery, titles & content', () => {
     expect(g.runSeasonalEvent('diretide-roshan-candy')).toBe(true);
     expect(g.liveRaid?.festivalObjective()?.mode).toBe('roshan-candy');
 
-    g.liveRaid!.step(20);
+    // Sample in fine steps: the Roshling adds are real sim units, but a maxed
+    // party clears them within a second or two of each spawn, so checking only
+    // at the end is racy. Detect a live enemy summon at any point near a wave.
+    let sawSummon = false;
+    for (let i = 0; i < 250 && !g.liveRaid!.done && !sawSummon; i++) {
+      g.liveRaid!.step(0.1);
+      if (g.liveRaid!.sim.unitsArr.some((u) => u.kind === 'summon' && u.team === 1)) sawSummon = true;
+    }
     const objective = g.liveRaid!.festivalObjective();
     expect(objective?.tributeTicks).toBeGreaterThan(0);
     expect(objective?.wavesSpawned).toBeGreaterThan(0);
-    expect(g.liveRaid!.sim.unitsArr.some((u) => u.kind === 'summon' && u.team === 1)).toBe(true);
+    expect(sawSummon).toBe(true);
   });
 
   it('runs the remaining raid-backed festival modes with live objective pressure', () => {
@@ -562,6 +584,59 @@ describe('STORY gallery, titles & content', () => {
     expect(phase.beats[0].line?.text).toContain('wreck');
     const clear = REG.cutscene('raid-clear-renegade-marshal');
     expect(clear.beats[0].line?.text).toContain('fleet');
+  });
+
+  it('gives every marquee and claimant raid a bespoke, world-keyed intro instead of a shared template', () => {
+    const ids = [...new Set([...OUTWORLD_CLAIMANT_RAID_IDS, 'last-eldwurm', 'roshan-pit', 'lich-king'])];
+    const openerFramings = new Set<string>();
+    const revealFramings = new Set<string>();
+    for (const raidId of ids) {
+      const raid = REG.raid(raidId);
+      const intro = REG.cutscene(`raid-intro-${raidId}`);
+      expect(intro.tier, raidId).toBe('setpiece');
+      expect(intro.music, raidId).toBe('duck');
+      expect(intro.beats.length, raidId).toBe(3);
+
+      // Withheld opener: the silhouette must not be focused yet, and the beat
+      // sets the scene with an establishing/withholding verb.
+      const opener = intro.beats[0];
+      expect(opener.stage?.some((s) => s.kind === 'focus' && s.target === 'boss'), raidId).toBe(false);
+      expect(
+        opener.stage?.some((s) => ['describe-environment', 'reveal-mystery', 'set-tone', 'establish-history'].includes(s.kind)),
+        raidId
+      ).toBe(true);
+
+      // Reveal + claim land the two shipped raid lines and the claim stings.
+      expect(intro.beats[1].line?.text, raidId).toBe(raid.dialogue[0]);
+      expect(intro.beats[1].stage?.some((s) => s.kind === 'focus' && s.target === 'boss'), raidId).toBe(true);
+      expect(intro.beats[2].line?.text, raidId).toBe(raid.dialogue[1]);
+      expect(intro.beats[2].sound, raidId).toBe('raid-clear');
+
+      // Bespoke gallery commentary names the homage register/silhouette read.
+      expect(intro.galleryCaption, raidId).toContain('Director note');
+
+      openerFramings.add(`${opener.shot.angle}/${opener.shot.move}/${opener.shot.palette}`);
+      revealFramings.add(`${intro.beats[1].shot.angle}/${intro.beats[1].shot.move}`);
+    }
+    // Not one shared template: opener palettes/framings and reveal moves vary widely.
+    expect(openerFramings.size).toBeGreaterThanOrEqual(6);
+    expect(revealFramings.size).toBeGreaterThanOrEqual(3);
+  });
+
+  it('plays Crownfall as a multi-act recruitment visual novel, not a single caption card', () => {
+    const vn = REG.cutscene('seasonal-crowns-fall');
+    expect(vn.tier).toBe('setpiece');
+    expect(vn.beats.length).toBeGreaterThanOrEqual(5);
+
+    // Three act title-cards structure the arc.
+    const actCards = vn.beats.filter((b) => b.stage?.some((s) => s.kind === 'title'));
+    expect(actCards.length).toBeGreaterThanOrEqual(3);
+
+    // Dialogue cards alternate between the narrator and the named roles.
+    const speakers = new Set(vn.beats.map((b) => b.line?.speaker).filter(Boolean));
+    expect(speakers.has('Crownfall')).toBe(true);
+    expect(speakers.size).toBeGreaterThanOrEqual(3);
+    expect(vn.galleryCaption?.toLowerCase()).toContain('visual novel');
   });
 
   it('stages major badge act breaks as Loop flashbacks before opening the road', () => {

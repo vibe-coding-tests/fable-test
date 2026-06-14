@@ -1,4 +1,5 @@
 import type { HeroDef } from '../../core/types';
+import { loopTurnLabel } from './loop-note';
 
 export const LICH: HeroDef = {
   id: 'lich',
@@ -7,7 +8,7 @@ export const LICH: HeroDef = {
   attribute: 'int',
   roles: ['support', 'nuker', 'disabler'],
   region: 'tranquil-vale',
-  lore: 'Once a tyrant of frost magic, drowned in a frozen lake by his own subjects. A Mad Moon fragment cracked the ice, and what climbed out remembers everything.',
+  lore: `Once a tyrant of frost magic, drowned in a frozen lake by his own subjects. A Mad Moon fragment cracked the ice, and what climbed out remembers everything. His Echo last fought on turn ${loopTurnLabel('lich')} of the Loop, thawed only long enough to teach the dead king another winter.`,
   baseStats: {
     str: 18, agi: 15, int: 24,
     strGain: 2.4, agiGain: 1.6, intGain: 3.4,

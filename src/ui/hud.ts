@@ -1067,7 +1067,7 @@ export class Hud {
       }
       this.vec.set(
         f.simX / WORLD_SCALE,
-        this.game.scene.terrain.heightAt(f.simX, f.simY) + 2.2 + age * 1.5,
+        this.game.scene.groundHeightAt(f.simX, f.simY) + 2.2 + age * 1.5,
         f.simY / WORLD_SCALE
       );
       this.vec.project(cam);
@@ -1166,7 +1166,7 @@ export class Hud {
   private screenFromWorld(simX: number, simY: number, height = 2.2): { x: number; y: number } | null {
     this.vec.set(
       simX / WORLD_SCALE,
-      this.game.scene.terrain.heightAt(simX, simY) + height,
+      this.game.scene.groundHeightAt(simX, simY) + height,
       simY / WORLD_SCALE
     );
     this.vec.project(this.game.scene.camera);
@@ -1196,7 +1196,8 @@ export class Hud {
     } else if (this.input.hoverUid >= 0) {
       const u = g.sim.unit(this.input.hoverUid);
       if (u) {
-        if (g.npcAt(u.uid)) hint = `${u.name} — right-click to recruit`;
+        const heroId = g.npcAt(u.uid);
+        if (heroId) hint = REG.hero(heroId).recruitmentQuestId ? `${u.name} — right-click to start trial` : `${u.name} — right-click to recruit`;
         else if (u.capturable && u.tier) {
           const elig = g.captureEligible(u);
           hint = elig.ok ? `${u.name} — press T to capture!` : `${u.name} — capture: ${elig.reason}`;
@@ -2566,6 +2567,30 @@ export class Hud {
       ? 'Champion dethroned — the ancients answer to you now.'
       : `Elite Five defeated: ${j.elite.defeated}/5${j.elite.defeated >= 5 ? ' — the Champion awaits.' : ''}`;
     const badges = j.badges.map((b) => b.replace(/-/g, ' ')).join(', ') || 'none yet';
+    const board = g.questBoard();
+    const questRows = board
+      .map((q) => {
+        const tag = q.kind === 'event' ? 'Chapter' : 'Bounty';
+        const stateLabel = q.claimable ? 'Ready' : q.status === 'cooldown' ? `Cooldown ${q.cooldownLeft ?? 0}s` : tag;
+        const objs = q.objectives.map((o) => `${o.text} ${Math.min(o.have, o.need)}/${o.need}`).join(' · ');
+        const claimBtn = q.claimable ? `<button class="btn small accent" data-claim-quest="${q.id}">Claim</button>` : '';
+        const source = [q.giver ?? tag, q.region].filter(Boolean).join(' · ');
+        const flavor = q.dialogue?.[0] ? `<p class="jr-flavor dim">&ldquo;${q.dialogue[0]}&rdquo;</p>` : '';
+        return `
+          <div class="journal-row">
+            <div class="jr-stage">${stateLabel}</div>
+            <div class="jr-main">
+              <b>${q.name}</b> <em>${source}</em>
+              <p>${q.summary}</p>
+              ${flavor}
+              <span>${objs}</span>
+              <span class="dim">Rewards: ${q.rewards.join(', ')}</span>
+            </div>
+            ${claimBtn}
+          </div>`;
+      })
+      .join('');
+    const titles = [...j.titles, ...g.questTitles().filter((t) => !j.titles.some((x) => x.id === t.id))];
     g.markJournalSeen([
       ...j.raids.map((r) => `raid:${r.id}`),
       ...j.factions.map((f) => `faction:${f.regionId}`),
@@ -2577,6 +2602,8 @@ export class Hud {
       <div class="journal-summary">
         <b>${g.region.name}</b> · reputation ${repText} · recruited ${g.recruited.size}/${REG.heroes.size}
       </div>
+      <h3>Bounties &amp; Chapters</h3>
+      ${questRows || '<p class="dim">No bounties or chapters open yet. They unlock as you recruit, badge up, and descend.</p>'}
       <h3>Recruitment</h3>
       ${rows || '<p class="dim">No open quest leads in this region yet. Find echo scars, gyms, and hero rumors to fill the journal.</p>'}
       <h3>Conquest</h3>
@@ -2587,10 +2614,15 @@ export class Hud {
       <h3>Badges</h3>
       <div class="journal-summary">${badges}</div>
       <h3>Titles</h3>
-      ${j.titles.length
-        ? j.titles.map((t) => `<div class="journal-row"><div class="jr-stage">Title</div><div class="jr-main"><p><b>${t.name}</b> — ${t.note}</p></div></div>`).join('')
+      ${titles.length
+        ? titles.map((t) => `<div class="journal-row"><div class="jr-stage">Title</div><div class="jr-main"><p><b>${t.name}</b> — ${t.note}</p></div></div>`).join('')
         : '<p class="dim">Earn titles through legendary feats — like holding Roshan\'s Pit at its hardest tier.</p>'}`
     );
+    this.modal.querySelectorAll<HTMLElement>('[data-claim-quest]').forEach((el) => {
+      el.addEventListener('click', () => {
+        if (this.game.claimQuest(el.dataset.claimQuest!)) this.renderJournalModal();
+      });
+    });
   }
 
   private renderCodexModal(): void {
@@ -2858,6 +2890,7 @@ export class Hud {
           <label class="opt-row">SFX volume <input type="range" id="opt-sfx-volume" min="0" max="1" step="0.05" value="${g.settings.audio.sfx}"></label>
           <label class="opt-row">Voice volume <input type="range" id="opt-voice-volume" min="0" max="1" step="0.05" value="${g.settings.audio.voice}"></label>
           <label class="opt-row">Stinger volume <input type="range" id="opt-stinger-volume" min="0" max="1" step="0.05" value="${g.settings.audio.stinger}"></label>
+          <label class="opt-row">Music volume <input type="range" id="opt-music-volume" min="0" max="1" step="0.05" value="${g.settings.audio.music}"></label>
           <h3>Graphics</h3>
           <label class="opt-row">Quality
             <select id="opt-quality">
@@ -2905,10 +2938,12 @@ export class Hud {
             </select>
           </label>
           <label class="opt-row">VFX density <input type="range" id="opt-vfx-density" min="0.5" max="1.5" step="0.05" value="${g.settings.graphics?.vfxDensity ?? 1}"></label>
+          <label class="opt-row">Overworld battle scale <input type="range" id="opt-battle-scale" min="0.5" max="1.5" step="0.05" value="${g.settings.graphics?.battleScale ?? 1}"></label>
           <label class="opt-row">Screen shake <input type="range" id="opt-screen-shake" min="0" max="1" step="0.05" value="${g.settings.graphics?.screenShake ?? 1}"></label>
           <label class="opt-row">Exposure <input type="range" id="opt-exposure" min="0.5" max="1.5" step="0.02" value="${g.settings.graphics?.exposure ?? 0.92}"></label>
           <label class="opt-row">Color grade <input type="range" id="opt-grade" min="0" max="1.5" step="0.05" value="${g.settings.graphics?.grade ?? 1}"></label>
           <label class="opt-row"><input type="checkbox" id="opt-reduced-motion" ${g.settings.graphics?.reducedMotion ? 'checked' : ''}> Reduced motion (ambient FX)</label>
+          <label class="opt-row"><input type="checkbox" id="opt-colorblind" ${g.settings.graphics?.colorblind ? 'checked' : ''}> Colorblind-safe loot palette</label>
           <h3>Cut-scenes</h3>
           <label class="opt-row">Length
             <select id="opt-cutscene-length">
@@ -2978,6 +3013,10 @@ export class Hud {
       g.settings.audio.stinger = Number((e.target as HTMLInputElement).value);
       g.audio.setSettings(g.settings);
     });
+    this.modal.querySelector('#opt-music-volume')?.addEventListener('input', (e) => {
+      g.settings.audio.music = Number((e.target as HTMLInputElement).value);
+      g.audio.setSettings(g.settings);
+    });
     this.modal.querySelector('#opt-quality')?.addEventListener('change', (e) => {
       g.setQualityTier((e.target as HTMLSelectElement).value as GraphicsSettings['quality']);
     });
@@ -3017,6 +3056,10 @@ export class Hud {
       if (g.settings.graphics) g.settings.graphics.vfxDensity = Number((e.target as HTMLInputElement).value);
       g.applyGraphics();
     });
+    this.modal.querySelector('#opt-battle-scale')?.addEventListener('input', (e) => {
+      if (g.settings.graphics) g.settings.graphics.battleScale = Number((e.target as HTMLInputElement).value);
+      g.applyGraphics();
+    });
     this.modal.querySelector('#opt-screen-shake')?.addEventListener('input', (e) => {
       if (g.settings.graphics) g.settings.graphics.screenShake = Number((e.target as HTMLInputElement).value);
       g.applyGraphics();
@@ -3033,6 +3076,11 @@ export class Hud {
       if (g.settings.graphics) g.settings.graphics.reducedMotion = (e.target as HTMLInputElement).checked;
       g.applyGraphics();
       g.applyCutsceneSettings();
+    });
+    this.modal.querySelector('#opt-colorblind')?.addEventListener('change', (e) => {
+      if (g.settings.graphics) g.settings.graphics.colorblind = (e.target as HTMLInputElement).checked;
+      g.applyGraphics();
+      this.renderMenuModal();
     });
     this.modal.querySelector('#opt-cutscene-length')?.addEventListener('change', (e) => {
       if (g.settings.cutscene) g.settings.cutscene.length = (e.target as HTMLSelectElement).value as 'full' | 'short' | 'off';

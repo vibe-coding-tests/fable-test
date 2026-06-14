@@ -1,13 +1,13 @@
 {
   "version": 1,
-  "hash": "68c3f6e320f8",
-  "generatedAt": "2026-06-14T06:06:29.746Z",
+  "hash": "41d950978c72",
+  "generatedAt": "2026-06-14T12:36:20.534Z",
   "assetRoot": "/assets/",
-  "totalBytes": 127312792,
+  "totalBytes": 139499604,
   "groups": {
     "audio": {
-      "count": 10,
-      "bytes": 2193092
+      "count": 51,
+      "bytes": 14379904
     },
     "creep": {
       "count": 20,
@@ -50,7 +50,7 @@
     {
       "path": "audio/music/coast.wav",
       "url": "/assets/audio/music/coast.wav",
-      "bytes": 352844,
+      "bytes": 2116844,
       "type": "audio",
       "group": "audio",
       "preloadGroup": "audio",
@@ -60,7 +60,7 @@
     {
       "path": "audio/music/desert.wav",
       "url": "/assets/audio/music/desert.wav",
-      "bytes": 352844,
+      "bytes": 2116844,
       "type": "audio",
       "group": "audio",
       "preloadGroup": "audio",
@@ -70,7 +70,7 @@
     {
       "path": "audio/music/forest.wav",
       "url": "/assets/audio/music/forest.wav",
-      "bytes": 352844,
+      "bytes": 2116844,
       "type": "audio",
       "group": "audio",
       "preloadGroup": "audio",
@@ -80,7 +80,7 @@
     {
       "path": "audio/music/grass.wav",
       "url": "/assets/audio/music/grass.wav",
-      "bytes": 352844,
+      "bytes": 2116844,
       "type": "audio",
       "group": "audio",
       "preloadGroup": "audio",
@@ -90,7 +90,7 @@
     {
       "path": "audio/music/snow.wav",
       "url": "/assets/audio/music/snow.wav",
-      "bytes": 352844,
+      "bytes": 2116844,
       "type": "audio",
       "group": "audio",
       "preloadGroup": "audio",
@@ -100,7 +100,177 @@
     {
       "path": "audio/music/wasteland.wav",
       "url": "/assets/audio/music/wasteland.wav",
-      "bytes": 352844,
+      "bytes": 2116844,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/blade-draw.wav",
+      "url": "/assets/audio/sfx/blade-draw.wav",
+      "bytes": 38852,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/cast-blade.wav",
+      "url": "/assets/audio/sfx/cast-blade.wav",
+      "bytes": 42380,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/cast-bow.wav",
+      "url": "/assets/audio/sfx/cast-bow.wav",
+      "bytes": 35324,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/cast-fire-2.wav",
+      "url": "/assets/audio/sfx/cast-fire-2.wav",
+      "bytes": 81188,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/cast-fire.wav",
+      "url": "/assets/audio/sfx/cast-fire.wav",
+      "bytes": 67076,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/cast-frost-2.wav",
+      "url": "/assets/audio/sfx/cast-frost-2.wav",
+      "bytes": 63548,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/cast-frost.wav",
+      "url": "/assets/audio/sfx/cast-frost.wav",
+      "bytes": 74132,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/cast-heal.wav",
+      "url": "/assets/audio/sfx/cast-heal.wav",
+      "bytes": 88244,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/cast-impact.wav",
+      "url": "/assets/audio/sfx/cast-impact.wav",
+      "bytes": 49436,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/cast-item.wav",
+      "url": "/assets/audio/sfx/cast-item.wav",
+      "bytes": 49436,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/cast-lightning.wav",
+      "url": "/assets/audio/sfx/cast-lightning.wav",
+      "bytes": 45908,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/cast-roar-2.wav",
+      "url": "/assets/audio/sfx/cast-roar-2.wav",
+      "bytes": 81188,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/cast-roar.wav",
+      "url": "/assets/audio/sfx/cast-roar.wav",
+      "bytes": 88244,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/cast-storm.wav",
+      "url": "/assets/audio/sfx/cast-storm.wav",
+      "bytes": 60020,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/cast-summon.wav",
+      "url": "/assets/audio/sfx/cast-summon.wav",
+      "bytes": 77660,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/cast-void.wav",
+      "url": "/assets/audio/sfx/cast-void.wav",
+      "bytes": 81188,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/coin.wav",
+      "url": "/assets/audio/sfx/coin.wav",
+      "bytes": 63548,
       "type": "audio",
       "group": "audio",
       "preloadGroup": "audio",
@@ -110,7 +280,7 @@
     {
       "path": "audio/sfx/crit.wav",
       "url": "/assets/audio/sfx/crit.wav",
-      "bytes": 17684,
+      "bytes": 70604,
       "type": "audio",
       "group": "audio",
       "preloadGroup": "audio",
@@ -120,7 +290,7 @@
     {
       "path": "audio/sfx/fanfare.wav",
       "url": "/assets/audio/sfx/fanfare.wav",
-      "bytes": 27386,
+      "bytes": 109412,
       "type": "audio",
       "group": "audio",
       "preloadGroup": "audio",
@@ -130,7 +300,247 @@
     {
       "path": "audio/sfx/impact-heavy.wav",
       "url": "/assets/audio/sfx/impact-heavy.wav",
-      "bytes": 15920,
+      "bytes": 63548,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/kenney/blade-draw-1.ogg",
+      "url": "/assets/audio/sfx/kenney/blade-draw-1.ogg",
+      "bytes": 11134,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/kenney/coin-1.ogg",
+      "url": "/assets/audio/sfx/kenney/coin-1.ogg",
+      "bytes": 25394,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/kenney/coin-2.ogg",
+      "url": "/assets/audio/sfx/kenney/coin-2.ogg",
+      "bytes": 13094,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/kenney/crit-bell-1.ogg",
+      "url": "/assets/audio/sfx/kenney/crit-bell-1.ogg",
+      "bytes": 13915,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/kenney/crit-metal-1.ogg",
+      "url": "/assets/audio/sfx/kenney/crit-metal-1.ogg",
+      "bytes": 7279,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/kenney/fanfare-hit-1.ogg",
+      "url": "/assets/audio/sfx/kenney/fanfare-hit-1.ogg",
+      "bytes": 15019,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/kenney/fanfare-steel-1.ogg",
+      "url": "/assets/audio/sfx/kenney/fanfare-steel-1.ogg",
+      "bytes": 14951,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/kenney/fanfare-steel-2.ogg",
+      "url": "/assets/audio/sfx/kenney/fanfare-steel-2.ogg",
+      "bytes": 22460,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/kenney/heal-power-1.ogg",
+      "url": "/assets/audio/sfx/kenney/heal-power-1.ogg",
+      "bytes": 9043,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/kenney/impact-heavy-punch-1.ogg",
+      "url": "/assets/audio/sfx/kenney/impact-heavy-punch-1.ogg",
+      "bytes": 11617,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/kenney/impact-heavy-punch-2.ogg",
+      "url": "/assets/audio/sfx/kenney/impact-heavy-punch-2.ogg",
+      "bytes": 9025,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/kenney/item-tone-1.ogg",
+      "url": "/assets/audio/sfx/kenney/item-tone-1.ogg",
+      "bytes": 7361,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/kenney/lightning-zap-1.ogg",
+      "url": "/assets/audio/sfx/kenney/lightning-zap-1.ogg",
+      "bytes": 8126,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/kenney/lightning-zap-2.ogg",
+      "url": "/assets/audio/sfx/kenney/lightning-zap-2.ogg",
+      "bytes": 9819,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/kenney/projectile-hit-1.ogg",
+      "url": "/assets/audio/sfx/kenney/projectile-hit-1.ogg",
+      "bytes": 5636,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/kenney/projectile-hit-2.ogg",
+      "url": "/assets/audio/sfx/kenney/projectile-hit-2.ogg",
+      "bytes": 5792,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/kenney/storm-phaser-up-1.ogg",
+      "url": "/assets/audio/sfx/kenney/storm-phaser-up-1.ogg",
+      "bytes": 7222,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/kenney/storm-zap-up-1.ogg",
+      "url": "/assets/audio/sfx/kenney/storm-zap-up-1.ogg",
+      "bytes": 9590,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/kenney/summon-power-1.ogg",
+      "url": "/assets/audio/sfx/kenney/summon-power-1.ogg",
+      "bytes": 5868,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/kenney/void-phase-1.ogg",
+      "url": "/assets/audio/sfx/kenney/void-phase-1.ogg",
+      "bytes": 6342,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/kenney/void-phase-2.ogg",
+      "url": "/assets/audio/sfx/kenney/void-phase-2.ogg",
+      "bytes": 6770,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/kenney/whoosh-blade-1.ogg",
+      "url": "/assets/audio/sfx/kenney/whoosh-blade-1.ogg",
+      "bytes": 15532,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/kenney/whoosh-blade-2.ogg",
+      "url": "/assets/audio/sfx/kenney/whoosh-blade-2.ogg",
+      "bytes": 15099,
+      "type": "audio",
+      "group": "audio",
+      "preloadGroup": "audio",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "audio/sfx/projectile-hit.wav",
+      "url": "/assets/audio/sfx/projectile-hit.wav",
+      "bytes": 31796,
       "type": "audio",
       "group": "audio",
       "preloadGroup": "audio",
@@ -140,7 +550,7 @@
     {
       "path": "audio/sfx/whoosh.wav",
       "url": "/assets/audio/sfx/whoosh.wav",
-      "bytes": 15038,
+      "bytes": 60020,
       "type": "audio",
       "group": "audio",
       "preloadGroup": "audio",

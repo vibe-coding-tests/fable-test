@@ -26,7 +26,7 @@ import {
 } from '../core/phase3';
 import { Rng } from '../core/rng';
 import { runRaidBattle } from '../core/macro';
-import { Game, newGameSave, SAVE_VERSION } from '../systems/game';
+import { GATED_TOP_TIER, Game, newGameSave, SAVE_VERSION } from '../systems/game';
 import { DEFAULT_CREEP_DROP_TABLES } from '../data/creep-drops';
 import { TUNING } from '../data/tuning';
 
@@ -119,6 +119,15 @@ describe('Phase 3 difficulty, loot, and reward economy', () => {
     expect(hell.armorScale).toBe(TUNING.bossTierScale.hell.armor);
     expect(hell.armorScale).toBeGreaterThan(normal.armorScale);
     expect(hell.aiDepth).toBe(TUNING.bossTierAiDepth.hell);
+    expect(normal.itemOverrides?.['black-king-bar']).toEqual({
+      cooldown: TUNING.bossBkbByTier.normal.cooldown,
+      values: { duration: [TUNING.bossBkbByTier.normal.duration] }
+    });
+    expect(hell.itemOverrides?.['black-king-bar']).toEqual({
+      cooldown: TUNING.bossBkbByTier.hell.cooldown,
+      values: { duration: [TUNING.bossBkbByTier.hell.duration] }
+    });
+    expect(hell.itemOverrides?.['black-king-bar']?.cooldown).toBeLessThan(normal.itemOverrides?.['black-king-bar']?.cooldown ?? 0);
   });
 
   it('keeps neutral item drops tiered and Tinker Bench operations in rule', () => {
@@ -138,9 +147,8 @@ describe('Phase 3 difficulty, loot, and reward economy', () => {
     const tome = tomePurchase(1000, 1);
     expect(tome.ok).toBe(true);
     expect(tome.xp).toBeGreaterThan(0);
-    const gated = new Set(['divine-rapier', 'butterfly', 'scythe-of-vyse', 'heart-of-tarrasque', 'eye-of-skadi', 'refresher-orb', 'aghanims-scepter']);
     const shopItems = new Set([...REG.regions.values()].flatMap((r) => r.shopInventory));
-    for (const id of gated) expect(shopItems.has(id)).toBe(false);
+    for (const id of GATED_TOP_TIER) expect(shopItems.has(id)).toBe(false);
   });
 });
 

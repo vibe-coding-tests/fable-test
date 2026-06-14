@@ -323,6 +323,7 @@ export function buildTerrain(region: RegionDef, isLive: SceneLiveCheck = () => t
   const geo = new THREE.PlaneGeometry(sizeW, sizeW, seg, seg);
   geo.rotateX(-Math.PI / 2);
   const pos = geo.attributes.position as THREE.BufferAttribute;
+  const heightSamples = new Float32Array((seg + 1) * (seg + 1));
   const colorArr: number[] = [];
   const cLow = new THREE.Color(colors.low);
   const cMid = new THREE.Color(colors.mid);
@@ -346,6 +347,7 @@ export function buildTerrain(region: RegionDef, isLive: SceneLiveCheck = () => t
     pos.setY(i, h);
     const ix = Math.max(0, Math.min(seg, Math.round(u * seg)));
     const iz = Math.max(0, Math.min(seg, Math.round(v * seg)));
+    heightSamples[iz * (seg + 1) + ix] = h;
     if (iz === 0) edgeHeights.south[ix] = h;
     if (iz === seg) edgeHeights.north[ix] = h;
     if (ix === 0) edgeHeights.west[iz] = h;
@@ -449,7 +451,19 @@ export function buildTerrain(region: RegionDef, isLive: SceneLiveCheck = () => t
     const u = simX / region.size;
     const v = simY / region.size;
     if (u < 0 || u > 1 || v < 0 || v > 1) return 0;
-    return heightAtUV(u, v);
+    const gx = Math.max(0, Math.min(seg, u * seg));
+    const gz = Math.max(0, Math.min(seg, v * seg));
+    const ix = Math.min(seg - 1, Math.floor(gx));
+    const iz = Math.min(seg - 1, Math.floor(gz));
+    const fx = gx - ix;
+    const fz = gz - iz;
+    const h00 = heightSamples[iz * (seg + 1) + ix];
+    const h10 = heightSamples[iz * (seg + 1) + ix + 1];
+    const h01 = heightSamples[(iz + 1) * (seg + 1) + ix];
+    const h11 = heightSamples[(iz + 1) * (seg + 1) + ix + 1];
+    const hx0 = h00 + (h10 - h00) * fx;
+    const hx1 = h01 + (h11 - h01) * fx;
+    return hx0 + (hx1 - hx0) * fz;
   };
 
   // scatter props (deterministic), keeping clearings around town/shrine/camps/spawns

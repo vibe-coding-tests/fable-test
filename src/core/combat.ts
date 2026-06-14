@@ -14,6 +14,7 @@ export interface DamageOpts {
   ignoreArmor?: boolean;
   noTriggers?: boolean;
   element?: import('./types').ElementId;
+  piercesImmunity?: boolean;
 }
 
 /** Central damage pipeline. Returns post-mitigation damage dealt. */
@@ -27,7 +28,7 @@ export function applyDamage(
 ): number {
   if (!victim.alive || rawAmount <= 0) return 0;
   if (victim.summary.invulnerable) return 0;
-  if (dtype === 'magical' && victim.summary.magicImmune) {
+  if (dtype === 'magical' && victim.summary.magicImmune && !opts.piercesImmunity) {
     sim.events.emit({ t: 'immune-block', uid: victim.uid });
     return 0;
   }

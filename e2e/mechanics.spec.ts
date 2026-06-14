@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { boot, state } from './helpers';
+import { boot, clearCinematics, state } from './helpers';
 
 test.describe('mechanics', () => {
   test('day/night toggles with the day-time clock', async ({ page }) => {
@@ -32,18 +32,24 @@ test.describe('mechanics', () => {
 
   test('killing wild creeps pays the player gold (reward loop)', async ({ page }) => {
     await boot(page, { seed: 23 });
+    // The main loop pauses the sim while the prologue cut-scene plays, so
+    // fastForward would never drain the kill-credit events. Clear it first.
+    await clearCinematics(page);
 
     const result = await page.evaluate(() => {
       const t = (window as any).__test;
       const g = (window as any).__game;
-      // Stand on a known kobold camp so there are hostiles to clear.
-      t.teleportActive(4400, 5200);
+      // Spawn wild creeps next to the hero so the reward loop has hostiles to
+      // clear regardless of where camps sit in the current region data.
+      const fight = t.spawnWildCreepNearActive({ count: 3 });
       t.fastForward(0.5);
       const goldBefore = g.gold;
       const killed = t.clearHostiles();
       t.fastForward(0.5); // drain kill-credit events -> bounty
-      return { killed, goldBefore, goldAfter: g.gold };
+      return { spawned: fight?.hostiles ?? 0, killed, goldBefore, goldAfter: g.gold };
     });
+
+    expect(result.spawned).toBeGreaterThan(0);
 
     expect(result.killed).toBeGreaterThan(0);
     expect(result.goldAfter).toBeGreaterThan(result.goldBefore);
@@ -55,7 +61,7 @@ test.describe('mechanics', () => {
     const cap = await page.evaluate(() => {
       const t = (window as any).__test;
       const g = (window as any).__game;
-      t.teleportActive(4400, 5200);
+      t.spawnWildCreepNearActive({ count: 3 });
       t.fastForward(0.5);
       // Find a nearby capturable hostile and chunk it down.
       const u = g.activeUnit();

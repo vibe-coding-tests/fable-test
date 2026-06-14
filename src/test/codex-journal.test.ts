@@ -6,7 +6,7 @@ import { Game, newGameSave } from '../systems/game';
 beforeAll(() => registerAllContent());
 
 function freshGame(): Game {
-  return Game.headless(newGameSave('juggernaut'));
+  return Game.headless(newGameSave('juggernaut'), { cinematics: true });
 }
 
 // ----------------------------------------------------------------

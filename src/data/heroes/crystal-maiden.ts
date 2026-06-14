@@ -1,4 +1,5 @@
 import type { HeroDef } from '../../core/types';
+import { loopTurnLabel } from './loop-note';
 
 export const CRYSTAL_MAIDEN: HeroDef = {
   id: 'crystal-maiden',
@@ -7,7 +8,7 @@ export const CRYSTAL_MAIDEN: HeroDef = {
   attribute: 'int',
   roles: ['support', 'disabler', 'nuker'],
   region: 'icewrack',
-  lore: 'Sent south from Icewrack so her frost would stop ruining the orchards, Rylai carries winter with her like a lantern.',
+  lore: `Sent south from Icewrack so her frost would stop ruining the orchards, Rylai carries winter with her like a lantern. Her Echo last fought on turn ${loopTurnLabel('crystal-maiden')} of the Loop, when Icewrack learned her winter could shelter as well as kill.`,
   baseStats: {
     str: 18, agi: 16, int: 22,
     strGain: 2.2, agiGain: 1.6, intGain: 3.3,

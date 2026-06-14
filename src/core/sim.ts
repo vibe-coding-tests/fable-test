@@ -131,6 +131,13 @@ export class Sim {
   zones: Zone[] = [];
   repeaters: Repeater[] = [];
   resonanceEnabled = false;
+  /**
+   * Player-facing overworld battle-scale multiplier (OPTIMIZATION 2.0 §F.2).
+   * Scales the per-owner summon/illusion ceiling for THIS sim only. The overworld
+   * sim sets it from the graphics settings; gym/Elite/raid/dungeon sims leave it
+   * at 1 so a macro outcome can never depend on a performance dial (§E.6 fairness).
+   */
+  summonCapScale = 1;
   private spatial = new SpatialGrid(256);
   private spatialDirty = true;
 
@@ -266,7 +273,8 @@ export class Sim {
 
   private enforceOwnerSummonCeiling(owner: Unit, spec: SummonSpec): void {
     const isIllusion = /illusion|image|clone|double|replicate/i.test(`${spec.id} ${spec.name}`);
-    const cap = isIllusion ? TUNING.scaleCeilings.illusions : TUNING.scaleCeilings.summons;
+    const base = isIllusion ? TUNING.scaleCeilings.illusions : TUNING.scaleCeilings.summons;
+    const cap = Math.max(1, Math.round(base * this.summonCapScale));
     const owned = this.unitsArr
       .filter((u) => u.alive && u.ownerUid === owner.uid && /illusion|image|clone|double|replicate/i.test(`${u.creepId ?? ''} ${u.name}`) === isIllusion)
       .sort((a, b) => a.uid - b.uid);

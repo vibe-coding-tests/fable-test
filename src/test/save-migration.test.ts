@@ -6,18 +6,18 @@ import { migratePhase5Save } from '../core/phase5';
 import { migratePhase6Save } from '../core/phase6';
 import type { GameSave } from '../core/types';
 
-// Save migration coverage. v6 adds Armory loadouts and dungeon progress while preserving the v4
-// audio/karma/codex and v5 exploration/stamina migration paths.
+// Save migration coverage. Current saves add board quests on top of Armory loadouts,
+// dungeon progress, audio/karma/codex, and exploration/stamina migration paths.
 
 beforeAll(() => registerAllContent());
 
-describe('save v6 round-trip and migration', () => {
-  it('a fresh save is v6 with audio, karma, exploration, and Armory defaults', () => {
+describe('save round-trip and migration', () => {
+  it('a fresh save has current audio, karma, exploration, Armory, and quest defaults', () => {
     const save = newGameSave('juggernaut');
-    expect(save.version).toBe(6);
-    expect(SAVE_VERSION).toBe(6);
+    expect(save.version).toBe(SAVE_VERSION);
     expect(save.loadouts).toEqual({});
     expect(save.dungeonProgress).toEqual({});
+    expect(save.quests).toEqual({});
     expect(save.reputation).toBe(0);
     expect(save.codexUnlocks).toEqual([]);
     expect(save.journalSeen).toEqual([]);
@@ -28,7 +28,7 @@ describe('save v6 round-trip and migration', () => {
     expect(save.solvedPuzzles).toEqual([]);
     expect(save.resin).toBeGreaterThan(0);
     expect(save.settings.resonance).toBe(true);
-    expect(save.settings.audio).toEqual({ master: 0.8, sfx: 0.8, voice: 0.7, stinger: 0.7, muted: false });
+    expect(save.settings.audio).toEqual({ master: 0.8, sfx: 0.8, voice: 0.7, stinger: 0.7, music: 0.6, muted: false });
     expect(save.settings.graphics).toEqual({
       quality: 'auto',
       autoAdjustQuality: true,
@@ -40,10 +40,12 @@ describe('save v6 round-trip and migration', () => {
       drawDistance: 'medium',
       crowdDetail: 'auto',
       vfxDensity: 1,
+      battleScale: 1,
       screenShake: 1,
       exposure: 0.92,
       grade: 1,
-      reducedMotion: false
+      reducedMotion: false,
+      colorblind: false
     });
     expect(save.settings.cutscene).toEqual({ length: 'full', defaultSpeed: 1, alwaysSkip: false, photosensitive: false, tieIns: true });
     expect(Game.validateSave(save)).toBe(true);
@@ -62,10 +64,12 @@ describe('save v6 round-trip and migration', () => {
       drawDistance: 'high',
       crowdDetail: 'balanced',
       vfxDensity: 1.25,
+      battleScale: 1.5,
       screenShake: 0.5,
       exposure: 1.1,
       grade: 0.6,
-      reducedMotion: true
+      reducedMotion: true,
+      colorblind: true
     };
     const reloaded = Game.migrateSave(JSON.parse(JSON.stringify(save)) as unknown);
     expect(reloaded!.settings.graphics).toEqual({
@@ -79,10 +83,12 @@ describe('save v6 round-trip and migration', () => {
       drawDistance: 'high',
       crowdDetail: 'balanced',
       vfxDensity: 1.25,
+      battleScale: 1.5,
       screenShake: 0.5,
       exposure: 1.1,
       grade: 0.6,
-      reducedMotion: true
+      reducedMotion: true,
+      colorblind: true
     });
 
     // A save with no graphics block gets the defaults backfilled on migration.
@@ -100,10 +106,12 @@ describe('save v6 round-trip and migration', () => {
       drawDistance: 'medium',
       crowdDetail: 'auto',
       vfxDensity: 1,
+      battleScale: 1,
       screenShake: 1,
       exposure: 0.92,
       grade: 1,
-      reducedMotion: false
+      reducedMotion: false,
+      colorblind: false
     });
   });
 
@@ -113,7 +121,7 @@ describe('save v6 round-trip and migration', () => {
     expect(Game.validateSave(save)).toBe(false);
   });
 
-  it('round-trips a v6 save carrying karma, codex/journal, exploration, audio, and loadouts identically', () => {
+  it('round-trips a current save carrying karma, codex/journal, exploration, audio, and loadouts identically', () => {
     const save = newGameSave('crystal-maiden');
     save.loadouts = { 'crystal-maiden': { Default: ['blink-dagger', null, null, null, null, null] } };
     save.dungeonProgress = {
@@ -138,13 +146,13 @@ describe('save v6 round-trip and migration', () => {
     save.shardsTurnedIn = { 'tranquil-vale': 3 };
     save.explorationPct = { 'tranquil-vale': 42 };
     save.resin = 77;
-    save.settings.audio = { master: 0.55, sfx: 0.4, voice: 0.9, stinger: 0.25, muted: true };
+    save.settings.audio = { master: 0.55, sfx: 0.4, voice: 0.9, stinger: 0.25, music: 0.5, muted: true };
     save.settings.minimap = false;
 
     const json = JSON.stringify(save);
     const reloaded = Game.migrateSave(JSON.parse(json) as unknown);
     expect(reloaded).not.toBeNull();
-    expect(reloaded!.version).toBe(6);
+    expect(reloaded!.version).toBe(SAVE_VERSION);
     expect(reloaded!.loadouts).toEqual(save.loadouts);
     expect(reloaded!.dungeonProgress).toEqual(save.dungeonProgress);
     expect(reloaded!.reputation).toBe(7);
@@ -184,7 +192,7 @@ describe('save v6 round-trip and migration', () => {
 
     const migrated = Game.migrateSave(v3);
     expect(migrated).not.toBeNull();
-    expect(migrated!.version).toBe(6);
+    expect(migrated!.version).toBe(SAVE_VERSION);
     expect(migrated!.loadouts).toEqual({});
     expect(migrated!.dungeonProgress).toEqual({});
     expect(migrated!.reputation).toBe(0);
@@ -197,12 +205,13 @@ describe('save v6 round-trip and migration', () => {
     expect(migrated!.settings.audio.master).toBeCloseTo(0.5);
     expect(migrated!.settings.audio.sfx).toBeCloseTo(0.6);
     expect(migrated!.settings.audio.stinger).toBeCloseTo(0.3); // musicVolume -> stinger
+    expect(migrated!.settings.audio.music).toBeCloseTo(0.3); // musicVolume -> music bed
     expect(migrated!.settings.audio.voice).toBeCloseTo(0.7); // no v3 analogue -> default
     expect(migrated!.settings.audio.muted).toBe(false);
     expect(Game.validateSave(migrated!)).toBe(true);
   });
 
-  it('migrates a v2-shaped save all the way to v6', () => {
+  it('migrates a v2-shaped save all the way to the current version', () => {
     const v4 = newGameSave('juggernaut');
     const v2 = JSON.parse(JSON.stringify(v4)) as Record<string, unknown>;
     v2.version = 2;
@@ -216,7 +225,7 @@ describe('save v6 round-trip and migration', () => {
 
     const migrated = Game.migrateSave(v2);
     expect(migrated).not.toBeNull();
-    expect(migrated!.version).toBe(6);
+    expect(migrated!.version).toBe(SAVE_VERSION);
     expect(migrated!.loadouts).toEqual({});
     expect(migrated!.dungeonProgress).toEqual({});
     expect(migrated!.difficulty).toEqual({});
@@ -224,8 +233,8 @@ describe('save v6 round-trip and migration', () => {
     expect(migrated!.reputation).toBe(0);
     expect(migrated!.settings.quickcast).toBe(false);
     expect(migrated!.settings.resonance).toBe(true);
-    // v3 defaults musicVolume to 0.6 when absent, which folds into the stinger channel.
-    expect(migrated!.settings.audio).toEqual({ master: 0.8, sfx: 0.8, voice: 0.7, stinger: 0.6, muted: false });
+    // v3 defaults musicVolume to 0.6 when absent, which folds into the stinger + music channels.
+    expect(migrated!.settings.audio).toEqual({ master: 0.8, sfx: 0.8, voice: 0.7, stinger: 0.6, music: 0.6, muted: false });
     expect(Game.validateSave(migrated!)).toBe(true);
   });
 

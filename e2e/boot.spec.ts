@@ -19,6 +19,11 @@ test.describe('boot', () => {
   });
 
   test('real WebGL renderer boots and sizes the canvas', async ({ page }) => {
+    // Full WebGL boot (env/vfx/holdout/party-model preload + post-FX compile).
+    // It needs a working GL context and comfortably exceeds the 30s default under
+    // software rendering, so give it headroom. NOTE: requires a real/SwiftShader
+    // GPU — sandboxes with no usable GL can't bring the context up and will skip.
+    test.setTimeout(90_000);
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(e.message));
 

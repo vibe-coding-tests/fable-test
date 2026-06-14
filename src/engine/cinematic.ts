@@ -200,6 +200,12 @@ export class CinematicDirector {
     this.finishCurrent();
   }
 
+  /** Test/gallery escape hatch: drop the active cut-scene and any queued follow-ups. */
+  clear(): void {
+    this.current = null;
+    this.queue = [];
+  }
+
   /**
    * Hold-to-fast-forward. Each press while held steps 2× → 4× → 8× (§3.4); releasing
    * returns to the base speed (1× or the seen/default auto-speed).

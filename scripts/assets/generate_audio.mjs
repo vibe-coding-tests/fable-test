@@ -8,9 +8,8 @@
 // medium+ tiers and a missing file simply leaves the synth playing.
 //
 // Pure Node (no deps): a tiny WAV writer + additive synthesis. Loops are made
-// seamless by building every partial and every amplitude LFO from frequencies
-// that are integer multiples of 1/loopDuration, so the waveform wraps with no
-// click at the seam.
+// seamless by quantizing every oscillator/LFO to integer multiples of
+// 1/loopDuration, so the waveform wraps without a click.
 //
 // Usage: node scripts/assets/generate_audio.mjs
 import fs from 'node:fs';
@@ -19,28 +18,33 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const OUT_DIR = path.join(ROOT, 'public', 'assets', 'audio');
-const SR = 22050; // mono, plenty for an ambient bed; keeps files small
+const SR = 44100; // stereo beds/SFX; still small enough for the no-budget policy
 
-// --- WAV (PCM16 mono) ------------------------------------------------------
+// --- WAV (PCM16) -----------------------------------------------------------
 function writeWav(filePath, samples) {
-  const n = samples.length;
-  const buf = Buffer.alloc(44 + n * 2);
+  const channels = Array.isArray(samples) ? samples : [samples];
+  const n = channels[0]?.length ?? 0;
+  const channelCount = channels.length;
+  const blockAlign = channelCount * 2;
+  const buf = Buffer.alloc(44 + n * blockAlign);
   buf.write('RIFF', 0);
-  buf.writeUInt32LE(36 + n * 2, 4);
+  buf.writeUInt32LE(36 + n * blockAlign, 4);
   buf.write('WAVE', 8);
   buf.write('fmt ', 12);
   buf.writeUInt32LE(16, 16); // PCM chunk size
   buf.writeUInt16LE(1, 20); // PCM
-  buf.writeUInt16LE(1, 22); // mono
+  buf.writeUInt16LE(channelCount, 22);
   buf.writeUInt32LE(SR, 24);
-  buf.writeUInt32LE(SR * 2, 28); // byte rate
-  buf.writeUInt16LE(2, 32); // block align
+  buf.writeUInt32LE(SR * blockAlign, 28); // byte rate
+  buf.writeUInt16LE(blockAlign, 32);
   buf.writeUInt16LE(16, 34); // bits/sample
   buf.write('data', 36);
-  buf.writeUInt32LE(n * 2, 40);
+  buf.writeUInt32LE(n * blockAlign, 40);
   for (let i = 0; i < n; i++) {
-    const s = Math.max(-1, Math.min(1, samples[i]));
-    buf.writeInt16LE(Math.round(s * 32767), 44 + i * 2);
+    for (let ch = 0; ch < channelCount; ch++) {
+      const s = Math.max(-1, Math.min(1, channels[ch][i] ?? 0));
+      buf.writeInt16LE(Math.round(s * 32767), 44 + i * blockAlign + ch * 2);
+    }
   }
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, buf);
@@ -48,85 +52,136 @@ function writeWav(filePath, samples) {
 }
 
 function normalize(samples, peak = 0.92) {
+  const channels = Array.isArray(samples) ? samples : [samples];
   let max = 0;
-  for (const s of samples) max = Math.max(max, Math.abs(s));
+  for (const channel of channels) {
+    for (const s of channel) max = Math.max(max, Math.abs(s));
+  }
   if (max < 1e-6) return samples;
   const g = peak / max;
-  for (let i = 0; i < samples.length; i++) samples[i] *= g;
+  for (const channel of channels) {
+    for (let i = 0; i < channel.length; i++) channel[i] *= g;
+  }
   return samples;
 }
 
 const TWO_PI = Math.PI * 2;
 const semi = (root, n) => root * 2 ** (n / 12);
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+function makeStereo(n) {
+  return [new Float32Array(n), new Float32Array(n)];
+}
+
+function panGains(pan) {
+  const theta = ((clamp(pan, -1, 1) + 1) * Math.PI) / 4;
+  return [Math.cos(theta), Math.sin(theta)];
+}
+
+function addPan(out, i, value, pan) {
+  const [lg, rg] = panGains(pan);
+  out[0][i] += value * lg;
+  out[1][i] += value * rg;
+}
+
+function qHz(hz, baseHz) {
+  return Math.max(baseHz, Math.round(hz / baseHz) * baseHz);
+}
+
+function hashNoise(i, seed = 1) {
+  const x = Math.sin((i + 1) * (12.9898 + seed * 0.071)) * 43758.5453;
+  return (x - Math.floor(x)) * 2 - 1;
+}
 
 // --- Music beds ------------------------------------------------------------
 // A slow, evolving ambient drone keyed to each biome's tonal centre. Tones come
 // from a minor-pentatonic-ish set so any pair sits consonant; each is breathed
 // in/out by an LFO whose period divides the loop, so the bed wraps seamlessly.
 const BIOMES = {
-  grass: { root: 110.0, scale: [0, 7, 12, 16], color: 'warm' },
-  forest: { root: 98.0, scale: [0, 5, 12, 15], color: 'soft' },
-  snow: { root: 146.83, scale: [0, 7, 12, 19], color: 'glass' },
-  desert: { root: 92.5, scale: [0, 5, 10, 15], color: 'reed' },
-  wasteland: { root: 82.41, scale: [0, 6, 12, 13], color: 'dark' },
-  coast: { root: 123.47, scale: [0, 7, 14, 16], color: 'airy' }
+  grass: { root: 110.0, scale: [0, 7, 12, 16, 19], color: 'warm', texture: 'meadow' },
+  forest: { root: 98.0, scale: [0, 5, 12, 15, 19], color: 'soft', texture: 'canopy' },
+  snow: { root: 146.83, scale: [0, 7, 12, 19, 24], color: 'glass', texture: 'ice' },
+  desert: { root: 92.5, scale: [0, 5, 10, 15, 22], color: 'reed', texture: 'sand' },
+  wasteland: { root: 82.41, scale: [0, 6, 12, 13, 18], color: 'dark', texture: 'ash' },
+  coast: { root: 123.47, scale: [0, 7, 14, 16, 21], color: 'airy', texture: 'surf' }
 };
 
 function partialShape(color, k) {
   // relative gain of harmonic k (1-based) per timbre family
   switch (color) {
-    case 'glass': return [1, 0.5, 0.32, 0.18][k - 1] ?? 0;
-    case 'airy': return [1, 0.42, 0.22, 0.1][k - 1] ?? 0;
-    case 'dark': return [1, 0.62, 0.12, 0.06][k - 1] ?? 0;
-    case 'reed': return [1, 0.7, 0.34, 0.2][k - 1] ?? 0;
-    case 'soft': return [1, 0.3, 0.14, 0.05][k - 1] ?? 0;
-    default: return [1, 0.45, 0.2, 0.08][k - 1] ?? 0; // warm
+    case 'glass': return [1, 0.45, 0.25, 0.14, 0.08, 0.04][k - 1] ?? 0;
+    case 'airy': return [1, 0.38, 0.2, 0.09, 0.04, 0.02][k - 1] ?? 0;
+    case 'dark': return [1, 0.66, 0.18, 0.08, 0.06, 0.02][k - 1] ?? 0;
+    case 'reed': return [1, 0.72, 0.36, 0.18, 0.09, 0.05][k - 1] ?? 0;
+    case 'soft': return [1, 0.32, 0.16, 0.07, 0.03, 0.015][k - 1] ?? 0;
+    default: return [1, 0.46, 0.22, 0.1, 0.05, 0.02][k - 1] ?? 0; // warm
   }
 }
 
-function makeBed(spec, loopDur = 8) {
+function textureLayer(texture, t, baseHz) {
+  const a = Math.sin(TWO_PI * 37 * baseHz * t + 0.2) * Math.sin(TWO_PI * 83 * baseHz * t + 1.1);
+  const b = Math.sin(TWO_PI * 59 * baseHz * t + 2.0) * Math.sin(TWO_PI * 127 * baseHz * t + 0.6);
+  switch (texture) {
+    case 'ice':
+      return [
+        Math.sin(TWO_PI * 212 * baseHz * t) * 0.025 + Math.sin(TWO_PI * 337 * baseHz * t + 0.7) * 0.018,
+        0.45
+      ];
+    case 'sand':
+      return [(a * 0.045 + b * 0.02) * (0.65 + 0.35 * Math.sin(TWO_PI * 2 * baseHz * t)), -0.35];
+    case 'ash':
+      return [(a * 0.035 + Math.sin(TWO_PI * 17 * baseHz * t) * 0.025), 0.05];
+    case 'surf':
+      return [
+        (Math.sin(TWO_PI * baseHz * t) * 0.045 + Math.sin(TWO_PI * 2 * baseHz * t + 1.8) * 0.028 + b * 0.025),
+        0.3
+      ];
+    case 'canopy':
+      return [(a * 0.026 + Math.sin(TWO_PI * 29 * baseHz * t + 0.4) * 0.018), -0.2];
+    default:
+      return [(a * 0.02 + Math.sin(TWO_PI * 71 * baseHz * t) * 0.016), 0.15];
+  }
+}
+
+function makeBed(spec, loopDur = 12) {
   const n = Math.round(SR * loopDur);
-  const out = new Float32Array(n);
+  const out = makeStereo(n);
   const baseHz = 1 / loopDur; // fundamental that guarantees a seamless wrap
 
-  // Each voice: a scale tone, a tremolo LFO (integer # of cycles per loop), and
-  // a slow detune buddy for chorus width. Stagger LFO phases so the bed breathes.
+  // Each voice: a quantized scale tone, integer-cycle tremolo/phase modulation,
+  // and a panned buddy partial for width. All modulation repeats at the loop edge.
   const voices = spec.scale.map((st, i) => ({
-    hz: semi(spec.root, st),
-    lfoCycles: [1, 2, 1, 3][i % 4], // whole cycles over the loop -> seamless
+    hz: qHz(semi(spec.root, st), baseHz),
+    buddyHz: qHz(semi(spec.root, st) * (i % 2 === 0 ? 1.006 : 0.994), baseHz),
+    lfoCycles: [1, 2, 1, 3, 2][i % 5], // whole cycles over the loop -> seamless
+    vibCycles: [3, 5, 4, 6, 7][i % 5],
     lfoPhase: (i / spec.scale.length) * TWO_PI,
-    gain: [0.5, 0.34, 0.26, 0.18][i % 4],
-    detune: 1 + (i % 2 === 0 ? 1 : -1) * 0.004
+    pan: [-0.55, 0.45, -0.2, 0.62, 0.12][i % 5],
+    gain: [0.45, 0.32, 0.24, 0.16, 0.12][i % 5]
   }));
 
   // Sub bass: octave below the root, gently pulsing on the loop fundamental.
-  const subHz = spec.root / 2;
+  const subHz = qHz(spec.root / 2, baseHz);
 
   for (let s = 0; s < n; s++) {
     const t = s / SR;
-    let v = 0;
     for (const voice of voices) {
       const trem = 0.55 + 0.45 * Math.sin(TWO_PI * voice.lfoCycles * baseHz * t + voice.lfoPhase);
-      for (let k = 1; k <= 4; k++) {
+      const phaseWobble = 0.025 * Math.sin(TWO_PI * voice.vibCycles * baseHz * t + voice.lfoPhase * 0.7);
+      for (let k = 1; k <= 6; k++) {
         const g = partialShape(spec.color, k);
         if (g <= 0) continue;
-        v += Math.sin(TWO_PI * voice.hz * voice.detune * k * t) * g * voice.gain * trem * 0.25;
+        const body = Math.sin(TWO_PI * voice.hz * k * t + phaseWobble) * g * voice.gain * trem * 0.22;
+        const buddy = Math.sin(TWO_PI * voice.buddyHz * k * t - phaseWobble) * g * voice.gain * trem * 0.09;
+        addPan(out, s, body, voice.pan);
+        addPan(out, s, buddy, -voice.pan * 0.8);
       }
     }
-    // sub
-    v += Math.sin(TWO_PI * subHz * t) * 0.22 * (0.7 + 0.3 * Math.sin(TWO_PI * baseHz * t));
-    // soft air: low-passed pseudo-noise driven by the seam-safe fundamental so it
-    // still wraps (deterministic, periodic, not white noise)
-    const air = Math.sin(TWO_PI * 53 * baseHz * t) * Math.sin(TWO_PI * 97 * baseHz * t + 1.3);
-    v += air * 0.05;
-    out[s] = v;
-  }
-  // gentle global fade window so even rounding error at the seam can't click
-  const edge = Math.round(SR * 0.02);
-  for (let i = 0; i < edge; i++) {
-    const g = i / edge;
-    out[i] *= g;
-    out[n - 1 - i] *= g;
+    const sub = Math.sin(TWO_PI * subHz * t) * 0.18 * (0.72 + 0.28 * Math.sin(TWO_PI * baseHz * t));
+    out[0][s] += sub;
+    out[1][s] += sub;
+    const [tex, pan] = textureLayer(spec.texture, t, baseHz);
+    addPan(out, s, tex, pan);
   }
   return normalize(out, 0.85);
 }
@@ -139,66 +194,279 @@ function adsr(t, dur, a = 0.005, r = 0.12) {
   return 1;
 }
 
-function makeCrit(dur = 0.4) {
+function oneShot(dur, render, peak = 0.92) {
   const n = Math.round(SR * dur);
-  const out = new Float32Array(n);
-  for (let s = 0; s < n; s++) {
-    const t = s / SR;
+  const out = makeStereo(n);
+  for (let s = 0; s < n; s++) render(out, s, s / SR, n);
+  return normalize(out, peak);
+}
+
+function addEcho(out, delaySec, gain = 0.28, cross = 0.18) {
+  const d = Math.round(SR * delaySec);
+  for (let ch = 0; ch < 2; ch++) {
+    for (let i = d; i < out[ch].length; i++) {
+      const other = out[1 - ch][i - d] ?? 0;
+      out[ch][i] += (out[ch][i - d] * (1 - cross) + other * cross) * gain;
+    }
+  }
+  return out;
+}
+
+function makeCrit(dur = 0.4) {
+  const out = oneShot(dur, (buf, s, t) => {
     const env = Math.exp(-t * 9);
     const sweep = 2400 * Math.exp(-t * 6) + 520;
-    let v = Math.sin(TWO_PI * sweep * t) * 0.6;
+    let v = Math.sin(TWO_PI * sweep * t + Math.sin(t * 90) * 0.04) * 0.6;
     v += Math.sin(TWO_PI * sweep * 1.5 * t) * 0.25;
-    v += (Math.sin(s * 1.7) * Math.sin(s * 0.3)) * Math.exp(-t * 28) * 0.4; // metallic click
-    out[s] = v * env;
-  }
-  return normalize(out, 0.95);
+    v += (hashNoise(s, 11) * 0.55 + Math.sin(s * 1.7) * 0.35) * Math.exp(-t * 32); // metallic click
+    addPan(buf, s, v * env, Math.sin(t * 34) * 0.35);
+  }, 0.95);
+  return addEcho(out, 0.055, 0.22, 0.35);
 }
 
 function makeImpactHeavy(dur = 0.36) {
-  const n = Math.round(SR * dur);
-  const out = new Float32Array(n);
   let lp = 0;
-  for (let s = 0; s < n; s++) {
-    const t = s / SR;
+  return oneShot(dur, (out, s, t) => {
     const env = Math.exp(-t * 11);
     const sub = Math.sin(TWO_PI * (120 * Math.exp(-t * 5) + 45) * t) * 0.8;
-    const noise = Math.sin(s * 2.3) * Math.sin(s * 0.7); // deterministic grit
-    lp += (noise - lp) * 0.25; // one-pole low-pass
-    out[s] = (sub + lp * 0.5) * env;
-  }
-  return normalize(out, 0.95);
+    const noise = hashNoise(s, 23) * 0.7 + Math.sin(s * 0.31) * 0.3;
+    lp += (noise - lp) * 0.18; // one-pole low-pass
+    const crack = hashNoise(s, 29) * Math.exp(-t * 60) * 0.35;
+    out[0][s] += (sub + lp * 0.5 + crack) * env;
+    out[1][s] += (sub + lp * 0.42 - crack * 0.4) * env;
+  }, 0.95);
 }
 
 function makeFanfare(dur = 0.62) {
-  const n = Math.round(SR * dur);
-  const out = new Float32Array(n);
   const notes = [523.25, 659.25, 783.99, 1046.5];
   const step = dur / notes.length;
-  for (let s = 0; s < n; s++) {
-    const t = s / SR;
+  const out = oneShot(dur, (buf, s, t) => {
     const idx = Math.min(notes.length - 1, Math.floor(t / step));
     const local = t - idx * step;
     const env = adsr(local, step, 0.008, step * 0.7);
-    let v = Math.sin(TWO_PI * notes[idx] * t) * 0.6;
-    v += Math.sin(TWO_PI * notes[idx] * 2 * t) * 0.2;
-    out[s] = v * env;
-  }
-  return normalize(out, 0.9);
+    const pan = [-0.35, 0.2, -0.12, 0.42][idx];
+    let v = Math.sin(TWO_PI * notes[idx] * t) * 0.58;
+    v += Math.sin(TWO_PI * notes[idx] * 2 * t) * 0.22;
+    v += Math.sin(TWO_PI * notes[idx] * 3 * t) * 0.08;
+    addPan(buf, s, v * env, pan);
+  }, 0.9);
+  return addEcho(out, 0.085, 0.24, 0.45);
 }
 
 function makeWhoosh(dur = 0.34) {
-  const n = Math.round(SR * dur);
-  const out = new Float32Array(n);
   let lp = 0;
-  for (let s = 0; s < n; s++) {
-    const t = s / SR;
+  return oneShot(dur, (out, s, t) => {
     const env = Math.sin((t / dur) * Math.PI); // swell + fall
-    const noise = Math.sin(s * 1.9) * Math.sin(s * 0.5 + 0.7);
-    const cutoff = 0.05 + 0.4 * (t / dur);
+    const noise = hashNoise(s, 41) * 0.75 + Math.sin(s * 0.47 + 0.7) * 0.25;
+    const cutoff = 0.035 + 0.48 * (t / dur);
     lp += (noise - lp) * cutoff;
-    out[s] = lp * env;
-  }
-  return normalize(out, 0.85);
+    addPan(out, s, lp * env, -0.7 + 1.4 * (t / dur));
+  }, 0.85);
+}
+
+function makeProjectileHit(dur = 0.18) {
+  return oneShot(dur, (out, s, t) => {
+    const env = Math.exp(-t * 18);
+    const click = hashNoise(s, 53) * Math.exp(-t * 55) * 0.5;
+    const body = Math.sin(TWO_PI * (560 * Math.exp(-t * 8) + 210) * t) * 0.35;
+    addPan(out, s, (click + body) * env, 0.1);
+  }, 0.82);
+}
+
+function makeBladeDraw(dur = 0.22) {
+  let hp = 0;
+  return oneShot(dur, (out, s, t) => {
+    const env = Math.sin(Math.PI * Math.min(1, t / dur));
+    const rasp = hashNoise(s, 67) - hp;
+    hp += (hashNoise(s, 67) - hp) * 0.08;
+    const ring = Math.sin(TWO_PI * (1400 + 800 * t / dur) * t) * 0.18;
+    addPan(out, s, (rasp * 0.38 + ring) * env, -0.45 + 0.9 * (t / dur));
+  }, 0.86);
+}
+
+function makeCoin(dur = 0.36) {
+  const notes = [1760, 2217.46, 2637.02];
+  const out = oneShot(dur, (buf, s, t) => {
+    for (let i = 0; i < notes.length; i++) {
+      const start = i * 0.045;
+      if (t < start) continue;
+      const local = t - start;
+      const env = Math.exp(-local * 9);
+      const v = Math.sin(TWO_PI * notes[i] * local) * 0.34 + Math.sin(TWO_PI * notes[i] * 2.01 * local) * 0.12;
+      addPan(buf, s, v * env, [-0.25, 0.25, 0.05][i]);
+    }
+  }, 0.84);
+  return addEcho(out, 0.042, 0.18, 0.4);
+}
+
+function makeCastBlade() {
+  return makeBladeDraw(0.24);
+}
+
+function makeCastBow(dur = 0.2) {
+  let hp = 0;
+  return oneShot(dur, (out, s, t) => {
+    const pluckEnv = Math.exp(-t * 22);
+    const string = Math.sin(TWO_PI * (760 - 180 * t / dur) * t) * 0.42 * pluckEnv;
+    const raw = hashNoise(s, 73);
+    hp += (raw - hp) * 0.12;
+    const air = (raw - hp) * Math.sin(Math.PI * t / dur) * 0.35;
+    addPan(out, s, string + air, -0.5 + t / dur);
+  }, 0.84);
+}
+
+function makeCastImpact() {
+  return makeImpactHeavy(0.28);
+}
+
+function makeCastFrost(dur = 0.42) {
+  const out = oneShot(dur, (buf, s, t) => {
+    const env = Math.exp(-t * 4.4);
+    const shimmer = Math.sin(TWO_PI * 1320 * t) * 0.18 + Math.sin(TWO_PI * 1980 * t + 0.4) * 0.1;
+    const crack = hashNoise(s, 89) * Math.exp(-t * 18) * 0.16;
+    const body = Math.sin(TWO_PI * (420 + 120 * t / dur) * t) * 0.26;
+    addPan(buf, s, (body + shimmer + crack) * env, 0.35);
+  }, 0.82);
+  return addEcho(out, 0.07, 0.18, 0.5);
+}
+
+function makeCastFire(dur = 0.38) {
+  let lp = 0;
+  return oneShot(dur, (out, s, t) => {
+    const env = Math.sin(Math.PI * t / dur) * Math.exp(-t * 1.5);
+    const raw = hashNoise(s, 97) * 0.8 + Math.sin(s * 0.19) * 0.2;
+    lp += (raw - lp) * (0.08 + 0.18 * t / dur);
+    const flare = Math.sin(TWO_PI * (220 + 580 * t / dur) * t) * 0.22;
+    addPan(out, s, (lp * 0.56 + flare) * env, -0.2);
+  }, 0.86);
+}
+
+function makeCastStorm(dur = 0.34) {
+  let hp = 0;
+  return oneShot(dur, (out, s, t) => {
+    const raw = hashNoise(s, 107);
+    hp += (raw - hp) * 0.04;
+    const wind = (raw - hp) * Math.sin(Math.PI * t / dur) * 0.38;
+    const rise = Math.sin(TWO_PI * (460 + 520 * t / dur) * t) * 0.22;
+    addPan(out, s, wind + rise, Math.sin(t * 18) * 0.55);
+  }, 0.85);
+}
+
+function makeCastVoid(dur = 0.46) {
+  const out = oneShot(dur, (buf, s, t) => {
+    const env = Math.exp(-t * 3.8);
+    const drop = Math.sin(TWO_PI * (240 * Math.exp(-t * 4) + 44) * t) * 0.46;
+    const fold = Math.sin(TWO_PI * 96 * t + Math.sin(TWO_PI * 7 * t) * 1.4) * 0.18;
+    addPan(buf, s, (drop + fold) * env, -0.15);
+  }, 0.88);
+  return addEcho(out, 0.09, 0.2, 0.55);
+}
+
+function makeCastHeal(dur = 0.5) {
+  const notes = [523.25, 659.25, 783.99, 1046.5];
+  const out = oneShot(dur, (buf, s, t) => {
+    for (let i = 0; i < notes.length; i++) {
+      const start = i * 0.055;
+      if (t < start) continue;
+      const local = t - start;
+      const env = Math.exp(-local * 4.8);
+      const v = Math.sin(TWO_PI * notes[i] * local) * 0.18 + Math.sin(TWO_PI * notes[i] * 2 * local) * 0.05;
+      addPan(buf, s, v * env, [-0.35, 0.2, -0.1, 0.38][i]);
+    }
+  }, 0.78);
+  return addEcho(out, 0.08, 0.24, 0.45);
+}
+
+function makeCastSummon(dur = 0.44) {
+  const out = oneShot(dur, (buf, s, t) => {
+    const env = Math.sin(Math.PI * t / dur);
+    const portal = Math.sin(TWO_PI * (170 + 260 * t / dur) * t) * 0.34;
+    const sparkle = Math.sin(TWO_PI * 1260 * t) * Math.exp(-t * 5) * 0.12;
+    const breath = hashNoise(s, 113) * env * 0.12;
+    addPan(buf, s, (portal + sparkle + breath) * env, 0.25);
+  }, 0.86);
+  return addEcho(out, 0.075, 0.2, 0.35);
+}
+
+function makeCastItem(dur = 0.28) {
+  const out = oneShot(dur, (buf, s, t) => {
+    const env = Math.exp(-t * 8);
+    const click = hashNoise(s, 127) * Math.exp(-t * 40) * 0.28;
+    const tone = Math.sin(TWO_PI * 980 * t) * 0.2 + Math.sin(TWO_PI * 1468 * t) * 0.1;
+    addPan(buf, s, (click + tone) * env, 0.05);
+  }, 0.8);
+  return addEcho(out, 0.055, 0.15, 0.35);
+}
+
+function makeCastRoar(dur = 0.5) {
+  let lp = 0;
+  return oneShot(dur, (out, s, t) => {
+    const env = Math.exp(-t * 3.2);
+    const raw = hashNoise(s, 137);
+    lp += (raw - lp) * 0.16;
+    const chest = Math.sin(TWO_PI * (160 * Math.exp(-t * 2.8) + 58) * t) * 0.52;
+    out[0][s] += (chest + lp * 0.46) * env;
+    out[1][s] += (chest + lp * 0.38) * env;
+  }, 0.92);
+}
+
+// --- Rotation variants -----------------------------------------------------
+// frost/fire/roar have no curated CC0 source in the Kenney subset (there is no
+// cryo/flame/beast recording in it), so they would otherwise always play the
+// single generated WAV. These second, tonally-distinct variants give the same
+// per-cast rotation variety the curated keys get, while staying fully original.
+
+// Brittle ice crack: high tinkle + a downward shard, sharper/shorter than the
+// shimmery base cast-frost.
+function makeCastFrost2(dur = 0.36) {
+  const out = oneShot(dur, (buf, s, t) => {
+    const env = Math.exp(-t * 6.2);
+    const tink = Math.sin(TWO_PI * 1760 * t) * 0.16 + Math.sin(TWO_PI * 2640 * t + 0.7) * 0.1;
+    const crack = hashNoise(s, 211) * Math.exp(-t * 26) * 0.22;
+    const shard = Math.sin(TWO_PI * (2200 * Math.exp(-t * 5) + 300) * t) * 0.2;
+    addPan(buf, s, (tink + crack + shard) * env, -0.3);
+  }, 0.8);
+  return addEcho(out, 0.05, 0.16, 0.55);
+}
+
+// Deep flame whoomp: more low rumble + a longer tail than the crackly base
+// cast-fire, for explosions and burning ultimates.
+function makeCastFire2(dur = 0.46) {
+  let lp = 0;
+  const out = oneShot(dur, (buf, s, t) => {
+    const env = Math.exp(-t * 3.4);
+    const raw = hashNoise(s, 223);
+    lp += (raw - lp) * 0.1;
+    const whoomp = Math.sin(TWO_PI * (150 * Math.exp(-t * 3.5) + 60) * t) * 0.5;
+    addPan(buf, s, (whoomp + lp * 0.5) * env, 0.15);
+  }, 0.88);
+  return addEcho(out, 0.06, 0.18, 0.5);
+}
+
+// Higher, more guttural growl with vibrato, distinct from the chesty base
+// cast-roar, for primal shouts and berserks.
+function makeCastRoar2(dur = 0.46) {
+  let lp = 0;
+  return oneShot(dur, (out, s, t) => {
+    const env = Math.sin(Math.PI * Math.min(1, (t / dur) * 1.1)) * Math.exp(-t * 1.8);
+    const raw = hashNoise(s, 233);
+    lp += (raw - lp) * 0.2;
+    const growl = Math.sin(TWO_PI * (220 * Math.exp(-t * 1.6) + 90) * t + Math.sin(TWO_PI * 30 * t) * 0.6) * 0.5;
+    out[0][s] += (growl + lp * 0.4) * env;
+    out[1][s] += (growl + lp * 0.34) * env;
+  }, 0.92);
+}
+
+function makeCastLightning(dur = 0.26) {
+  let hp = 0;
+  const out = oneShot(dur, (buf, s, t) => {
+    const raw = hashNoise(s, 149);
+    hp += (raw - hp) * 0.035;
+    const crackle = (raw - hp) * Math.exp(-t * 7) * 0.38;
+    const zap = Math.sin(TWO_PI * (1800 * Math.exp(-t * 7) + 640) * t) * Math.exp(-t * 8) * 0.38;
+    addPan(buf, s, crackle + zap, Math.sin(t * 44) * 0.7);
+  }, 0.9);
+  return addEcho(out, 0.035, 0.16, 0.6);
 }
 
 // --- main ------------------------------------------------------------------
@@ -209,7 +477,31 @@ for (const [biome, spec] of Object.entries(BIOMES)) {
   total += bytes; count++;
   console.log(`  audio/music/${biome}.wav  ${(bytes / 1024).toFixed(0)}KB`);
 }
-const sfx = { crit: makeCrit(), 'impact-heavy': makeImpactHeavy(), fanfare: makeFanfare(), whoosh: makeWhoosh() };
+const sfx = {
+  crit: makeCrit(),
+  'impact-heavy': makeImpactHeavy(),
+  fanfare: makeFanfare(),
+  whoosh: makeWhoosh(),
+  'projectile-hit': makeProjectileHit(),
+  'blade-draw': makeBladeDraw(),
+  coin: makeCoin(),
+  'cast-blade': makeCastBlade(),
+  'cast-bow': makeCastBow(),
+  'cast-impact': makeCastImpact(),
+  'cast-frost': makeCastFrost(),
+  'cast-fire': makeCastFire(),
+  'cast-storm': makeCastStorm(),
+  'cast-void': makeCastVoid(),
+  'cast-heal': makeCastHeal(),
+  'cast-summon': makeCastSummon(),
+  'cast-item': makeCastItem(),
+  'cast-roar': makeCastRoar(),
+  'cast-lightning': makeCastLightning(),
+  // Second rotation variants for the keys with no curated CC0 source.
+  'cast-frost-2': makeCastFrost2(),
+  'cast-fire-2': makeCastFire2(),
+  'cast-roar-2': makeCastRoar2()
+};
 for (const [name, samples] of Object.entries(sfx)) {
   const bytes = writeWav(path.join(OUT_DIR, 'sfx', `${name}.wav`), samples);
   total += bytes; count++;

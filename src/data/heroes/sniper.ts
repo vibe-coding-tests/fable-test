@@ -1,4 +1,5 @@
 import type { HeroDef } from '../../core/types';
+import { loopTurnLabel } from './loop-note';
 
 export const SNIPER: HeroDef = {
   id: 'sniper',
@@ -7,7 +8,7 @@ export const SNIPER: HeroDef = {
   attribute: 'agi',
   roles: ['carry', 'nuker'],
   region: 'tranquil-vale',
-  lore: 'Exiled from his mountain keen for shooting the ceremonial target a mile past the rules, Kardel treats distance as a personal friend.',
+  lore: `Exiled from his mountain keen for shooting the ceremonial target a mile past the rules, Kardel treats distance as a personal friend. His Echo last fought on turn ${loopTurnLabel('sniper')} of the Loop, from a ridge so far away the shard heard the shot before the target did.`,
   baseStats: {
     str: 16, agi: 24, int: 18,
     strGain: 2.0, agiGain: 3.2, intGain: 1.7,

@@ -3,6 +3,7 @@ import { dist, dist2, pointSegDist, v2 } from './math2d';
 import { attackImpact } from './combat';
 import { execEffects, type EffectCtx } from './effects';
 import { REG } from './registry';
+import { itemReady } from './items';
 import { cannotAttack, cannotCast, cannotMove, isDisabled } from './status';
 import type { Unit } from './unit';
 import { faceToward, integrateForcedMoves, steerToward } from './movement';
@@ -331,8 +332,7 @@ function handleCastOrder(sim: Sim, u: Unit, dt: number): void {
     targetUid: target?.uid,
     point: point ? { ...point } : undefined
   };
-  u.castingUntil = sim.time + cp + 0.25;
-  u.castGesture = gestureForAbility(def);
+    u.setCastGesture(gestureForAbility(def), { now: sim.time, windowUntil: sim.time + cp + 0.25 });
   u.order = { kind: 'stop' };
   breakInvis(sim, u);
 }
@@ -413,7 +413,8 @@ function channelSource(sim: Sim, u: Unit): { def: AbilityDef | null; level: numb
   }
   const it = u.items[u.channel.slot];
   const def = it ? REG.items.get(it.defId)?.active ?? null : null;
-  return { def: def ?? null, level: 1, ctx: def ? abilityCtx(def, 1, 'item:') : { defId: 'none', level: 1, vfx: { archetype: 'channel', color: '#fff' } } };
+  if (!def) return { def: null, level: 1, ctx: { defId: 'none', level: 1, vfx: { archetype: 'channel', color: '#fff' } } };
+  return { def, level: 1, ctx: { ...abilityCtx(def, 1, 'item:'), values: it?.activeOverride?.values ?? def.values } };
 }
 
 function toggleAbility(sim: Sim, u: Unit, slot: number): void {
@@ -469,6 +470,10 @@ function handleItemOrder(sim: Sim, u: Unit, dt: number): void {
     return;
   }
   if (isDisabled(u.summary)) return;
+  if (!itemReady(it, def, u, sim.time).ok) {
+    u.order = { kind: 'stop' };
+    return;
+  }
 
   const active = def.active;
   const target = u.order.uid !== undefined ? sim.unit(u.order.uid) : undefined;
@@ -491,8 +496,7 @@ function handleItemOrder(sim: Sim, u: Unit, dt: number): void {
 
   u.order = { kind: 'stop' };
   // A pressed item reads on the body for a brief beat (Phase 6 §3.11).
-  u.castGesture = gestureForAbility(active);
-  u.castingUntil = Math.max(u.castingUntil, sim.time + 0.35);
+  u.setCastGesture(gestureForAbility(active), { now: sim.time, windowUntil: sim.time + 0.35 });
   sim.fireItemActive(u, slot, target, point);
 }
 

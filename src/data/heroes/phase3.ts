@@ -1,6 +1,7 @@
 import type { AbilityDef, HeroBaseStats, HeroDef, StatModMap } from '../../core/types';
-import { AUTHORED_PHASE3_KITS } from './phase3-kits';
+import { AUTHORED_PHASE3_KITS, AUTHORED_PHASE3_AGHANIMS } from './phase3-kits';
 import { buildSeedAghanim } from './seed-aghanim';
+import { echoLoopNote } from './loop-note';
 
 type HeroSeed = {
   id: string;
@@ -15,6 +16,8 @@ type HeroSeed = {
   summon?: boolean;
   exotic?: string;
 };
+
+const PIERCING_GENERATED_ULTS = new Set(['doom']);
 
 function baseStats(attribute: HeroDef['attribute'], ranged: boolean): HeroBaseStats {
   const primary = attribute === 'uni' ? 'agi' : attribute;
@@ -140,6 +143,7 @@ function ultimate(seed: HeroSeed): AbilityDef {
     name: seed.abilities[3],
     targeting: 'no-target',
     ult: true,
+    piercesImmunity: PIERCING_GENERATED_ULTS.has(seed.id),
     castPoint: 0.45,
     manaCost: [150, 250, 350],
     cooldown: [95, 80, 65],
@@ -179,7 +183,7 @@ function hero(seed: HeroSeed): HeroDef {
     attribute: seed.attribute,
     roles: seed.roles,
     region: seed.region,
-    lore: `${seed.name} follows the Mad Moon fractures into ${seed.region.replaceAll('-', ' ')}, translating a recognizable Dota kit into the shared Ancients rules.`,
+    lore: `${seed.name} follows the Mad Moon fractures into ${seed.region.replaceAll('-', ' ')}, translating a recognizable Dota kit into the shared Ancients rules.${echoLoopNote(seed.id)}`,
     baseStats: baseStats(seed.attribute, ranged),
     abilities,
     skillOrder: [0, 1, 2],
@@ -188,7 +192,7 @@ function hero(seed: HeroSeed): HeroDef {
       { id: `${seed.id}-facet-tempo`, name: 'Tempo', description: 'A Phase 3 facet that sharpens the hero identity.', mods: seed.attribute === 'str' ? { str: 6 } : seed.attribute === 'agi' ? { agi: 6 } : { int: 6 } },
       { id: `${seed.id}-facet-reach`, name: 'Reach', description: 'Adds cast range for macro and raid control.', mods: { castRange: 80 } }
     ],
-    aghanim: buildSeedAghanim(seed.name, abilities),
+    aghanim: AUTHORED_PHASE3_AGHANIMS[seed.id] ?? buildSeedAghanim(seed.name, abilities),
     silhouette: {
       build: seed.roles.includes('durable') ? 'brute' : seed.summon ? 'biped' : 'biped',
       scale: seed.roles.includes('durable') ? 1.12 : 1,

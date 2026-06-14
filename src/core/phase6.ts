@@ -1,4 +1,4 @@
-import type { ArmoryLoadouts, DifficultyTier, DungeonProgressSave, GameSave, HeroAugments, HeroLoadoutSlots, HeroSave, ItemSave } from './types';
+import type { ArmoryLoadouts, DifficultyTier, DungeonProgressSave, GameSave, GroundItemDrop, HeroAugments, HeroLoadoutSlots, HeroSave, ItemSave } from './types';
 import { migratePhase5Save } from './phase5';
 
 // ------------------------------------------------------------------
@@ -71,6 +71,26 @@ export function higherDungeonTier(a: DifficultyTier, b: DifficultyTier): Difficu
   return TIER_RANK[a] >= TIER_RANK[b] ? a : b;
 }
 
+export function normalizeGroundItemDrops(value: unknown): GroundItemDrop[] {
+  if (!Array.isArray(value)) return [];
+  const out: GroundItemDrop[] = [];
+  for (const raw of value) {
+    if (!raw || typeof raw !== 'object') continue;
+    const rec = raw as Partial<GroundItemDrop>;
+    if (typeof rec.uid !== 'number' || !rec.item || typeof rec.item.id !== 'string') continue;
+    if (!rec.pos || typeof rec.pos.x !== 'number' || typeof rec.pos.y !== 'number') continue;
+    out.push({
+      uid: Math.max(1, Math.floor(rec.uid)),
+      item: { ...rec.item },
+      pos: { x: rec.pos.x, y: rec.pos.y },
+      source: rec.source,
+      context: rec.context === 'dungeon' ? 'dungeon' : 'overworld',
+      createdAt: typeof rec.createdAt === 'number' ? rec.createdAt : undefined
+    });
+  }
+  return out;
+}
+
 function augmentKindForItem(item: ItemSave | null | undefined): keyof HeroAugments | null {
   if (!item) return null;
   if (item.id === 'aghanims-scepter' || item.id === 'aghanims-blessing') return 'scepter';
@@ -96,6 +116,7 @@ export function migratePhase6Save(s: GameSave | { version: number; [k: string]: 
     version: 6,
     roster: base.roster.map(migrateHeroAugments),
     loadouts: normalizeArmoryLoadouts((base as GameSave & { loadouts?: unknown }).loadouts),
-    dungeonProgress: normalizeDungeonProgress((base as GameSave & { dungeonProgress?: unknown }).dungeonProgress)
+    dungeonProgress: normalizeDungeonProgress((base as GameSave & { dungeonProgress?: unknown }).dungeonProgress),
+    groundItemDrops: normalizeGroundItemDrops((base as GameSave & { groundItemDrops?: unknown }).groundItemDrops)
   };
 }

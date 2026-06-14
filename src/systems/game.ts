@@ -5,7 +5,7 @@ import { affixDef, affixPoolForItem, rollAffixForKind, rollAffixesFor } from '..
 import { fuseGems, gemDef, isGemId, socketsForDrop } from '../data/gems';
 import { setBonusEffects } from '../data/sets';
 import { ITEM_GRADES, levelReq, percentileForGrade, rollGrade, statMultiplier, type GradeFloorSource } from '../data/grade';
-import { QUALITY_GRADES, nextQuality, rarityColor } from '../data/quality';
+import { QUALITY_GRADES, nextQuality, rarityColor, setColorblindPalette } from '../data/quality';
 import { applyLootFilter, DEFAULT_LOOT_FILTER, type LootFilterRule } from './loot-filter';
 import { REG } from '../core/registry';
 import { buildAbilityCard } from '../core/describe';
@@ -54,7 +54,9 @@ import { resonanceMods } from '../core/resonance';
 import { levelFromXp, xpForLevel } from '../core/stats';
 import { abilityMaxLevel, abilityRankRequiredHeroLevel, autoAbilityLevels, canLearnAbilityRank, normalizeAbilityLevels } from '../core/values';
 import { dist, fromAngle, norm, sub } from '../core/math2d';
-import type { ActiveElement, ArmoryLoadouts, BossDef, CreepTier, CreepInstanceSave, CutsceneDef, DifficultyTier, DraftDef, DropSource, DungeonDef, DungeonModifierDef, DungeonProgressSave, DungeonRoom, EchoProgress, EchoSpawnDef, GambitRule, GameSave, GraphicsSettings, GroundItemDrop, HeroAugments, HeroLoadoutSlots, HeroSave, ItemDef, ItemDropTable, ItemGrade, ItemQuality, ItemRarity, ItemSave, ItemTier, LootBand, LoreEntryDef, MacroHeroSetup, NeutralItemDef, NeutralStashEntry, Order, QuestProgress, RaidDef, RegionDef, RolledAffix, RoomTemplate, RoomType, SeasonalEventDef, SimEvent, StingerId, StatModMap, Vec2 } from '../core/types';
+import type { ActiveElement, ArmoryLoadouts, BossDef, CreepTier, CreepInstanceSave, CutsceneDef, DifficultyTier, DraftDef, DropSource, DungeonDef, DungeonModifierDef, DungeonProgressSave, DungeonRoom, EchoProgress, EchoSpawnDef, GambitRule, GameSave, GraphicsSettings, GroundItemDrop, HeroAugments, HeroLoadoutSlots, HeroSave, ItemDef, ItemDropTable, ItemGrade, ItemQuality, ItemRarity, ItemSave, ItemTier, LootBand, LoreEntryDef, MacroHeroSetup, NeutralItemDef, NeutralStashEntry, Order, QuestDef, QuestKind, QuestProgress, QuestReward, QuestSave, QuestStatus, RaidDef, RegionDef, RolledAffix, RoomTemplate, RoomType, SeasonalEventDef, SimEvent, StingerId, StatModMap, Vec2 } from '../core/types';
+import { advance as questAdvance, claim as questClaim, normalizeQuestSave, refreshAvailability, type QuestContext, type QuestEvent } from '../core/quests';
+import { migratePhase7Save } from '../core/phase7';
 import { ProceduralAudio, type CinematicMixMode } from '../engine/audio';
 import { CinematicDirector, type CinematicView, type CutsceneContext } from '../engine/cinematic';
 import { StoryDetector, type StoryObserveCtx, type StoryTrigger } from '../engine/story-detectors';
@@ -127,7 +129,7 @@ function bindIfNeeded(item: ItemSave): ItemSave {
 // camps, capture/entourage, shop, shrine, day clock, save/load.
 // ------------------------------------------------------------------
 
-export const SAVE_VERSION = 6;
+export const SAVE_VERSION = 7;
 const SLOT_KEYS = ['ancients.save.1', 'ancients.save.2', 'ancients.save.3'];
 const AUTO_KEY = 'ancients.save.auto';
 
@@ -398,6 +400,7 @@ export function newGameSave(starterHeroId: string): GameSave {
     recruited: [starterHeroId],
     badges: [],
     questProgress: {},
+    quests: {},
     defeatedGyms: [],
     echoRespawn: {},
     campRespawn: {},
@@ -428,6 +431,7 @@ export function resolveQuality(q: GraphicsSettings['quality'] | undefined): Qual
 export interface SceneLike {
   selectedUid: number;
   terrain: { obstacles: { pos: Vec2; radius: number }[] };
+  groundHeightAt?(simX: number, simY: number): number;
   pushEvent(ev: SimEvent, sim: Sim): void;
   update(sim: Sim, followUnit: Unit | null, renderDt: number, timeOfDay01: number, cinematicView?: CinematicView | null, groundItems?: readonly GroundItemDrop[]): void;
   pick?(clientX: number, clientY: number, sim: Sim, groundItems?: readonly GroundItemDrop[]): { uid?: number; itemUid?: number; ground?: Vec2 };
@@ -459,6 +463,7 @@ export interface AudioLike {
 export class HeadlessScene implements SceneLike {
   selectedUid = -1;
   terrain = { obstacles: [] as { pos: Vec2; radius: number }[] };
+  groundHeightAt(): number { return 0; }
   pushEvent(): void {}
   update(): void {}
   pick(): { uid?: number; itemUid?: number; ground?: Vec2 } { return {}; }
@@ -513,6 +518,7 @@ export class Game {
   private rerollPreview: { stashIdx: number; affixIdx: number; itemId: string; baseAffixId: string; candidate: RolledAffix } | null = null;
   badges = new Set<string>();
   questProgress: Record<string, QuestProgress> = {};
+  quests: Record<string, QuestSave> = {};
   defeatedGyms = new Set<string>();
   difficulty: GameSave['difficulty'] = {};
   inventoryStash: ItemSave[] = [];
@@ -635,6 +641,10 @@ export class Game {
     this.questProgress = Object.fromEntries(
       Object.entries(save.questProgress).map(([id, q]) => [id, { ...defaultQuestProgress(), ...q }])
     );
+    this.quests = {};
+    for (const [id, q] of Object.entries(save.quests ?? {})) {
+      if (REG.questDefs.has(id)) this.quests[id] = normalizeQuestSave(REG.questDef(id), q);
+    }
     this.defeatedGyms = new Set(save.defeatedGyms);
     this.difficulty = structuredClone(save.difficulty);
     this.inventoryStash = save.inventoryStash.map((i) => cloneItemSave(i)!);
@@ -752,6 +762,11 @@ export class Game {
     this.applyCutsceneSettings();
     if (save.playtimeSec === 0 && this.region.id === 'tranquil-vale') this.playCutscene('prologue-moon-breaks');
     this.playRegionArrival();
+
+    // Quests (QUEST.md): unlock anything whose prereq is already met, then count
+    // "reach this region" since entering a region constructs a fresh Game.
+    this.refreshQuests();
+    this.advanceQuests({ kind: 'reach-region', amount: 1, regionId: this.region.id, targetId: this.region.id });
   }
 
   settings: GameSave['settings'] = { quickcast: true, resonance: true, minimap: true, audio: defaultAudioSettings(), graphics: defaultGraphicsSettings(), cutscene: defaultCutsceneSettings() };
@@ -1659,6 +1674,10 @@ export class Game {
    *  the scene. Cheap — safe to call on every slider change. No-op headless. */
   applyGraphics(): void {
     const g = this.settings.graphics ?? defaultGraphicsSettings();
+    // Overworld-only battle scale; macro sims (gym/Elite/raid/dungeon) keep their
+    // own sims at scale 1, so a perf dial can never change a macro outcome (§E.6).
+    this.sim.summonCapScale = g.battleScale;
+    setColorblindPalette(g.colorblind);
     this.scene.setGraphics?.({
       exposure: g.exposure,
       grade: g.grade,
@@ -2033,6 +2052,7 @@ export class Game {
     if (result.winner === 0) {
       this.defeatedGyms.add(gym.id);
       this.badges.add(gym.badgeId);
+      this.advanceQuests({ kind: 'earn-badge', amount: 1, targetId: gym.badgeId });
       this.applyRecruitCeiling(); // a new badge raises the ceiling; banked XP catches up (§3.4)
       this.playPresentationStinger('badge');
       this.msg(`${gym.leader} awards the ${gym.badgeId.replace('-', ' ')}!`, 'good');
@@ -2141,6 +2161,7 @@ export class Game {
         ? `dropped ${REG.item(loot.assembled.id).name}${loot.pityUsed ? ' (pity!)' : ''}!`
         : `${loot.guaranteed.length} component${loot.guaranteed.length === 1 ? '' : 's'}`;
     this.msg(`${REG.hero(boss.heroId).name} (${tier}) defeated — ${drop}`, 'good');
+    this.advanceQuests({ kind: 'clear-boss', amount: 1, targetId: bossId, regionId: boss.region });
     this.playCutscene('boss-clear-stinger', { boss: REG.hero(boss.heroId).name, bossLine: boss.dialogue[0] });
     this.autosave('boss');
     return { won: true, loot };
@@ -2223,6 +2244,7 @@ export class Game {
     this.deliverRaidLoot(def, tier, raidId, clears);
     this.codexUnlock('raid:' + raidId); // killing the raid boss is the encounter (§3.14)
     this.recordOutworldClaimantClear(raidId);
+    this.advanceQuests({ kind: 'clear-raid', amount: 1, targetId: raidId });
     this.msg(`${def.name} cleared! (clear #${clears + 1})`, 'good');
     this.playRaidClearBeat(raidId, def.name);
     this.playPresentationStinger('raid-clear');
@@ -2563,6 +2585,7 @@ export class Game {
     } else {
       this.msg(`${def.name} cleared: ${clearedRooms.length}/${depth} rooms. You return to the portal.`, 'good');
     }
+    this.advanceQuests({ kind: 'clear-dungeon', amount: 1, targetId: dungeonId, regionId: def.regionId });
     this.playPresentationStinger('raid-clear');
     this.autosave('dungeon');
   }
@@ -2875,6 +2898,199 @@ export class Game {
   /** Mark journal entries acknowledged (§3.14). */
   markJournalSeen(ids: string[]): void {
     for (const id of ids) this.journalSeen.add(id);
+  }
+
+  // ---------- quests: bounties + chapters (QUEST.md) ----------
+
+  private questContext(): QuestContext {
+    const reached = new Set(Object.keys(this.regionVisits));
+    reached.add(this.region.id);
+    const claimed = new Set<string>();
+    for (const [id, q] of Object.entries(this.quests)) if (q.status === 'claimed') claimed.add(id);
+    return {
+      badges: this.badges.size,
+      recruited: this.recruited.size,
+      raidClears: this.totalRaidClears(),
+      reachedRegions: reached,
+      claimedQuests: claimed,
+      playtimeSec: this.playtime
+    };
+  }
+
+  private questSaveFor(def: QuestDef): QuestSave {
+    return normalizeQuestSave(def, this.quests[def.id]);
+  }
+
+  /** Keep the save sparse: a default-locked record is implied, not stored. */
+  private storeQuestState(def: QuestDef, save: QuestSave): void {
+    const isDefault = save.status === 'locked' && save.completions === 0 && save.progress.every((p) => p === 0);
+    if (isDefault) delete this.quests[def.id];
+    else this.quests[def.id] = save;
+  }
+
+  /** Unlock anything whose prereq is now met; re-arm cooled-down bounties. */
+  refreshQuests(): void {
+    const ctx = this.questContext();
+    for (const def of REG.questDefs.values()) {
+      this.storeQuestState(def, refreshAvailability(def, this.questSaveFor(def), ctx));
+    }
+  }
+
+  /** Count a progression beat toward every active quest it matches. */
+  advanceQuests(ev: QuestEvent): void {
+    this.refreshQuests();
+    for (const def of REG.questDefs.values()) {
+      const { save, justCompleted } = questAdvance(def, this.questSaveFor(def), ev);
+      this.storeQuestState(def, save);
+      if (justCompleted) this.msg(`Quest ready to claim: ${def.name} — open the Journal (J).`, 'good');
+    }
+  }
+
+  /** Claim a completed quest's rewards. Chapters chain into their next quest. */
+  claimQuest(id: string): boolean {
+    const def = REG.questDefs.get(id);
+    if (!def) return false;
+    const cur = this.questSaveFor(def);
+    if (cur.status !== 'complete') {
+      this.msg('That quest is not ready to claim.', 'bad');
+      return false;
+    }
+    const { save, claimed } = questClaim(def, cur, this.questContext());
+    if (!claimed) return false;
+    this.storeQuestState(def, save);
+    this.msg(`Quest complete: ${def.name}`, 'good');
+    this.playPresentationStinger('badge');
+    for (const r of def.rewards) this.grantQuestReward(r);
+    // `next` is the authoritative chain link: claiming a chapter unlocks its
+    // successor once that successor's remaining prereqs are met. Toast it.
+    const nextDef = def.next ? REG.questDefs.get(def.next) : undefined;
+    const nextWasLocked = nextDef ? this.questSaveFor(nextDef).status === 'locked' : false;
+    this.refreshQuests();
+    if (nextDef && nextWasLocked && this.questSaveFor(nextDef).status !== 'locked') {
+      this.msg(`New chapter available: ${nextDef.name} — open the Journal (J).`, 'good');
+    }
+    this.autosave('quest');
+    return true;
+  }
+
+  private grantHeroXp(rec: RosterEntry, amount: number, cap: number): void {
+    if (amount <= 0) return;
+    if (rec.unit) {
+      const gained = rec.unit.addXp(amount, cap);
+      if (gained > 0) {
+        rec.abilityLevels = normalizeAbilityLevels(REG.hero(rec.heroId), rec.abilityLevels, rec.unit.level);
+        rec.attributePoints = normalizeAttributePoints(rec.heroId, rec.unit.level, rec.abilityLevels, rec.talentPicks, rec.attributePoints);
+        rec.unit.refresh(this.sim.time);
+      }
+      rec.level = rec.unit.level;
+      rec.xp = rec.unit.xp;
+    } else {
+      rec.xp = Math.min(rec.xp + amount, xpForLevel(TUNING.levelCap));
+      const newLevel = Math.min(levelFromXp(rec.xp), cap);
+      if (newLevel > rec.level) {
+        rec.level = newLevel;
+        rec.abilityLevels = normalizeAbilityLevels(REG.hero(rec.heroId), rec.abilityLevels, rec.level);
+        rec.attributePoints = normalizeAttributePoints(rec.heroId, rec.level, rec.abilityLevels, rec.talentPicks, rec.attributePoints);
+      }
+    }
+  }
+
+  private grantQuestReward(r: QuestReward): void {
+    switch (r.kind) {
+      case 'gold':
+        this.awardGold(r.amount, 'quest', this.activeUnit()?.pos, true);
+        this.msg(`Reward: +${r.amount}g`, 'good');
+        break;
+      case 'xp': {
+        const targets = r.scope === 'party' ? this.party : this.party[this.activeIdx] ? [this.party[this.activeIdx]] : [];
+        const cap = this.recruitLevelCap();
+        for (const rec of targets) this.grantHeroXp(rec, r.amount, cap);
+        this.msg(`Reward: +${r.amount} XP${r.scope === 'party' ? ' (party)' : ''}`, 'good');
+        break;
+      }
+      case 'loot-mark':
+        this.lootMarks[r.band] = (this.lootMarks[r.band] ?? 0) + r.amount;
+        this.msg(`Reward: ${r.amount} ${r.band} loot mark${r.amount === 1 ? '' : 's'}`, 'good');
+        break;
+      case 'item': {
+        if (!REG.items.has(r.itemId)) break;
+        const item: ItemSave = { id: r.itemId, ...(r.quality ? { quality: r.quality } : {}) };
+        this.inventoryStash.push(item);
+        this.recordItemAcquired(item);
+        this.msg(`Reward: ${REG.item(r.itemId).name}`, 'good');
+        break;
+      }
+      case 'essence':
+        this.essence += r.amount;
+        this.msg(`Reward: +${r.amount} essence`, 'good');
+        break;
+      case 'recruit':
+        if (REG.heroes.has(r.heroId) && !this.recruited.has(r.heroId)) {
+          this.recruitHero(r.heroId);
+        } else {
+          this.awardGold(1500, 'quest', this.activeUnit()?.pos, true);
+          this.msg(`${REG.heroes.get(r.heroId)?.name ?? r.heroId} already answers your call — 1500g instead.`, 'info');
+        }
+        break;
+      case 'title':
+        this.codexUnlocks.add('title:' + r.id);
+        this.msg(`Title earned: ${r.name}`, 'good');
+        break;
+    }
+  }
+
+  private rewardLabel(r: QuestReward): string {
+    switch (r.kind) {
+      case 'gold': return `${r.amount}g`;
+      case 'xp': return `${r.amount} XP${r.scope === 'party' ? ' (party)' : ''}`;
+      case 'loot-mark': return `${r.amount} ${r.band} loot mark${r.amount === 1 ? '' : 's'}`;
+      case 'item': return REG.items.get(r.itemId)?.name ?? r.itemId;
+      case 'essence': return `${r.amount} essence`;
+      case 'recruit': return `Recruit ${REG.heroes.get(r.heroId)?.name ?? r.heroId}`;
+      case 'title': return `Title: ${r.name}`;
+    }
+  }
+
+  /** Board view-model: every quest the player can see (not locked, not terminal-claimed). */
+  questBoard(): {
+    id: string; name: string; kind: QuestKind; summary: string; giver?: string; region?: string;
+    status: QuestStatus; objectives: { text: string; have: number; need: number }[];
+    rewards: string[]; dialogue?: string[]; claimable: boolean; cooldownLeft?: number;
+  }[] {
+    this.refreshQuests();
+    const out: ReturnType<Game['questBoard']> = [];
+    for (const def of REG.questDefs.values()) {
+      const save = this.questSaveFor(def);
+      if (save.status === 'locked' || save.status === 'claimed') continue;
+      out.push({
+        id: def.id,
+        name: def.name,
+        kind: def.kind,
+        summary: def.summary,
+        giver: def.giver,
+        region: def.regionId ? REG.regions.get(def.regionId)?.name : undefined,
+        status: save.status,
+        objectives: def.objectives.map((obj, i) => ({ text: obj.text, have: save.progress[i] ?? 0, need: obj.count })),
+        rewards: def.rewards.map((r) => this.rewardLabel(r)),
+        dialogue: def.dialogue,
+        claimable: save.status === 'complete',
+        cooldownLeft: save.status === 'cooldown' && save.availableAt !== undefined ? Math.max(0, Math.ceil(save.availableAt - this.playtime)) : undefined
+      });
+    }
+    const rank = (s: QuestStatus): number => (s === 'complete' ? 0 : s === 'active' ? 1 : 2);
+    out.sort((a, b) => rank(a.status) - rank(b.status) || (a.kind === b.kind ? 0 : a.kind === 'event' ? -1 : 1));
+    return out;
+  }
+
+  /** Quest-earned titles for the journal (codex-unlocked, named from the reward). */
+  questTitles(): { id: string; name: string; note: string }[] {
+    const titles: { id: string; name: string; note: string }[] = [];
+    for (const def of REG.questDefs.values()) {
+      for (const r of def.rewards) {
+        if (r.kind === 'title' && this.codexUnlocks.has('title:' + r.id)) titles.push({ id: r.id, name: r.name, note: r.note });
+      }
+    }
+    return titles;
   }
 
   // ---------- the Compendium: Atlas (Items) + Heroes (LOOT_OVERHAUL §3.7) ----------
@@ -5020,7 +5236,11 @@ export class Game {
       speed: TUNING.locomotion.dashSpeed,
       until: this.sim.time + TUNING.locomotion.dashDurationSec
     });
-    u.setCastGesture('dash', this.sim.time + TUNING.locomotion.dashDurationSec, { now: this.sim.time });
+    u.setCastGesture('dash', {
+      now: this.sim.time,
+      windowUntil: this.sim.time + TUNING.locomotion.dashDurationSec,
+      lockUntil: this.sim.time + TUNING.locomotion.dashDurationSec
+    });
     return true;
   }
 
@@ -5314,6 +5534,7 @@ export class Game {
     }
     this.recruited.add(heroId);
     this.codexUnlock('hero:' + heroId); // recruiting is the encounter (§3.14)
+    this.advanceQuests({ kind: 'recruit-heroes', amount: 1 });
     if (this.party.length < 5) {
       this.party.push({
         heroId,
@@ -5677,6 +5898,7 @@ export class Game {
     this.echoHeroes.forEach((id, uid) => {
       if (id === spawnId) this.echoHeroes.delete(uid);
     });
+    this.advanceQuests({ kind: 'kill-echoes', amount: 1, regionId: this.region.id });
     if (this.recruited.has(spawn.heroId)) {
       this.unlockOwnedHeroEcho(spawn.heroId);
     } else {
@@ -5744,6 +5966,7 @@ export class Game {
       recruited: [...this.recruited],
       badges: [...this.badges],
       questProgress: structuredClone(this.questProgress),
+      quests: structuredClone(this.quests),
       defeatedGyms: [...this.defeatedGyms],
       echoRespawn: this.echoRespawnMap(),
       campRespawn: this.campRespawnMap(),
@@ -5842,9 +6065,10 @@ export class Game {
   static migrateSave(s: unknown): GameSave | null {
     if (!s || typeof s !== 'object') return null;
     const v = s as Partial<GameSave>;
-    if (v.version === 2 || v.version === 3 || v.version === 4 || v.version === 5 || v.version === SAVE_VERSION) {
-      // v2/v3 -> v3 shape, v4 audio/codex fields, v5 exploration, then v6 Armory loadouts.
-      const migrated = migratePhase6Save(migratePhase3Save(v as unknown as { version: number; [k: string]: unknown }));
+    if (v.version === 2 || v.version === 3 || v.version === 4 || v.version === 5 || v.version === 6 || v.version === SAVE_VERSION) {
+      // v2/v3 -> v3 shape, v4 audio/codex fields, v5 exploration, v6 Armory,
+      // then v7 board quests.
+      const migrated = migratePhase7Save(migratePhase3Save(v as unknown as { version: number; [k: string]: unknown }));
       return Game.validateSave(migrated) ? migrated : null;
     }
     return null;
@@ -5862,6 +6086,7 @@ export class Game {
     if (!Array.isArray(v.roster) || !Array.isArray(v.recruited) || !Array.isArray(v.caught) || !Array.isArray(v.fielded)) return false;
     if (!Array.isArray(v.badges) || !v.badges.every((b) => typeof b === 'string')) return false;
     if (!v.questProgress || typeof v.questProgress !== 'object') return false;
+    if (!v.quests || typeof v.quests !== 'object') return false;
     for (const q of Object.values(v.questProgress)) {
       if (!q || typeof q !== 'object') return false;
       if (!['unfound', 'found', 'trial-complete', 'bound'].includes(q.stage)) return false;
@@ -5973,10 +6198,12 @@ export class Game {
       if (!['low', 'medium', 'high'].includes(graphics.drawDistance)) return false;
       if (!['auto', 'full', 'balanced', 'reduced'].includes(graphics.crowdDetail)) return false;
       if (typeof graphics.vfxDensity !== 'number' || graphics.vfxDensity < 0.5 || graphics.vfxDensity > 1.5) return false;
+      if (typeof graphics.battleScale !== 'number' || graphics.battleScale < 0.5 || graphics.battleScale > 1.5) return false;
       if (typeof graphics.screenShake !== 'number' || graphics.screenShake < 0 || graphics.screenShake > 1) return false;
       if (typeof graphics.exposure !== 'number' || graphics.exposure < 0.5 || graphics.exposure > 1.5) return false;
       if (typeof graphics.grade !== 'number' || graphics.grade < 0 || graphics.grade > 1.5) return false;
       if (typeof graphics.reducedMotion !== 'boolean') return false;
+      if (typeof graphics.colorblind !== 'boolean') return false;
     }
     for (const heroId of v.party) {
       if (typeof heroId !== 'string' || !REG.heroes.has(heroId)) return false;
@@ -6122,6 +6349,7 @@ export class Game {
       this.rollItemDropsForCreep(victim.creepId, victim.tier, ev.victimUid, creepCombatTier(this.region.id), victim.pos);
       if (this.eliteCreepUids.delete(ev.victimUid)) this.rollEliteCreepDrop(victim.tier, ev.victimUid, victim.pos);
       this.rollNeutralFor(victim.tier, ev.victimUid);
+      this.advanceQuests({ kind: 'kill-creeps', amount: 1, tier: victim.tier, regionId: this.region.id });
     }
     if (victim && victim.kind === 'hero' && victim.team !== 0) this.rollHeroLoadoutDrop(victim);
 
@@ -6151,6 +6379,7 @@ export class Game {
     this.caught.push(inst);
     const def = REG.creep(ev.creepId);
     this.codexUnlock('creep:' + ev.creepId); // capturing is the encounter (§3.14)
+    this.advanceQuests({ kind: 'capture-creeps', amount: 1, tier: def.tier, regionId: this.region.id });
     this.msg(`Captured ${def.name}!`, 'good');
     const { list, merges } = mergeCreeps(this.caught);
     this.caught = list;

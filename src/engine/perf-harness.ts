@@ -273,7 +273,7 @@ export class PerfHarness {
 }
 
 function perfSettings(): GameSave['settings'] {
-  return { quickcast: true, audio: { master: 0.8, sfx: 0.8, voice: 0.8, stinger: 0.8, muted: false } };
+  return { quickcast: true, audio: { master: 0.8, sfx: 0.8, voice: 0.8, stinger: 0.8, music: 0.8, muted: false } };
 }
 
 /**

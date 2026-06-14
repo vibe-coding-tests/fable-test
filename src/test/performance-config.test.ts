@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { clampedPixelRatio, higherQualityTier, lowerQualityTier, qualityPreset } from '../engine/performance';
 import { shouldUseCrowdImpostor } from '../engine/lod';
+import { RARITY_COLORS, RARITY_COLORS_COLORBLIND, rarityColor, setColorblindPalette } from '../data/quality';
 
 describe('performance quality presets', () => {
   it('clamps device pixel ratio by quality tier', () => {
@@ -19,8 +20,11 @@ describe('performance quality presets', () => {
     expect(qualityPreset('medium').fullRigAnimationBudget).toBeLessThan(qualityPreset('high').fullRigAnimationBudget);
   });
 
-  it('keeps ambient occlusion disabled until a pass is wired', () => {
-    expect(qualityPreset('ultra').ao).toBe(false);
+  it('enables ground-contact AO only on the ultra fidelity tier', () => {
+    expect(qualityPreset('ultra').ao).toBe(true);
+    expect(qualityPreset('high').ao).toBe(false);
+    expect(qualityPreset('medium').ao).toBe(false);
+    expect(qualityPreset('low').ao).toBe(false);
   });
 
   it('walks quality tiers within the requested ceiling', () => {
@@ -28,6 +32,17 @@ describe('performance quality presets', () => {
     expect(lowerQualityTier('low')).toBeNull();
     expect(higherQualityTier('medium', 'ultra')).toBe('high');
     expect(higherQualityTier('high', 'high')).toBeNull();
+  });
+
+  afterEach(() => setColorblindPalette(false));
+
+  it('swaps the rarity palette for a colorblind-safe set and restores it (§F.3)', () => {
+    expect(rarityColor('immortal')).toBe(RARITY_COLORS.immortal);
+    setColorblindPalette(true);
+    expect(rarityColor('immortal')).toBe(RARITY_COLORS_COLORBLIND.immortal);
+    expect(rarityColor('arcana')).toBe(RARITY_COLORS_COLORBLIND.arcana);
+    setColorblindPalette(false);
+    expect(rarityColor('immortal')).toBe(RARITY_COLORS.immortal);
   });
 
   it('uses crowd impostors only for cheap non-hero overflow/far units', () => {

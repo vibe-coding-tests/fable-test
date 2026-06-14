@@ -588,9 +588,12 @@ export function mountHeroModel(
   rig: UnitRig,
   model: THREE.Object3D,
   clips: THREE.AnimationClip[] = [],
-  clipNames?: Partial<Record<AuthoredActionName, string>>
+  clipNames?: Partial<Record<AuthoredActionName, string>>,
+  opts: { hideProcedural?: boolean } = {}
 ): void {
-  for (const child of rig.body.children) child.visible = false;
+  if (opts.hideProcedural ?? true) {
+    for (const child of rig.body.children) child.visible = false;
+  }
   if (rig.authoredModel?.parent) rig.authoredModel.parent.remove(rig.authoredModel);
 
   // Fit authored height to the procedural silhouette and seat feet on the ground.

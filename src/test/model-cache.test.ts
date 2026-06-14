@@ -84,6 +84,17 @@ describe('pluggable hero rig (Phase 5)', () => {
     expect(model.castShadow).toBe(true);
   });
 
+  it('can mount creature models without hiding the procedural fallback', () => {
+    const rig = buildUnitRig({ build: 'biped', scale: 0.55 }, ['#b8743c', '#7a4a22', '#e8d8a0']);
+    const proceduralCount = rig.body.children.length;
+    const model = new THREE.Mesh(new THREE.BoxGeometry(1, 2, 1), new THREE.MeshStandardMaterial());
+
+    mountHeroModel(rig, model, [], undefined, { hideProcedural: false });
+
+    for (let i = 0; i < proceduralCount; i++) expect(rig.body.children[i].visible).toBe(true);
+    expect(rig.body.children).toContain(model);
+  });
+
   it('resolves base-mesh sockets and hangs the weapon off the authored hand (WS-B)', () => {
     const rig = buildUnitRig({ build: 'biped', scale: 1, weapon: 'sword' }, ['#888899', '#666677', '#aaaabb']);
 

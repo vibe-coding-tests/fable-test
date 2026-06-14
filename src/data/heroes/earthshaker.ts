@@ -1,4 +1,5 @@
 import type { HeroDef } from '../../core/types';
+import { loopTurnLabel } from './loop-note';
 
 export const EARTHSHAKER: HeroDef = {
   id: 'earthshaker',
@@ -7,7 +8,7 @@ export const EARTHSHAKER: HeroDef = {
   attribute: 'str',
   roles: ['initiator', 'disabler', 'nuker'],
   region: 'tranquil-vale',
-  lore: 'Born of the earth and loyal to it, Raigor walks the vale listening for the Mad Moon fragments grinding under the soil.',
+  lore: `Born of the earth and loyal to it, Raigor walks the vale listening for the Mad Moon fragments grinding under the soil. His Echo last fought on turn ${loopTurnLabel('earthshaker')} of the Loop, where the ground answered before anyone else did.`,
   baseStats: {
     str: 22, agi: 12, int: 18,
     strGain: 3.2, agiGain: 1.4, intGain: 1.8,

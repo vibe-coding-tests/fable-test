@@ -77,4 +77,28 @@ describe('movement and collision', () => {
 
     expect(pointSegDist(unit.pos, a, b)).toBeGreaterThanOrEqual(60 + unit.radius - 0.1);
   });
+
+  it('settles orders clicked against obstacle rims', () => {
+    const sim = new Sim({
+      seed: 24,
+      bounds: { w: 2000, h: 2000 },
+      obstacles: [{ pos: { x: 600, y: 500 }, radius: 80 }]
+    });
+    const unit = sim.spawnHero(REG.hero('juggernaut'), {
+      team: 0,
+      pos: { x: 420, y: 500 },
+      level: 1,
+      ctrl: { kind: 'none' }
+    });
+    unit.facing = 0;
+
+    const clickedRim = { x: 704, y: 500 };
+    let arrived = false;
+    for (let i = 0; i < 300 && !arrived; i++) {
+      arrived = steerToward(sim, unit, clickedRim, sim.dt, Math.max(12, unit.radius * 0.5));
+    }
+
+    expect(arrived).toBe(true);
+    expect(dist(unit.pos, sim.obstacles[0].pos)).toBeGreaterThanOrEqual(sim.obstacles[0].radius + unit.radius - 0.1);
+  });
 });

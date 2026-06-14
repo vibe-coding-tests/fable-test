@@ -226,6 +226,21 @@ export function tierScale(tier: DifficultyTier): { hp: number; damage: number; a
   return TUNING.bossTierScale[tier];
 }
 
+export function bossBkbItemOverrides(tier: DifficultyTier): NonNullable<MacroHeroSetup['itemOverrides']> {
+  const bkb = TUNING.bossBkbByTier[tier];
+  return { 'black-king-bar': { cooldown: bkb.cooldown, values: { duration: [bkb.duration] } } };
+}
+
+function withBossBkbOverrides(setup: MacroHeroSetup, tier: DifficultyTier): MacroHeroSetup {
+  return {
+    ...setup,
+    itemOverrides: {
+      ...(setup.itemOverrides ?? {}),
+      ...bossBkbItemOverrides(tier)
+    }
+  };
+}
+
 export function creepCombatTier(regionId: string): DifficultyTier {
   const mult = TUNING.regionRewardMult[regionId as keyof typeof TUNING.regionRewardMult] ?? 1;
   if (mult >= 2.0) return 'hell';
@@ -308,7 +323,7 @@ export interface LegacySettings {
   masterVolume?: number;
   sfxVolume?: number;
   musicVolume?: number;
-  audio?: { master: number; sfx: number; voice: number; stinger: number; muted: boolean };
+  audio?: { master: number; sfx: number; voice: number; stinger: number; music: number; muted: boolean };
 }
 
 /** A v3-shaped save: Phase 3 fields present, but pre-v4 settings and no karma/codex/journal. */
@@ -320,10 +335,11 @@ export type GameSaveV3 = Omit<GameSave, 'version' | 'settings' | 'reputation' | 
   journalSeen?: string[];
 };
 
-export function defaultPhase3SaveFields(): Pick<GameSave, 'difficulty' | 'inventoryStash' | 'raidProgress' | 'eliteFive' | 'factionChoices' | 'heldUniques' | 'neutralStash' | 'lootMarks' | 'goldSinks'> {
+export function defaultPhase3SaveFields(): Pick<GameSave, 'difficulty' | 'inventoryStash' | 'groundItemDrops' | 'raidProgress' | 'eliteFive' | 'factionChoices' | 'heldUniques' | 'neutralStash' | 'lootMarks' | 'goldSinks'> {
   return {
     difficulty: {},
     inventoryStash: [],
+    groundItemDrops: [],
     raidProgress: {},
     eliteFive: { defeated: 0, championDown: false },
     factionChoices: {},
@@ -344,6 +360,7 @@ export function migratePhase3Save(s: { version: number; [k: string]: unknown }):
     roster: base.roster.map((r) => ({ ...r, neutralSlot: r.neutralSlot ?? null })),
     difficulty: base.difficulty ?? defaults.difficulty,
     inventoryStash: base.inventoryStash ?? defaults.inventoryStash,
+    groundItemDrops: base.groundItemDrops ?? defaults.groundItemDrops,
     raidProgress: base.raidProgress ?? defaults.raidProgress,
     eliteFive: base.eliteFive ?? defaults.eliteFive,
     factionChoices: base.factionChoices ?? defaults.factionChoices,
@@ -393,7 +410,7 @@ export function raidSetupFromDef(def: RaidDef, party: MacroHeroSetup[], tier: Di
     seed,
     party,
     boss: {
-      ...def.boss,
+      ...withBossBkbOverrides(def.boss, tier),
       hpScale: (def.boss.hpScale ?? TUNING.raidBossHpScale) * scale.hp,
       damageScale: (def.boss.damageScale ?? TUNING.raidBossDamageScale) * scale.damage,
       armorScale: scale.armor,
@@ -414,6 +431,7 @@ export function bossFightSetupFromDef(def: BossDef, party: MacroHeroSetup[], tie
       heroId: def.heroId,
       level: def.rank === 'boss' ? 28 : 24,
       items: ['black-king-bar', 'assault-cuirass'],
+      itemOverrides: bossBkbItemOverrides(tier),
       hpScale: TUNING.raidBossHpScale * TUNING.regionalBossHpScale * scale.hp,
       damageScale: TUNING.raidBossDamageScale * scale.damage,
       armorScale: scale.armor,

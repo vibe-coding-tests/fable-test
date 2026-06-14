@@ -219,7 +219,7 @@ function defileGrowth(ctx: ExoticContext): void {
 function swarmSpread(ctx: ExoticContext): void {
   const c = center(ctx.caster, ctx.primary);
   for (const enemy of enemiesAround(ctx, 650)) {
-    applyDamage(ctx.sim, ctx.caster, enemy, 45 + V(ctx.ctx, 'damage', 0) * 0.25, 'magical', { element: ctx.ctx.element });
+    applyDamage(ctx.sim, ctx.caster, enemy, 45 + V(ctx.ctx, 'damage', 0) * 0.25, 'magical', { element: ctx.ctx.element, piercesImmunity: ctx.ctx.piercesImmunity });
     applyStatus(ctx.sim, ctx.caster, enemy, 'slow', 2, { tag: 'exotic:swarm-spread', moveSlowPct: 25 } as StatusParams, ctx.ctx);
   }
   ctx.sim.events.emit({ t: 'aoe-burst', pos: { ...c }, radius: V(ctx.ctx, 'radius', 650), vfx: ctx.ctx.vfx });

@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import type { AuthoredActionName, UnitRig } from './models';
 import type { Unit } from '../core/unit';
 import type { AnimGesture } from '../core/types';
@@ -24,6 +25,9 @@ interface CastPose {
 
 // Reused across frames so the cast path never allocates in the render hot loop.
 const POSE: CastPose = { l: 0, r: 0, bodyZ: 0, bodyY: 0, bodyX: 0 };
+const GROUND_BOX = new THREE.Box3();
+const GROUND_ROOT_POS = new THREE.Vector3();
+const DEATH_GROUND_MARGIN = 0.02;
 
 type AttackStyle =
   | 'heavy-chop'
@@ -216,6 +220,17 @@ function playAuthoredOneShot(
   void lockUntil;
 }
 
+function keepDeathPoseAboveGround(rig: UnitRig): void {
+  rig.root.updateMatrixWorld(true);
+  GROUND_BOX.setFromObject(rig.body);
+  if (GROUND_BOX.isEmpty() || !Number.isFinite(GROUND_BOX.min.y)) return;
+  const rootY = rig.root.getWorldPosition(GROUND_ROOT_POS).y;
+  const lift = rootY + DEATH_GROUND_MARGIN - GROUND_BOX.min.y;
+  if (lift <= 0) return;
+  rig.body.position.y += lift / Math.max(0.001, rig.root.scale.y);
+  rig.root.updateMatrixWorld(true);
+}
+
 function restoreAuthoredLoop(rig: UnitRig, moving: boolean, channeling: boolean): void {
   if (channeling && rig.actions?.channel) switchAuthoredAction(rig, 'channel', 0.16);
   else if (moving && rig.actions?.run) switchAuthoredAction(rig, 'run', 0.16);
@@ -245,6 +260,7 @@ function animateAuthoredRig(
       body.position.y = -st.deathT * 0.4;
     }
     rig.mixer?.update(dt);
+    keepDeathPoseAboveGround(rig);
     return;
   }
 
@@ -322,6 +338,7 @@ export function animateRig(rig: UnitRig, unit: Unit, st: AnimState, dt: number, 
     const t = st.deathT;
     body.rotation.z = (Math.PI / 2) * t;
     body.position.y = -t * 0.4;
+    keepDeathPoseAboveGround(rig);
     rig.root.traverse((o) => {
       const m = (o as { material?: { transparent?: boolean; opacity?: number } }).material;
       if (m && typeof m.opacity === 'number') {
