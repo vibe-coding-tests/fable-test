@@ -1173,6 +1173,23 @@ export class VfxManager {
     this.push(ribbon, 0.24, (_t, lifeT) => {
       mat.opacity = 0.9 * (1 - lifeT);
     });
+    // A short forked branch veers off a midpoint so the bolt reads as electric
+    // arc rather than a single clean stroke. Reuses the ribbon builder; no new art.
+    const branchAt = 3; // midpoint of the 7-point arc
+    const root = points[branchAt];
+    const fork: THREE.Vector3[] = [root.clone()];
+    for (let i = 1; i <= 3; i++) {
+      const t = i / 3;
+      const p = root.clone().lerp(b, t * 0.5);
+      p.addScaledVector(side, (0.18 + t * 0.22) * scale * (i % 2 === 0 ? -1 : 1));
+      p.y += (0.12 + t * 0.1) * scale;
+      fork.push(p);
+    }
+    const branch = this.lightningRibbon(fork, visual.color2 ?? visual.color, 0.035 * scale);
+    const branchMat = branch.material as THREE.MeshBasicMaterial;
+    this.push(branch, 0.18, (_t, lifeT) => {
+      branchMat.opacity = 0.7 * (1 - lifeT);
+    });
     this.burst(to.x, to.y, visual.color2 ?? visual.color, 0.55 * scale, 0.22, visual.color);
     this.impactDecal(to.x, to.y, visual.color2 ?? visual.color, 0.48 * scale, 0.24);
   }

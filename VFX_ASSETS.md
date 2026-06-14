@@ -376,6 +376,15 @@ landed, `channel` has a distinct vertical cast read, projectile objects and burs
 rings/sparks are pooled, and coverage is complete. All additive, tier-gated, off
 on low. Gate: perf harness, no-asset boot, theme fit.
 
+**Attack-VFX polish pass (latest).** `lightning-bounce` now renders as a soft
+additive **ribbon** (`lightningRibbon`, alpha-ramped) instead of the old flat
+`THREE.Line`, plus a short **forked branch** off the midpoint for an electric-arc
+read. Ground **impact decals** were added to `cleave-sweep`, `ranged-conversion`
+(attack beam), and `lightning-bounce` so every attack visual now leaves a tinted
+additive ground mark. Headless-safe (DataTexture geometry only); the transient
+cap auto-trims. Gate: `vfx-cache` (lightning-is-ribbon-not-line + two-ribbon fork
++ cleave/beam decals) — green.
+
 ---
 
 ## 8. WS-F — Audio — **shipped**

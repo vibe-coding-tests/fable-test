@@ -148,17 +148,18 @@ describe('vfx cache', () => {
       { x: 500, y: 0 }
     );
 
-    const ribbon = vfx.group.children.find((child) => {
+    const ribbons = vfx.group.children.filter((child) => {
       const mesh = child as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
-      return mesh.isMesh && mesh.geometry.index && mesh.material instanceof THREE.MeshBasicMaterial && !!mesh.material.alphaMap;
-    }) as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial> | undefined;
+      return mesh.isMesh && !!mesh.geometry.index && mesh.material instanceof THREE.MeshBasicMaterial && !!mesh.material.alphaMap;
+    }) as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>[];
     const line = vfx.group.children.find((child) => (child as THREE.Line).isLine);
     const decal = vfx.group.children.find((child) => {
       const mesh = child as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
       return mesh.isMesh && mesh.material instanceof THREE.MeshBasicMaterial && !!mesh.material.map;
     }) as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial> | undefined;
 
-    expect(ribbon).toBeDefined();
+    // Main bolt plus a forked branch, both soft additive ribbons (no flat line).
+    expect(ribbons.length).toBeGreaterThanOrEqual(2);
     expect(line).toBeUndefined();
     expect(decal).toBeDefined();
     expect(decal!.material.blending).toBe(THREE.AdditiveBlending);
