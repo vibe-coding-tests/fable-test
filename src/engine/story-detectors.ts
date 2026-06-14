@@ -28,7 +28,7 @@ export interface StoryObserveCtx {
 
 export type StoryTrigger =
   | { kind: 'legend'; legendId: string }
-  | { kind: 'boss-phase'; bossHeroId?: string; marqueeRaidId?: string }
+  | { kind: 'boss-phase'; bossHeroId?: string; raidId?: string }
   | { kind: 'resonance'; reaction: string };
 
 function dist2(a: Vec2, b: Vec2): number {
@@ -161,8 +161,7 @@ export class StoryDetector {
       const frac = u.hp / Math.max(1, u.stats.maxHp);
       if (frac <= PHASE_BREAK_PCT) {
         this.phaseFired.add(u.uid);
-        const marquee = ctx.raidId === 'void-prelate' || ctx.raidId === 'last-eldwurm' ? ctx.raidId : undefined;
-        out.push({ kind: 'boss-phase', bossHeroId: ctx.bossHeroId, marqueeRaidId: marquee });
+        out.push({ kind: 'boss-phase', bossHeroId: ctx.bossHeroId, raidId: ctx.raidId });
       }
     }
     return out;

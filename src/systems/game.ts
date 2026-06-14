@@ -1115,14 +1115,17 @@ export class Game {
       }
       return;
     }
-    // §6.6 boss phase break. Marquee guardians get a bespoke set-piece on their first break,
-    // then fall back to the templated stinger; everyone else always gets the stinger.
+    // §6.6 boss phase break. Raid anchors get a directed beat first, then fall back to
+    // the generic stinger on repeats or if the encounter is not tied to a raid.
     const bossName = trig.bossHeroId ? REG.hero(trig.bossHeroId).name : 'The boss';
     const bossLine = trig.bossHeroId ? this.bossStoryLine(trig.bossHeroId, 1) : 'You pushed it past something. Now it is serious.';
-    if (trig.marqueeRaidId) {
-      const marqueeId = trig.marqueeRaidId === 'void-prelate' ? 'void-prelate-phase-break' : 'last-eldwurm-phase-break';
-      if (!this.journalSeen.has(`cinematic:${marqueeId}`)) {
-        this.playCutscene(marqueeId, { boss: bossName });
+    if (trig.raidId) {
+      const directedId =
+        trig.raidId === 'void-prelate' ? 'void-prelate-phase-break' :
+        trig.raidId === 'last-eldwurm' ? 'last-eldwurm-phase-break' :
+        `raid-phase-${trig.raidId}`;
+      if (REG.cutscenes.has(directedId) && !this.journalSeen.has(`cinematic:${directedId}`)) {
+        this.playCutscene(directedId, { boss: bossName });
         return;
       }
     }
@@ -1169,6 +1172,12 @@ export class Game {
       this.codexUnlock('claimants:all');
       this.playCutscene('outworld-all-clear');
     }
+  }
+
+  private playRaidClearBeat(raidId: string, raidName: string): void {
+    const directedId = `raid-clear-${raidId}`;
+    if (REG.cutscenes.has(directedId)) this.playCutscene(directedId, { raid: raidName });
+    else this.playCutscene('raid-clear-stinger', { raid: raidName });
   }
 
   private activeFestival: string | null = null;
@@ -1239,7 +1248,7 @@ export class Game {
     const map = this.seasonalModeTarget(event);
     if (!this.festivalLaunchable(event.id)) return false;
     const ok = map.kind === 'raid'
-      ? this.startLiveRaid(map.id, 'normal', map.maxSec ? { maxSec: map.maxSec } : undefined)
+      ? this.startLiveRaid(map.id, 'normal', { maxSec: map.maxSec, festivalMode: map.mode })
       : this.startDungeon(map.id, 'normal', { endless: map.endless, maxSec: map.maxSec, modifiers: map.modifiers });
     return ok;
   }
@@ -1910,13 +1919,13 @@ export class Game {
     this.codexUnlock('raid:' + raidId); // killing the raid boss is the encounter (§3.14)
     this.recordOutworldClaimantClear(raidId);
     this.msg(`${def.name} cleared! (clear #${clears + 1})`, 'good');
-    this.playCutscene('raid-clear-stinger', { raid: def.name });
+    this.playRaidClearBeat(raidId, def.name);
     this.playPresentationStinger('raid-clear');
     this.autosave('raid');
     return { won: true, result };
   }
 
-  startLiveRaid(raidId: string, tier: DifficultyTier = 'normal', opts: { maxSec?: number } = {}): boolean {
+  startLiveRaid(raidId: string, tier: DifficultyTier = 'normal', opts: { maxSec?: number; festivalMode?: SeasonalEventDef['mode'] } = {}): boolean {
     if (this.liveGym || this.liveRaid) return false;
     const def = REG.raid(raidId);
     if (this.party.length < 5) {
@@ -1935,7 +1944,7 @@ export class Game {
     this.liveRaidTier = tier;
     this.liveRaidClears = prog?.clears ?? 0;
     this.liveRaidAegis = this.aegisReady();
-    this.liveRaid = new LiveRaid(def, this.gymPlayerTeam(), tier, stableContentSeed(`${raidId}:${tier}`, this.liveRaidClears) + Math.round(this.playtime), { aegis: this.liveRaidAegis, maxSec: opts.maxSec });
+    this.liveRaid = new LiveRaid(def, this.gymPlayerTeam(), tier, stableContentSeed(`${raidId}:${tier}`, this.liveRaidClears) + Math.round(this.playtime), { aegis: this.liveRaidAegis, maxSec: opts.maxSec, festivalMode: opts.festivalMode });
     this.story.beginEncounter();
     this.playRaidIntroSetpieces(raidId, def.name);
     this.queuedOrders = [];
@@ -1997,7 +2006,7 @@ export class Game {
     this.recordOutworldClaimantClear(raidId);
     this.completeActiveFestival(true);
     this.msg(`${def.name} cleared! (clear #${clears + 1})`, 'good');
-    this.playCutscene('raid-clear-stinger', { raid: def.name });
+    this.playRaidClearBeat(raidId, def.name);
     this.playPresentationStinger('raid-clear');
     this.autosave('raid');
   }
@@ -2320,7 +2329,13 @@ export class Game {
     const draft = this.eliteDraftFor(idx, seed);
     const player = opts.playerTeam ?? draft.player;
     if (idx === 0 && this.eliteFive.defeated === 0) this.playCutscene('elite-gauntlet-open');
-    this.playCutscene(`elite-persona-${idx}`);
+    const personaId = `elite-persona-${idx}`;
+    if (this.journalSeen.has(`cinematic:${personaId}`)) {
+      const member = ELITE_DRAFT.members[idx];
+      this.msg(`${member.name}: "${member.dialogue[0] ?? member.title}"`, 'bark');
+    } else {
+      this.playCutscene(personaId);
+    }
     if (this.queueAfterCinematic(ELITE_DRAFT.members[idx].name, () => {
       this.resolveEliteMatch(idx, seed, player, draft.enemy);
     })) {
@@ -4922,7 +4937,9 @@ export class Game {
       this.msg(line, 'info');
       this.awardGold(Math.round(def.bounty.gold * 1.5), 'echo', this.activeUnit()?.pos ?? this.region.town.pos);
     }
-    this.playCutscene('echo-milestone-stinger', { hero: def.name, echoLine: echoLines[0] ?? `${def.name}'s echo deepens.` });
+    if (result.firstFacetUnlock) {
+      this.playCutscene('echo-milestone-stinger', { hero: def.name, echoLine: echoLines[0] ?? `${def.name}'s echo deepens.` });
+    }
 
     this.rollEchoComponentDrop(heroId);
     this.rebuildHeroUnit(recIdx);

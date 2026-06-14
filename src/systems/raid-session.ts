@@ -1,8 +1,17 @@
 import { createRaidMechanicRunner, heroesAlive, setupRaidSim, type RaidEncounterResult } from '../core/macro';
 import { raidSetupFromDef } from '../core/phase3';
-import type { DifficultyTier, MacroHeroSetup, RaidDef } from '../core/types';
+import type { DifficultyTier, MacroHeroSetup, RaidDef, SeasonalModeKind } from '../core/types';
+import type { EffectCtx } from '../core/effects';
 import type { Sim } from '../core/sim';
 import type { Unit } from '../core/unit';
+
+export interface LiveRaidFestivalObjective {
+  mode: SeasonalModeKind;
+  wavesSpawned: number;
+  tributeTicks: number;
+  timerSec: number;
+  nextPressureAt: number;
+}
 
 export class LiveRaid {
   readonly def: RaidDef;
@@ -14,17 +23,24 @@ export class LiveRaid {
   private readonly mechanics;
   private readonly gambitControllers = new Map<number, Unit['ctrl']>();
   private readonly handledFallen = new Set<number>();
+  private readonly festivalMode?: SeasonalModeKind;
+  private readonly festivalCtx: EffectCtx;
   private aegisAvailable: boolean;
   private aegisConsumed = false;
   private claimedUid: number | null = null;
+  private festivalWavesSpawned = 0;
+  private festivalTributeTicks = 0;
+  private nextFestivalPressureAt = 14;
 
   driverIdx = 0;
   done = false;
   result: RaidEncounterResult | null = null;
 
-  constructor(def: RaidDef, party: MacroHeroSetup[], tier: DifficultyTier, seed: number, opts?: { maxSec?: number; aegis?: boolean }) {
+  constructor(def: RaidDef, party: MacroHeroSetup[], tier: DifficultyTier, seed: number, opts?: { maxSec?: number; aegis?: boolean; festivalMode?: SeasonalModeKind }) {
     this.def = def;
     this.tier = tier;
+    this.festivalMode = opts?.festivalMode;
+    this.festivalCtx = { defId: `festival:${opts?.festivalMode ?? def.id}`, level: def.boss.level ?? 30, vfx: { archetype: 'summon-pop', color: '#ffd86a' } };
     const rs = raidSetupFromDef(def, party, tier, seed);
     const limit = opts?.maxSec ?? rs.maxSec;
     this.sim = setupRaidSim({ seed: rs.seed, party: rs.party, boss: rs.boss, maxSec: limit });
@@ -74,6 +90,17 @@ export class LiveRaid {
     return this.drivenUnit() ?? heroesAlive(this.sim, 0)[0] ?? this.boss;
   }
 
+  festivalObjective(): LiveRaidFestivalObjective | null {
+    if (!this.festivalMode) return null;
+    return {
+      mode: this.festivalMode,
+      wavesSpawned: this.festivalWavesSpawned,
+      tributeTicks: this.festivalTributeTicks,
+      timerSec: Math.max(0, this.maxTicks * this.sim.dt - this.sim.time),
+      nextPressureAt: this.nextFestivalPressureAt
+    };
+  }
+
   step(dt: number): void {
     if (this.done) return;
     const ticks = Math.max(1, Math.round(dt / this.sim.dt));
@@ -83,6 +110,7 @@ export class LiveRaid {
   private stepOnce(): void {
     this.sim.tick();
     this.mechanics.tick(this.sim);
+    this.tickFestivalPressure();
     this.handleFallen();
     const partyAlive = heroesAlive(this.sim, 0).length;
     const bossAlive = this.boss.alive ? 1 : 0;
@@ -104,6 +132,35 @@ export class LiveRaid {
         fired: this.mechanics.fired
       };
     }
+  }
+
+  private tickFestivalPressure(): void {
+    if (!this.festivalMode || !this.boss.alive || this.sim.time < this.nextFestivalPressureAt) return;
+    if (this.festivalMode === 'roshan-candy') {
+      this.festivalTributeTicks += 1;
+      this.spawnFestivalAdds(2 + Math.min(3, this.festivalTributeTicks));
+      this.nextFestivalPressureAt += 18;
+    } else if (this.festivalMode === 'wave-defense') {
+      this.spawnFestivalAdds(3);
+      this.nextFestivalPressureAt += 16;
+    } else if (this.festivalMode === 'damage-race') {
+      this.boss.externalMods.damagePct = (this.boss.externalMods.damagePct ?? 0) + 8;
+      this.boss.markStatsDirty();
+      this.boss.refresh(this.sim.time);
+      this.festivalTributeTicks += 1;
+      this.nextFestivalPressureAt += 15;
+    }
+  }
+
+  private spawnFestivalAdds(count: number): void {
+    const spec = this.def.addWaves[0]?.summon;
+    if (!spec) return;
+    for (let i = 0; i < count; i++) {
+      const ang = (i / Math.max(1, count)) * Math.PI * 2 + this.festivalWavesSpawned * 0.37;
+      const pos = { x: this.boss.pos.x + Math.cos(ang) * 190, y: this.boss.pos.y + Math.sin(ang) * 190 };
+      this.sim.spawnSummon(spec, this.boss, pos, this.festivalCtx);
+    }
+    this.festivalWavesSpawned += 1;
   }
 
   private handleFallen(): void {

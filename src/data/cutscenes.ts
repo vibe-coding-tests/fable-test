@@ -1,4 +1,5 @@
 import type { CutsceneBeat, CutsceneDef, RegionDef } from '../core/types';
+import { compileCutsceneDsl } from '../engine/cutscene-dsl';
 import { ALL_GYMS } from './gyms';
 import { ALL_RAIDS } from './raids';
 import { ELITE_DRAFT } from './drafts';
@@ -18,8 +19,6 @@ export const OUTWORLD_CLAIMANT_RAID_IDS = [
   'lord-of-hatred',
   'forsaken-queen'
 ];
-
-const stingerShot = { angle: 'title-card', move: 'hold', palette: 'biome grade', mood: 'revealing' } as const;
 
 const ACT_BREAKS: Record<string, { title: string; line: string; palette: string; mood: string }> = {
   'lunar-badge': {
@@ -54,6 +53,103 @@ const RAID_GRADES: Record<string, { palette: string; mood: string; reveal: strin
   'last-eldwurm': { palette: 'dragonfire under moon', mood: 'home-world refusal', reveal: 'One wing, old burns, and a dragon that belongs to this falling moon.', vfx: '#ff7a2c' },
   'lich-king': { palette: 'frost crown', mood: 'summit throne', reveal: 'The summit reveals a throne made from everyone who climbed first.', vfx: '#d8f4ff' },
   'roshan-pit': { palette: 'pit gold', mood: 'immortal bargain', reveal: 'The Pit is empty only until Roshan decides otherwise.', vfx: '#ffd86a' }
+};
+
+const ARRIVAL_DIRECTING: Record<string, { opener: string; reveal: string; palette: string; mood: string; vfx: string }> = {
+  'tranquil-vale': {
+    opener: 'Golden grass bends around a half-buried shard before the first road appears.',
+    reveal: 'Dawnshade waits beyond the Radiant shelf, quiet enough to hear the Moon-stone hum.',
+    palette: 'warm Radiant gold',
+    mood: 'first memory',
+    vfx: '#ffd86a'
+  },
+  'nightsilver-woods': {
+    opener: 'Moonlight catches in leaves that refuse to cast ordinary shadows.',
+    reveal: 'The cult paths open under Selemene, but the broken Mad Moon answers from below.',
+    palette: 'silver moonblue',
+    mood: 'omen read',
+    vfx: '#9ed8ff'
+  },
+  icewrack: {
+    opener: 'A bell-note crosses the glacier before any enemy shows itself.',
+    reveal: 'The Blueheart cliffs answer with tighter rings, proof that the Loop is accelerating.',
+    palette: 'cryo white-blue',
+    mood: 'tightening',
+    vfx: '#d8f4ff'
+  },
+  'devarshi-desert': {
+    opener: 'Star-metal glints under dunes shaped like a kingdom already buried once.',
+    reveal: 'The Burrow road rises from sand that remembers losing this war before.',
+    palette: 'sepia star-gold',
+    mood: 'old ruin',
+    vfx: '#f4c06a'
+  },
+  shadeshore: {
+    opener: 'Black surf drags wreck-bells across the reef line.',
+    reveal: 'Every captain and leviathan feud here is an old fight wearing new bodies.',
+    palette: 'drowned teal',
+    mood: 'salt feud',
+    vfx: '#7fd0d8'
+  },
+  'vile-reaches': {
+    opener: 'Rot engines vent into a sky thin enough for outsiders to hear.',
+    reveal: 'The fifth road smells like bone-fire and the first real tear in the seal.',
+    palette: 'rot red-green',
+    mood: 'seal thinning',
+    vfx: '#9ad66a'
+  },
+  quoidge: {
+    opener: 'Towers dispute in violet light while scholars chalk circles around fallen stones.',
+    reveal: 'Quoidge names the truth: Ancient falls, time resets, and Avaryn already chose.',
+    palette: 'arcane violet',
+    mood: 'truth named',
+    vfx: '#b88cff'
+  },
+  'hidden-wood': {
+    opener: 'The canopy closes over a world older than banners.',
+    reveal: 'Neutral camps stir like witnesses from before heroes learned to call the war theirs.',
+    palette: 'old green',
+    mood: 'pre-war wild',
+    vfx: '#88d878'
+  },
+  'mount-joerlak': {
+    opener: 'Horn-calls climb the highland before the cliffs answer in bronze.',
+    reveal: 'The Fundamentals still ask whether every broken thing deserves to be made whole.',
+    palette: 'titan bronze',
+    mood: 'first forces',
+    vfx: '#caa36a'
+  },
+  'mad-moon-crater': {
+    opener: 'The crater opens without horizon: Roshan below, Tower above, shards everywhere.',
+    reveal: 'Every road has led to the place where the Loop waits for an answer.',
+    palette: 'crater cold ember',
+    mood: 'final question',
+    vfx: '#d8f4ff'
+  }
+};
+
+const RAID_PHASE_DIRECTING: Record<string, { title: string; line: string; palette: string; mood: string; vfx: string }> = {
+  'roshan-pit': { title: 'The Pit Closes', line: 'Roshan plants one hand in the stone. The bargain is no longer patient.', palette: 'pit gold', mood: 'immortal anger', vfx: '#ffd86a' },
+  'lord-of-terror': { title: 'The Rift Looks Back', line: 'The abyss stops waiting below the floor and starts climbing through it.', palette: 'hell-rift red', mood: 'terror rising', vfx: '#ff4c2f' },
+  'lich-king': { title: 'The Summit Freezes Shut', line: 'Every frozen name on the glacier turns its face toward the fight.', palette: 'frost crown', mood: 'dead summit', vfx: '#d8f4ff' },
+  'queen-of-blades': { title: 'The Web Wakes', line: 'The crater-web tightens, and every child in it learns your pulse.', palette: 'fallen-star purple', mood: 'swarm closing', vfx: '#d882ff' },
+  'renegade-marshal': { title: 'The Marshal Reloads', line: 'The wreck behind him answers like a firing line.', palette: 'gunmetal voidlight', mood: 'last shot loaded', vfx: '#8fb7ff' },
+  'forsaken-queen': { title: 'Mercy Stays Dead', line: 'The arrow in the air does not thaw. Neither does the Queen.', palette: 'banshee frost', mood: 'mercy gone', vfx: '#9ed8ff' },
+  'sundered-betrayer': { title: 'The Eclipse Answers', line: 'The fel eclipse turns, and the shadow you cast chooses his side.', palette: 'fel eclipse green', mood: 'mirror threat', vfx: '#7dff72' },
+  'prime-evil': { title: 'The Worldstone Burns', line: 'The stone at the world heart flares as if it knows his hand.', palette: 'worldstone ember', mood: 'destruction crowned', vfx: '#ff7a2c' },
+  'lord-of-hatred': { title: 'The Hall Goes Lightless', line: 'Hatred takes the light first, then asks for the rest of you.', palette: 'lightless black', mood: 'name spoken', vfx: '#d62f44' }
+};
+
+const RAID_CLEAR_DIRECTING: Record<string, { speaker: string; line: string; palette: string; vfx: string }> = {
+  'renegade-marshal': { speaker: 'The Renegade Marshal', line: 'The fleet is quiet at last. Even the rifle lowers.', palette: 'gunmetal dawn', vfx: '#8fb7ff' },
+  'void-prelate': { speaker: 'The Void Prelate', line: 'The blade leaves no angle behind. For once, the dark misses.', palette: 'severed violet', vfx: '#7c6bff' },
+  'queen-of-blades': { speaker: 'The Queen of Blades', line: 'The web opens. The children scatter back into the falling-star dust.', palette: 'fallen-star dusk', vfx: '#d882ff' },
+  'lord-of-terror': { speaker: 'The Lord of Terror', line: 'The rift shuts around his name, and the room remembers how to breathe.', palette: 'rift ember', vfx: '#ff4c2f' },
+  'sundered-betrayer': { speaker: 'The Sundered Betrayer', line: 'The eclipse cracks. The mirror-side of the war loses its claim.', palette: 'fel eclipse ash', vfx: '#7dff72' },
+  'prime-evil': { speaker: 'The Lord of Destruction', line: 'The Worldstone keeps its heart. Destruction leaves empty-handed.', palette: 'worldstone quiet', vfx: '#ff7a2c' },
+  'lord-of-hatred': { speaker: 'The Lord of Hatred', line: 'The hall takes back its light one breath at a time.', palette: 'light returning', vfx: '#d62f44' },
+  'forsaken-queen': { speaker: 'The Forsaken Queen', line: 'The last arrow falls cold and harmless into the snow.', palette: 'banshee thaw', vfx: '#9ed8ff' },
+  'last-eldwurm': { speaker: 'The Last Eldwurm', line: 'The ember folds low. The home-world answer has been heard.', palette: 'dragonfire dusk', vfx: '#ff7a2c' }
 };
 
 const PROLOGUE: CutsceneDef = {
@@ -168,21 +264,41 @@ const BIND_STINGER: CutsceneDef = {
 };
 
 function arrival(region: RegionDef): CutsceneDef {
+  const directing = ARRIVAL_DIRECTING[region.id] ?? {
+    opener: region.lore.split('.')[0] + '.',
+    reveal: region.lore,
+    palette: `${region.biome} grade`,
+    mood: 'establishing',
+    vfx: '#ffd86a'
+  };
+  const setpiece = region.id === 'mad-moon-crater';
   return {
     id: region.arrivalBeat ?? `arrival-${region.id}`,
     title: region.name,
-    tier: region.id === 'mad-moon-crater' ? 'setpiece' : 'stinger',
+    tier: setpiece ? 'setpiece' : 'stinger',
     trigger: { kind: 'region-arrival', regionId: region.id },
     skippable: true,
-    letterbox: region.id === 'mad-moon-crater',
+    letterbox: setpiece,
     category: 'Regions',
     replayable: true,
     beats: [
       {
-        shot: { ...stingerShot, palette: `${region.biome} grade` },
-        stage: [{ kind: 'title', text: region.name }],
+        shot: { angle: setpiece ? 'wide' : 'high', move: setpiece ? 'crane' : 'pull-back', palette: directing.palette, mood: directing.mood },
+        stage: [
+          { kind: 'describe-environment', text: directing.opener },
+          { kind: 'vfx', archetype: setpiece ? 'dome' : 'global-mark', color: directing.vfx }
+        ],
+        line: { speaker: region.name, text: directing.opener },
+        hold: setpiece ? 3.8 : 2.6
+      },
+      {
+        shot: { angle: setpiece ? 'low' : 'wide', move: 'push-in', palette: directing.palette, mood: 'act beat' },
+        stage: [
+          { kind: 'focus', target: region.id === 'mad-moon-crater' ? 'tower' : 'region' },
+          { kind: 'reveal-mystery', text: directing.reveal, target: region.id === 'mad-moon-crater' ? 'tower' : 'region' }
+        ],
         line: { speaker: region.name, text: region.lore },
-        hold: region.id === 'mad-moon-crater' ? 5 : 3.4
+        hold: setpiece ? 4.6 : 3.2
       }
     ]
   };
@@ -228,45 +344,122 @@ function badge(gym: (typeof ALL_GYMS)[number]): CutsceneDef {
   };
 }
 
+function dslQuote(s: string): string {
+  return s.replace(/"/g, "'");
+}
+
+function resolveCutsceneRef(ref: string): string {
+  const dialogue = ref.match(/^([a-z0-9-]+)\.dialogue\[(\d+)\]$/i);
+  if (dialogue) {
+    const raid = ALL_RAIDS.find((r) => r.id === dialogue[1]);
+    if (raid) return raid.dialogue[Number(dialogue[2])] ?? '';
+  }
+  throw new Error(`cutscene ref not found: ${ref}`);
+}
+
 function raidIntro(raid: (typeof ALL_RAIDS)[number]): CutsceneDef {
   const grade = RAID_GRADES[raid.id] ?? { palette: 'raid shadow', mood: 'withheld', reveal: raid.location, vfx: '#ffd86a' };
-  return {
+  const def = compileCutsceneDsl(`
+    BEAT {
+      SHOT: wide/crane/${dslQuote(grade.palette)}/withheld
+      STAGE: {DescribeEnvironment(location="${dslQuote(raid.location)}", target="region")}
+      STAGE: {RevealMystery(mystery="${dslQuote(grade.reveal)}", target="region")}
+      LINE: ${raid.location} : "${dslQuote(grade.reveal)}"
+      HOLD: 2.6
+    }
+    BEAT {
+      SHOT: through-objects/rack-focus/${dslQuote(grade.palette)}/${dslQuote(grade.mood)}
+      STAGE: {DevelopCharacter(target="boss", text="${dslQuote(`${raid.name} steps through the wrong-world grade.`)}", gesture="toggle-stance")}
+      LINE: ${raid.name} : "ref:${raid.id}.dialogue[0]"
+      HOLD: 3.1
+    }
+    BEAT {
+      SHOT: low/push-in/${dslQuote(grade.palette)}/claim named
+      STAGE: {IntroduceConflict(conflict="${dslQuote(raid.title)}", target="boss")}
+      STAGE: {RevealMystery(mystery="${dslQuote(raid.title)}", target="boss")}
+      LINE: ${raid.name} : "ref:${raid.id}.dialogue[1]"
+      HOLD: 3.2
+      SOUND: raid-clear
+    }
+  `, {
     id: `raid-intro-${raid.id}`,
     title: raid.name,
     tier: 'setpiece',
     trigger: { kind: 'raid-intro', raidId: raid.id },
-    skippable: true,
-    letterbox: true,
     category: 'Raids',
     replayable: true,
+    resolveRef: resolveCutsceneRef
+  });
+  return {
+    ...def,
+    letterbox: true,
+    music: 'duck',
+    beats: def.beats.map((beat, idx) => idx === 2
+      ? { ...beat, stage: [...(beat.stage ?? []), { kind: 'vfx', archetype: 'global-mark', color: grade.vfx }] }
+      : beat)
+  };
+}
+
+function raidPhase(raid: (typeof ALL_RAIDS)[number]): CutsceneDef {
+  const grade = RAID_GRADES[raid.id] ?? { palette: 'raid shadow', mood: 'withheld', reveal: raid.location, vfx: '#ffd86a' };
+  const directing = RAID_PHASE_DIRECTING[raid.id] ?? {
+    title: `${raid.name} Breaks`,
+    line: raid.dialogue[1] ?? 'The fight crosses a line, and the boss commits.',
+    palette: grade.palette,
+    mood: grade.mood,
+    vfx: grade.vfx
+  };
+  return {
+    id: `raid-phase-${raid.id}`,
+    title: directing.title,
+    tier: 'stinger',
+    trigger: { kind: 'boss-phase', bossHeroId: raid.boss.heroId },
+    skippable: true,
+    letterbox: false,
+    category: 'Bosses',
+    replayable: false,
     beats: [
       {
-        shot: { angle: 'wide', move: 'crane', palette: grade.palette, mood: 'withheld' },
+        shot: { angle: 'low', move: 'push-in', palette: directing.palette, mood: directing.mood },
         stage: [
-          { kind: 'describe-environment', text: raid.location },
-          { kind: 'reveal-mystery', text: grade.reveal, target: 'region' }
+          { kind: 'gesture', target: 'boss', gesture: 'ground-slam' },
+          { kind: 'vfx', archetype: 'global-mark', color: directing.vfx }
         ],
-        line: { speaker: raid.location, text: grade.reveal },
-        hold: 2.6
-      },
+        line: { speaker: raid.name, text: directing.line },
+        sound: 'levelup',
+        hold: 2.1
+      }
+    ]
+  };
+}
+
+function raidClear(raid: (typeof ALL_RAIDS)[number]): CutsceneDef {
+  const grade = RAID_GRADES[raid.id] ?? { palette: 'loot gold', mood: 'claimed', reveal: raid.location, vfx: '#ffd86a' };
+  const directing = RAID_CLEAR_DIRECTING[raid.id] ?? {
+    speaker: raid.name,
+    line: `${raid.name} falls. The floor answers with proof.`,
+    palette: grade.palette,
+    vfx: grade.vfx
+  };
+  return {
+    id: `raid-clear-${raid.id}`,
+    title: `${raid.name} Falls`,
+    tier: 'stinger',
+    trigger: { kind: 'raid-clear', raidId: raid.id },
+    skippable: true,
+    letterbox: false,
+    category: 'Raids',
+    replayable: false,
+    beats: [
       {
-        shot: { angle: 'through-objects', move: 'rack-focus', palette: grade.palette, mood: grade.mood },
+        shot: { angle: 'wide', move: 'pull-back', palette: directing.palette, mood: 'claim broken' },
         stage: [
           { kind: 'focus', target: 'boss' },
-          { kind: 'develop-character', target: 'boss', text: `${raid.name} steps through the wrong-world grade.`, gesture: 'toggle-stance' }
+          { kind: 'vfx', archetype: 'ground-aoe', color: directing.vfx }
         ],
-        line: { speaker: raid.name, text: raid.dialogue[0] ?? raid.title },
-        hold: 3.1
-      },
-      {
-        shot: { angle: 'low', move: 'push-in', palette: grade.palette, mood: 'claim named' },
-        stage: [
-          { kind: 'introduce-conflict', text: 'The claimant names the Ancient as the prize.', target: 'tower' },
-          { kind: 'vfx', archetype: 'global-mark', color: grade.vfx }
-        ],
-        line: { speaker: raid.name, text: raid.dialogue[1] ?? raid.title },
+        line: { speaker: directing.speaker, text: directing.line },
         sound: 'raid-clear',
-        hold: 3.2
+        hold: 2.8
       }
     ]
   };
@@ -956,6 +1149,8 @@ export const ALL_CUTSCENES: CutsceneDef[] = [
   ...REGIONS.map(arrival),
   ...ALL_GYMS.map(badge),
   ...ALL_RAIDS.map(raidIntro),
+  ...ALL_RAIDS.map(raidPhase),
+  ...ALL_RAIDS.map(raidClear),
   RAID_CLEAR,
   BOSS_CLEAR,
   BOSS_PHASE_STINGER,

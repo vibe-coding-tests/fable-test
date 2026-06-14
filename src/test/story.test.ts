@@ -173,7 +173,7 @@ describe('STORY §6.6 boss phase detector', () => {
     const det = new StoryDetector();
     det.beginEncounter();
     const first = det.observe([], { sim, nowSec: 1, playerTeam: 0, raidId: 'last-eldwurm', bossHeroId: 'dragon-knight' });
-    expect(first).toContainEqual({ kind: 'boss-phase', bossHeroId: 'dragon-knight', marqueeRaidId: 'last-eldwurm' });
+    expect(first).toContainEqual({ kind: 'boss-phase', bossHeroId: 'dragon-knight', raidId: 'last-eldwurm' });
     expect(det.observe([], { sim, nowSec: 2, playerTeam: 0, raidId: 'last-eldwurm', bossHeroId: 'dragon-knight' })).toHaveLength(0);
   });
 
@@ -182,7 +182,7 @@ describe('STORY §6.6 boss phase detector', () => {
     const det = new StoryDetector();
     det.beginEncounter();
     const out = det.observe([], { sim: fakeSim([boss]), nowSec: 1, playerTeam: 0, raidId: 'roshan-pit', bossHeroId: 'sven' });
-    expect(out).toContainEqual({ kind: 'boss-phase', bossHeroId: 'sven', marqueeRaidId: undefined });
+    expect(out).toContainEqual({ kind: 'boss-phase', bossHeroId: 'sven', raidId: 'roshan-pit' });
   });
 });
 
@@ -438,6 +438,19 @@ describe('STORY gallery, titles & content', () => {
     expect(g.gold).toBe(goldBefore);
   });
 
+  it('runs flagship raid-backed festival mechanics as live pressure, not just copy', () => {
+    const g = fullPartyGame('mad-moon-crater');
+    expect(g.festivalLaunchable('diretide-roshan-candy')).toBe(true);
+    expect(g.runSeasonalEvent('diretide-roshan-candy')).toBe(true);
+    expect(g.liveRaid?.festivalObjective()?.mode).toBe('roshan-candy');
+
+    g.liveRaid!.step(20);
+    const objective = g.liveRaid!.festivalObjective();
+    expect(objective?.tributeTicks).toBeGreaterThan(0);
+    expect(objective?.wavesSpawned).toBeGreaterThan(0);
+    expect(g.liveRaid!.sim.unitsArr.some((u) => u.kind === 'summon' && u.team === 1)).toBe(true);
+  });
+
   it('starts a dungeon-backed festival in its target region with event modifiers', () => {
     const g = fullPartyGame('vile-reaches');
     expect(g.festivalLaunchable('crowns-fall')).toBe(true);
@@ -459,6 +472,54 @@ describe('STORY gallery, titles & content', () => {
     expect(raid.dialogue.length).toBeGreaterThanOrEqual(2);
     expect(REG.quests.has(raid.unlockQuest)).toBe(true);
     expect(REG.cutscenes.has('raid-intro-sundered-betrayer')).toBe(true);
+  });
+
+  it('upgrades region arrivals from caption cards into directed two-beat establishes', () => {
+    const icewrack = REG.cutscene('arrival-icewrack');
+    expect(icewrack.beats.length).toBeGreaterThanOrEqual(2);
+    expect(icewrack.beats[0].stage?.some((s) => s.kind === 'describe-environment')).toBe(true);
+    expect(icewrack.beats[1].stage?.some((s) => s.kind === 'reveal-mystery')).toBe(true);
+
+    const crater = REG.cutscene('arrival-mad-moon-crater');
+    expect(crater.tier).toBe('setpiece');
+    expect(crater.beats[1].stage).toContainEqual({ kind: 'focus', target: 'tower' });
+  });
+
+  it('authors production raid intros through ref-resolved dialogue and registers directed clear/phase beats', () => {
+    const intro = REG.cutscene('raid-intro-last-eldwurm');
+    expect(intro.music).toBe('duck');
+    expect(intro.beats[1].line?.text).toBe(REG.raid('last-eldwurm').dialogue[0]);
+    expect(intro.beats[2].line?.text).toBe(REG.raid('last-eldwurm').dialogue[1]);
+
+    const phase = REG.cutscene('raid-phase-renegade-marshal');
+    expect(phase.beats[0].line?.text).toContain('wreck');
+    const clear = REG.cutscene('raid-clear-renegade-marshal');
+    expect(clear.beats[0].line?.text).toContain('fleet');
+  });
+
+  it('stages owned-Echo story only for the first facet unlock, not surplus/repeat kills', () => {
+    const g = freshGame();
+    while (g.cinematic.active) g.cinematicSkip();
+
+    expect(g.unlockOwnedHeroEcho('juggernaut')).toBe(true);
+    expect(g.cinematic.view()?.id).toBe('echo-milestone-stinger');
+    while (g.cinematic.active) g.cinematicSkip();
+
+    expect(g.unlockOwnedHeroEcho('juggernaut')).toBe(true);
+    expect(g.cinematic.active).toBe(false);
+  });
+
+  it('degrades repeated Elite persona openings to barks instead of replaying the stinger', () => {
+    const g = freshGame();
+    while (g.cinematic.active) g.cinematicSkip();
+    g.eliteFive.defeated = 1;
+    g.journalSeen.add('cinematic:elite-persona-1');
+    const before = g.toasts.length;
+    const team = ['juggernaut', 'axe', 'sven', 'sniper', 'crystal-maiden'].map((heroId) => ({ heroId, level: 80, items: ['heart-of-tarrasque', 'divine-rapier'] }));
+    g.runEliteMatch({ seed: 1, playerTeam: team });
+    expect(g.cinematic.active).toBe(false);
+    expect(g.toasts.length).toBeGreaterThan(before);
+    expect(g.toasts.some((t) => t.kind === 'bark')).toBe(true);
   });
 });
 
