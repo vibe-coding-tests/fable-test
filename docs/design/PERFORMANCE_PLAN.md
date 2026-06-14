@@ -8,11 +8,10 @@ grows.
 
 Companions:
 
-- `OPTIMIZATION.md` and `OPTIMIZATION_SPEC.md` cover the earlier sim and render
-  hot-path pass.
+- `OPTIMIZATION_SPEC.md` covers the earlier sim and render hot-path pass.
 - `GRAPHICS_SPEC.md` covers the visual target and asset policy.
-- `ASSETS.md` records provenance for every shipped asset.
-- `PROGRESS.md` records measured results once work lands.
+- `../../ASSETS.md` records provenance for every shipped asset.
+- `../../PROGRESS.md` records measured results once work lands.
 
 ## 0. Current Baseline
 

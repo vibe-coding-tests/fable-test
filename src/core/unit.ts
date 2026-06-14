@@ -157,6 +157,7 @@ export class Unit {
   heroId?: string;
   creepId?: string;
   star: 1 | 2 | 3 = 1;
+  elite = false;             // rare gold-bordered camp variant (ITEM_REHAUL §10.3)
   ownerUid?: number;         // summons / entourage
   lifetimeUntil?: number;    // summons
   capturable = false;

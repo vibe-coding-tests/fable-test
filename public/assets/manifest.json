@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "hash": "3ffb2caf92af",
-  "generatedAt": "2026-06-14T05:44:59.201Z",
+  "hash": "68c3f6e320f8",
+  "generatedAt": "2026-06-14T05:54:38.199Z",
   "assetRoot": "/assets/",
-  "totalBytes": 126937704,
+  "totalBytes": 127312792,
   "groups": {
     "audio": {
       "count": 10,
@@ -22,8 +22,8 @@
       "bytes": 113019372
     },
     "holdout": {
-      "count": 11,
-      "bytes": 286892
+      "count": 22,
+      "bytes": 658004
     },
     "terrain": {
       "count": 27,
@@ -34,8 +34,8 @@
       "bytes": 822752
     },
     "ui": {
-      "count": 2,
-      "bytes": 29312
+      "count": 6,
+      "bytes": 33288
     },
     "vfx": {
       "count": 2,
@@ -1278,6 +1278,116 @@
       "source": null
     },
     {
+      "path": "holdouts/replacements/ancient-apparition.glb",
+      "url": "/assets/holdouts/replacements/ancient-apparition.glb",
+      "bytes": 35856,
+      "type": "model",
+      "group": "holdout",
+      "preloadGroup": "holdout",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "holdouts/replacements/bane.glb",
+      "url": "/assets/holdouts/replacements/bane.glb",
+      "bytes": 34500,
+      "type": "model",
+      "group": "holdout",
+      "preloadGroup": "holdout",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "holdouts/replacements/batrider.glb",
+      "url": "/assets/holdouts/replacements/batrider.glb",
+      "bytes": 26968,
+      "type": "model",
+      "group": "holdout",
+      "preloadGroup": "holdout",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "holdouts/replacements/enigma.glb",
+      "url": "/assets/holdouts/replacements/enigma.glb",
+      "bytes": 42140,
+      "type": "model",
+      "group": "holdout",
+      "preloadGroup": "holdout",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "holdouts/replacements/io.glb",
+      "url": "/assets/holdouts/replacements/io.glb",
+      "bytes": 36300,
+      "type": "model",
+      "group": "holdout",
+      "preloadGroup": "holdout",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "holdouts/replacements/leshrac.glb",
+      "url": "/assets/holdouts/replacements/leshrac.glb",
+      "bytes": 32412,
+      "type": "model",
+      "group": "holdout",
+      "preloadGroup": "holdout",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "holdouts/replacements/lone-druid.glb",
+      "url": "/assets/holdouts/replacements/lone-druid.glb",
+      "bytes": 27952,
+      "type": "model",
+      "group": "holdout",
+      "preloadGroup": "holdout",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "holdouts/replacements/medusa.glb",
+      "url": "/assets/holdouts/replacements/medusa.glb",
+      "bytes": 45348,
+      "type": "model",
+      "group": "holdout",
+      "preloadGroup": "holdout",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "holdouts/replacements/morphling.glb",
+      "url": "/assets/holdouts/replacements/morphling.glb",
+      "bytes": 27396,
+      "type": "model",
+      "group": "holdout",
+      "preloadGroup": "holdout",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "holdouts/replacements/naga-siren.glb",
+      "url": "/assets/holdouts/replacements/naga-siren.glb",
+      "bytes": 32144,
+      "type": "model",
+      "group": "holdout",
+      "preloadGroup": "holdout",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "holdouts/replacements/phoenix.glb",
+      "url": "/assets/holdouts/replacements/phoenix.glb",
+      "bytes": 30096,
+      "type": "model",
+      "group": "holdout",
+      "preloadGroup": "holdout",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
       "path": "props/foliage/bush.glb",
       "url": "/assets/props/foliage/bush.glb",
       "bytes": 49064,
@@ -1652,6 +1762,46 @@
       "url": "/assets/ui/fonts/cinzel-700.woff2",
       "bytes": 15184,
       "type": "font",
+      "group": "ui",
+      "preloadGroup": "ui",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "ui/frames/carved-frame.svg",
+      "url": "/assets/ui/frames/carved-frame.svg",
+      "bytes": 1145,
+      "type": "svg",
+      "group": "ui",
+      "preloadGroup": "ui",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "ui/frames/gem-slot.svg",
+      "url": "/assets/ui/frames/gem-slot.svg",
+      "bytes": 971,
+      "type": "svg",
+      "group": "ui",
+      "preloadGroup": "ui",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "ui/frames/parchment-panel.svg",
+      "url": "/assets/ui/frames/parchment-panel.svg",
+      "bytes": 1036,
+      "type": "svg",
+      "group": "ui",
+      "preloadGroup": "ui",
+      "sourceSpec": null,
+      "source": null
+    },
+    {
+      "path": "ui/frames/portrait-frame.svg",
+      "url": "/assets/ui/frames/portrait-frame.svg",
+      "bytes": 824,
+      "type": "svg",
       "group": "ui",
       "preloadGroup": "ui",
       "sourceSpec": null,

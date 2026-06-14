@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+
+  <defs>
+    <radialGradient id="paper" cx=".45" cy=".35" r=".85">
+      <stop offset="0" stop-color="#3b3327"/>
+      <stop offset=".55" stop-color="#211c18"/>
+      <stop offset="1" stop-color="#0f1015"/>
+    </radialGradient>
+    <filter id="grain">
+      <feTurbulence type="fractalNoise" baseFrequency=".9" numOctaves="2" seed="17"/>
+      <feColorMatrix type="saturate" values="0"/>
+      <feComponentTransfer>
+        <feFuncA type="table" tableValues="0 .18"/>
+      </feComponentTransfer>
+    </filter>
+  </defs>
+  <rect width="128" height="128" rx="14" fill="url(#paper)"/>
+  <rect x="6" y="6" width="116" height="116" rx="10" fill="none" stroke="#d4ad60" stroke-opacity=".18" stroke-width="2"/>
+  <path d="M14 22c24-8 41 6 62-3 13-5 25-4 38 1M14 104c26 7 39-5 61 3 14 5 25 4 39-1" stroke="#efd48a" stroke-opacity=".08" stroke-width="3" fill="none"/>
+  <rect width="128" height="128" rx="14" filter="url(#grain)" opacity=".32"/>
+
+</svg>

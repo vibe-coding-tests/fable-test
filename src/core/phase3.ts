@@ -42,6 +42,8 @@ export interface ItemDropRoll {
 export interface ItemDropRollOptions {
   source?: DropSource | GradeFloorSource;
   gradeFloorBump?: number;
+  /** Hell + full badges/raids opens the T5 "ancient" affix tier (ITEM_REHAUL §14). */
+  endgameUnlocked?: boolean;
 }
 
 const QUALITY_ORDER: ItemQuality[] = ['unusual', 'corrupted', 'frozen', 'genuine', 'inscribed', 'standard'];
@@ -118,7 +120,7 @@ function bumpGradeFloor(floor: ItemGrade, bump = 0): ItemGrade {
   return ITEM_GRADES[Math.min(ITEM_GRADES.length - 1, idx + Math.floor(bump))];
 }
 
-export function instantiateDroppedItem(id: string, tier: DifficultyTier, rng: Rng, quality?: ItemQuality, source?: DropSource | GradeFloorSource, gradeFloorBump = 0): ItemSave {
+export function instantiateDroppedItem(id: string, tier: DifficultyTier, rng: Rng, quality?: ItemQuality, source?: DropSource | GradeFloorSource, gradeFloorBump = 0, endgameUnlocked = false): ItemSave {
   const item: ItemSave = { id };
   if (quality) item.quality = quality;
   if (!itemSupportsRolledIdentity(id)) return item;
@@ -127,7 +129,7 @@ export function instantiateDroppedItem(id: string, tier: DifficultyTier, rng: Rn
   const floor = bumpGradeFloor(gradeFloor(def, { difficulty: tier, source: gradeSourceForDrop(source) }), gradeFloorBump);
   const grade = rollGrade(floor, rng.next());
   const gradeRoll = rng.next();
-  const affixes = rollAffixesFor(def, grade, tier, rng);
+  const affixes = rollAffixesFor(def, grade, tier, rng, endgameUnlocked);
   const sockets = socketsForDrop(grade, def.socketCap ?? 0, rng.next());
   return refreshResolvedMods({ ...item, grade, gradeRoll, affixes, sockets }, def);
 }
@@ -164,7 +166,7 @@ export function lootTableToDropTable(table: LootTable, source?: DropSource): Ite
 }
 
 export function rollItemDrops(table: ItemDropTable, tier: DifficultyTier, dryStreaks: Record<string, number>, rng: Rng, band?: LootBand, opts: ItemDropRollOptions = {}): ItemDropRoll {
-  const items: ItemSave[] = table.guaranteed.map((id) => instantiateDroppedItem(id, tier, rng, undefined, opts.source, opts.gradeFloorBump));
+  const items: ItemSave[] = table.guaranteed.map((id) => instantiateDroppedItem(id, tier, rng, undefined, opts.source, opts.gradeFloorBump, opts.endgameUnlocked));
   const nextDry = { ...dryStreaks };
   let pityUsed = false;
 
@@ -181,7 +183,7 @@ export function rollItemDrops(table: ItemDropTable, tier: DifficultyTier, dryStr
       }
       const entry = pickDropEntry(slot, rng, band);
       const quality = rollQuality(entry, slot, tier, rng);
-      items.push(instantiateDroppedItem(entry.id, tier, rng, quality, slot.source ?? opts.source, opts.gradeFloorBump));
+      items.push(instantiateDroppedItem(entry.id, tier, rng, quality, slot.source ?? opts.source, opts.gradeFloorBump, opts.endgameUnlocked));
       dry = 0;
       pityUsed = pityUsed || pity;
     }
@@ -191,8 +193,8 @@ export function rollItemDrops(table: ItemDropTable, tier: DifficultyTier, dryStr
   return { items, dryStreaks: nextDry, pityUsed };
 }
 
-export function rollLoot(table: LootTable, tier: DifficultyTier, dryStreak: number, seed: number, band?: LootBand, source?: DropSource, opts: { gradeFloorBump?: number } = {}): LootRoll {
-  const roll = rollItemDrops(lootTableToDropTable(table, source), tier, { assembled: dryStreak }, new Rng(seed), band, { source, gradeFloorBump: opts.gradeFloorBump });
+export function rollLoot(table: LootTable, tier: DifficultyTier, dryStreak: number, seed: number, band?: LootBand, source?: DropSource, opts: { gradeFloorBump?: number; endgameUnlocked?: boolean } = {}): LootRoll {
+  const roll = rollItemDrops(lootTableToDropTable(table, source), tier, { assembled: dryStreak }, new Rng(seed), band, { source, gradeFloorBump: opts.gradeFloorBump, endgameUnlocked: opts.endgameUnlocked });
   const guaranteed = roll.items.slice(0, table.guaranteed.length);
   const assembled = roll.items[table.guaranteed.length];
   return {

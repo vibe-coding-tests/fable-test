@@ -19,6 +19,7 @@
     "typecheck": "tsc --noEmit",
     "generate:hero-weapons": "node scripts/assets/generate_hero_weapons.mjs",
     "generate:holdout-signatures": "node scripts/assets/generate_holdout_signatures.mjs",
+    "generate:ui-assets": "node scripts/assets/generate_ui_assets.mjs",
     "generate:vfx-ramp": "node scripts/assets/generate_vfx_ramp.mjs",
     "build:assets": "node scripts/assets/build_assets.mjs",
     "assets:manifest": "node scripts/assets/build_assets.mjs --manifest --report",

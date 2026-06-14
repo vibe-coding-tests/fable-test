@@ -1392,11 +1392,13 @@ export class Game {
     if (!loud) return;
     const signature = items.some((it) => hasSignatureAffix(it));
     // The biggest drops (a signature or a Pristine copy) get a brief slow-motion
-    // micro-pause, the Diablo-unique / Borderlands-legendary beat (ITEM_REHAUL §13.2).
-    if (signature || items.some((it) => it.grade === 'pristine')) {
+    // micro-pause plus a dedicated stinger, the Diablo-unique / Borderlands-legendary
+    // beat (ITEM_REHAUL §13.2). Lesser-but-still-loud drops get the standard cue.
+    const peak = signature || items.some((it) => it.grade === 'pristine');
+    if (peak) {
       this.lootSlowmoUntil = this.realClock + TUNING.loot.signatureSlowmoSec;
     }
-    this.playPresentationStinger('loot');
+    this.playPresentationStinger(peak ? 'loot-signature' : 'loot');
     this.emitPresentationEvent({
       t: 'loot-drop',
       pos: this.activeUnit()?.pos ?? this.region.town.pos,
@@ -1568,7 +1570,8 @@ export class Game {
         new Rng(stableContentSeed(`chest:${chest.id}:${itemId}`, idx)),
         undefined,
         source,
-        this.regionalGradeFloorBump()
+        this.regionalGradeFloorBump(),
+        this.endgameAffixUnlocked()
       );
     });
     const drops = chestItems.length > 0 ? this.addDroppedItems(chestItems) : [];
@@ -1794,6 +1797,16 @@ export class Game {
     return this.badgeClearedFor(regionId) ? 1 : 0;
   }
 
+  /**
+   * The T5 "ancient" affix/signature tier opens only on Hell once the player has
+   * fully badged out (every gym cleared) or cleared a raid (ITEM_REHAUL §14).
+   */
+  private endgameAffixUnlocked(difficulty: DifficultyTier = creepCombatTier(this.region.id)): boolean {
+    if (difficulty !== 'hell') return false;
+    const fullBadges = REG.gyms.size > 0 && this.badges.size >= REG.gyms.size;
+    return fullBadges || this.totalRaidClears() > 0;
+  }
+
   /** Difficulty tiers currently selectable for a boss (§3.6). */
   bossUnlockedTiers(bossId: string): DifficultyTier[] {
     const boss = REG.boss(bossId);
@@ -1827,7 +1840,7 @@ export class Game {
       return { won: false };
     }
     const dryStreak = this.difficulty[bossId]?.dryClears ?? 0;
-    const loot = rollLoot(boss.loot, tier, dryStreak, bossLootSeed(boss, tier, dryStreak), this.lootBandForRegion(boss.region), 'boss', { gradeFloorBump: this.regionalGradeFloorBump(boss.region) });
+    const loot = rollLoot(boss.loot, tier, dryStreak, bossLootSeed(boss, tier, dryStreak), this.lootBandForRegion(boss.region), 'boss', { gradeFloorBump: this.regionalGradeFloorBump(boss.region), endgameUnlocked: this.endgameAffixUnlocked(tier) });
     const fullLoot = this.spendResinForLoot(TUNING.resin.bossCost);
     if (fullLoot) {
       this.deliverLoot(loot);
@@ -2216,7 +2229,7 @@ export class Game {
       dryStreaks,
       new Rng(stableContentSeed(`${def.id}:room-reward:${tier}:${room.index}${modSalt}`, Math.round(this.playtime))),
       this.lootBandForRegion(def.regionId),
-      { source: reward.kind === 'guardian' ? 'boss' : undefined, gradeFloorBump: this.regionalGradeFloorBump(def.regionId) }
+      { source: reward.kind === 'guardian' ? 'boss' : undefined, gradeFloorBump: this.regionalGradeFloorBump(def.regionId), endgameUnlocked: this.endgameAffixUnlocked(tier) }
     );
     this.dungeonProgress[def.id] = { ...(prev ?? { clears: 0, wipes: 0, bestDepth: 0, bestTier: 'normal' as DifficultyTier }), dryStreaks: roll.dryStreaks };
     if (roll.items.length === 0) return;
@@ -2277,7 +2290,7 @@ export class Game {
       this.msg('Title earned: True Champion — you held the Pit at its hardest.', 'good');
     }
     const dryStreak = this.raidProgress[raidId]?.dryStreak ?? 0;
-    const loot = rollLoot(def.loot, tier, dryStreak, stableContentSeed(`${raidId}:loot:${tier}`, clears), this.currentLootBand(), 'raid', { gradeFloorBump: this.regionalGradeFloorBump() });
+    const loot = rollLoot(def.loot, tier, dryStreak, stableContentSeed(`${raidId}:loot:${tier}`, clears), this.currentLootBand(), 'raid', { gradeFloorBump: this.regionalGradeFloorBump(), endgameUnlocked: this.endgameAffixUnlocked(tier) });
     const next = { ...(this.raidProgress[raidId] ?? { clears: 0, dryStreak: 0 }) };
     next.clears = clears + 1;
     next.dryStreak = loot.dryStreak;
@@ -2775,7 +2788,7 @@ export class Game {
   private rollItemDropsForCreep(creepId: string | undefined, tier: CreepTier, salt: number, difficulty: DifficultyTier = 'normal'): void {
     const table = (creepId ? REG.creep(creepId).drops : undefined) ?? DEFAULT_CREEP_DROP_TABLES[tier];
     const seed = stableContentSeed(`${this.region.id}:creep-drops:${tier}:${difficulty}`, Math.round(this.sim.time * 1000) + salt);
-    const roll = rollItemDrops(table, difficulty, {}, new Rng(seed), this.currentLootBand(), { gradeFloorBump: this.regionalGradeFloorBump() });
+    const roll = rollItemDrops(table, difficulty, {}, new Rng(seed), this.currentLootBand(), { gradeFloorBump: this.regionalGradeFloorBump(), endgameUnlocked: this.endgameAffixUnlocked(difficulty) });
     if (roll.items.length === 0) return;
     this.addDroppedItems(roll.items);
     const names = roll.items.map((it) => REG.item(it.id).name).join(', ');
@@ -2793,7 +2806,7 @@ export class Game {
       .map((item) => item.id);
     const id = this.rollMarketItem(candidates, `elite-creep:${tier}:${salt}`);
     if (!id) return;
-    const item = instantiateDroppedItem(id, difficulty, new Rng(stableContentSeed(`elite-creep-copy:${id}`, salt)), undefined, 'elite', this.regionalGradeFloorBump());
+    const item = instantiateDroppedItem(id, difficulty, new Rng(stableContentSeed(`elite-creep-copy:${id}`, salt)), undefined, 'elite', this.regionalGradeFloorBump(), this.endgameAffixUnlocked(difficulty));
     const drops = this.addDroppedItems([item]);
     if (drops.length > 0) this.msg(`Elite drop: ${REG.item(id).name} (→ Armory)`, 'good', this.dropAccent(drops));
   }
@@ -2885,7 +2898,7 @@ export class Game {
   private rollEchoComponentDrop(heroId: string): ItemSave[] {
     const difficulty = creepCombatTier(this.region.id);
     const seed = stableContentSeed(`${heroId}:echo-drop:${difficulty}`, this.party.find((r) => r.heroId === heroId)?.echo.kills ?? 0);
-    const roll = rollItemDrops(this.echoComponentTable(heroId), difficulty, {}, new Rng(seed), this.currentLootBand(), { gradeFloorBump: this.regionalGradeFloorBump() });
+    const roll = rollItemDrops(this.echoComponentTable(heroId), difficulty, {}, new Rng(seed), this.currentLootBand(), { gradeFloorBump: this.regionalGradeFloorBump(), endgameUnlocked: this.endgameAffixUnlocked(difficulty) });
     if (roll.items.length === 0) return [];
     const drops = this.addDroppedItems(roll.items);
     this.msg(`Echo drop: ${roll.items.map((it) => REG.item(it.id).name).join(', ')} (→ Armory)`, 'good', this.dropAccent(roll.items));
@@ -3317,7 +3330,8 @@ export class Game {
       new Rng(stableContentSeed(`market-copy:${source}:${salt}:${id}`, Math.round(this.playtime))),
       opts.quality,
       source,
-      this.regionalGradeFloorBump()
+      this.regionalGradeFloorBump(),
+      this.endgameAffixUnlocked()
     );
     if (opts.bound) item.bound = true;
     return item;
@@ -3328,7 +3342,7 @@ export class Game {
     const difficulty = creepCombatTier(this.region.id);
     const rng = new Rng(stableContentSeed(`merchant-copy:${this.region.id}:${salt}:${id}:${grade}`, Math.round(this.playtime)));
     const gradeRoll = rng.next();
-    const affixes = rollAffixesFor(def, grade, difficulty, rng);
+    const affixes = rollAffixesFor(def, grade, difficulty, rng, this.endgameAffixUnlocked(difficulty));
     const sockets = socketsForDrop(grade, def.socketCap ?? 0, rng.next());
     return refreshResolvedMods({ id, grade, gradeRoll, affixes, sockets, bound: true }, def);
   }
@@ -3779,7 +3793,7 @@ export class Game {
     this.essence -= quote.essence;
     this.goldSinks.gambleRolls += 1;
     const seed = stableContentSeed(`forge:grade:${target.item.id}:${quote.to}:${this.goldSinks.gambleRolls}`, Math.round(this.playtime));
-    const result = gradeUp(target.item, target.def, new Rng(seed), { deterministic, difficulty: creepCombatTier(this.region.id) });
+    const result = gradeUp(target.item, target.def, new Rng(seed), { deterministic, difficulty: creepCombatTier(this.region.id), endgameUnlocked: this.endgameAffixUnlocked() });
     this.inventoryStash[stashIdx] = result.item;
     this.msg(
       result.changed
@@ -3817,7 +3831,7 @@ export class Game {
     this.essence -= quote.essence;
     this.goldSinks.gambleRolls += 1;
     const seed = stableContentSeed(`forge:reforge:${target.item.id}:${quote.grade}:${this.goldSinks.gambleRolls}`, Math.round(this.playtime));
-    this.inventoryStash[stashIdx] = reforge(target.item, target.def, new Rng(seed), creepCombatTier(this.region.id));
+    this.inventoryStash[stashIdx] = reforge(target.item, target.def, new Rng(seed), creepCombatTier(this.region.id), undefined, this.endgameAffixUnlocked());
     const locked = target.item.imprintedAffixId ? ' (imprint preserved)' : '';
     this.msg(`Reforged ${target.def.name}'s affixes${locked}`, 'good');
     return true;
@@ -3867,7 +3881,7 @@ export class Game {
     const kind = affixDef(affix.affixId).kind;
     const exclude = (target.item.affixes ?? []).map((a, i) => (i === affixIdx ? '' : a.affixId)).filter(Boolean);
     const seed = stableContentSeed(`forge:reroll-affix:${target.item.id}:${affixIdx}:${this.goldSinks.gambleRolls}`, Math.round(this.playtime));
-    const candidate = rollAffixForKind(target.def, kind, target.item.grade ?? 'standard', creepCombatTier(this.region.id), new Rng(seed), exclude);
+    const candidate = rollAffixForKind(target.def, kind, target.item.grade ?? 'standard', creepCombatTier(this.region.id), new Rng(seed), exclude, this.endgameAffixUnlocked());
     if (!candidate) {
       this.msg('No alternative affix could be rolled', 'bad');
       return false;
@@ -4223,7 +4237,10 @@ export class Game {
       const r = camp.radius * 0.55;
       const pos = { x: camp.pos.x + Math.cos(a) * r, y: camp.pos.y + Math.sin(a) * r };
       const eliteSeed = stableContentSeed(`${this.region.id}:elite-creep:${camp.id}:${this.playtime}`, i);
-      const elite = i === 0 && def.tier !== 'small' && Math.abs(eliteSeed % 100) < 35;
+      // Elites are a rare variant of large/ancient camps only (§10.3); the spawn
+      // chance lives in tuning, not a magic number.
+      const eliteChance = (TUNING.eliteSpawnChance as Partial<Record<CreepTier, number>>)[def.tier] ?? 0;
+      const elite = i === 0 && eliteChance > 0 && Math.abs(eliteSeed % 10000) / 10000 < eliteChance;
       const u = this.sim.spawnCreep(def, {
         team: 1,
         pos,
@@ -4233,6 +4250,7 @@ export class Game {
         combatTier: creepCombatTier(this.region.id),
         star: elite ? 2 : 1
       });
+      u.elite = elite;
       if (elite) this.eliteCreepUids.add(u.uid);
       uids.push(u.uid);
     }

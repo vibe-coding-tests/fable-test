@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { applyAuthoredSilhouette, applyHeroLikeness, applyItemAppearances, attachHeroWeaponModel, attachHoldoutSignatureModel, buildUnitRig, heroProportions, modelGeometryCacheSize, mountHeroModel, recolorToPalette } from '../engine/models';
-import { ENABLED_HERO_MODELS, ENABLED_HERO_BASES, ENABLED_HOLDOUT_SIGNATURES, HERO_BASE, heroAssetEntry, heroBaseId, heroBaseUrl, holdoutSignatureUrl, PHASE5_STARTER_ASSETS } from '../engine/assets';
+import { ENABLED_HERO_MODELS, ENABLED_HERO_BASES, ENABLED_HOLDOUT_MODELS, ENABLED_HOLDOUT_SIGNATURES, HERO_BASE, heroAssetEntry, heroBaseId, heroBaseUrl, holdoutReplacementUrl, holdoutSignatureUrl, PHASE5_STARTER_ASSETS } from '../engine/assets';
 import { ALL_HEROES } from '../data/index';
 
 /** A stand-in mounted base: a 2×6×2 box the loader would normally fit + seat. */
@@ -56,11 +56,11 @@ describe('pluggable hero rig (Phase 5)', () => {
     }
     // Creature-cohort heroes mount through shared bases, not per-hero GLB entries.
     expect(heroAssetEntry('broodmother')).toBeNull();
-    expect(heroAssetEntry('io')).toBeNull(); // procedural holdout
+    expect(heroAssetEntry('io')?.modelUrl).toBe('/assets/holdouts/replacements/io.glb');
     expect(heroAssetEntry('unknown-hero')).toBeNull();
     expect(heroAssetEntry(undefined)).toBeNull();
-    // The gate matches exactly the shipped manifest entries.
-    expect(ENABLED_HERO_MODELS.size).toBe(PHASE5_STARTER_ASSETS.length);
+    // The gate matches all dedicated hero-model entries: 80 humanoids + 11 holdout replacements.
+    expect(ENABLED_HERO_MODELS.size).toBe(PHASE5_STARTER_ASSETS.length + ENABLED_HOLDOUT_MODELS.size);
   });
 
   it('mounts an authored model over the procedural body, fitting height + seating feet', () => {
@@ -202,12 +202,21 @@ describe('shared hero bases (WS-A0)', () => {
     }
   });
 
+  it('resolves animated replacement URLs for exactly the procedural holdouts (A7)', () => {
+    expect(ENABLED_HOLDOUT_MODELS.size).toBe(11);
+    expect(holdoutReplacementUrl('io')).toBe('/assets/holdouts/replacements/io.glb');
+    expect(holdoutReplacementUrl('phoenix')).toBe('/assets/holdouts/replacements/phoenix.glb');
+    expect(holdoutReplacementUrl('juggernaut')).toBeNull();
+    expect(holdoutReplacementUrl('broodmother')).toBeNull();
+    expect(holdoutReplacementUrl(undefined)).toBeNull();
+  });
+
   it('ships every generated holdout signature file and tracks them in the manifest', () => {
     const manifest = JSON.parse(readFileSync(path.join(process.cwd(), 'public', 'assets', 'manifest.json'), 'utf8')) as {
       groups?: Record<string, { count: number; bytes: number }>;
       files?: { path: string; group: string; type: string }[];
     };
-    expect(manifest.groups?.holdout?.count).toBe(ENABLED_HOLDOUT_SIGNATURES.size);
+    expect(manifest.groups?.holdout?.count).toBe(ENABLED_HOLDOUT_SIGNATURES.size + ENABLED_HOLDOUT_MODELS.size);
     for (const heroId of ENABLED_HOLDOUT_SIGNATURES) {
       const url = holdoutSignatureUrl(heroId)!;
       const rel = url.replace('/assets/', '');
@@ -217,6 +226,23 @@ describe('shared hero bases (WS-A0)', () => {
       expect(
         manifest.files?.some((entry) => entry.path === rel && entry.group === 'holdout' && entry.type === 'model'),
         `${heroId} manifest entry`
+      ).toBe(true);
+    }
+  });
+
+  it('ships every generated holdout replacement file and tracks them in the manifest', () => {
+    const manifest = JSON.parse(readFileSync(path.join(process.cwd(), 'public', 'assets', 'manifest.json'), 'utf8')) as {
+      files?: { path: string; group: string; type: string }[];
+    };
+    for (const heroId of ENABLED_HOLDOUT_MODELS) {
+      const url = holdoutReplacementUrl(heroId)!;
+      const rel = url.replace('/assets/', '');
+      const file = path.join(process.cwd(), 'public', 'assets', rel);
+      expect(existsSync(file), `${heroId} replacement file`).toBe(true);
+      expect(statSync(file).size, `${heroId} replacement size`).toBeGreaterThan(0);
+      expect(
+        manifest.files?.some((entry) => entry.path === rel && entry.group === 'holdout' && entry.type === 'model'),
+        `${heroId} replacement manifest entry`
       ).toBe(true);
     }
   });

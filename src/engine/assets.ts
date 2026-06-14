@@ -125,27 +125,48 @@ export const PHASE5_STARTER_ASSETS: HeroAssetManifestEntry[] = (() => {
   return out.sort((a, b) => a.heroId.localeCompare(b.heroId));
 })();
 
-/** Heroes whose authored glTF is actually shipped in /public/assets/heroes. */
+/** A7: abstract holdouts now ship generated animated replacement GLBs too. */
+export const HOLDOUT_REPLACEMENT_ASSETS: HeroAssetManifestEntry[] = [...PROCEDURAL_HOLDOUTS]
+  .sort((a, b) => a.localeCompare(b))
+  .map((heroId) => ({
+    heroId,
+    modelUrl: `/assets/holdouts/replacements/${heroId}.glb`,
+    clips: { idle: 'idle', run: 'run', attack: 'attack', cast: 'cast', channel: 'channel', death: 'death' },
+    sockets: [],
+    fallback: 'procedural'
+  }));
+
+const SHIPPED_HERO_ASSETS: HeroAssetManifestEntry[] = [...PHASE5_STARTER_ASSETS, ...HOLDOUT_REPLACEMENT_ASSETS]
+  .sort((a, b) => a.heroId.localeCompare(b.heroId));
+
+/** Heroes whose authored glTF is actually shipped in /public/assets. */
 export const ENABLED_HERO_MODELS: ReadonlySet<string> = new Set<string>(
-  PHASE5_STARTER_ASSETS.map((a) => a.heroId)
+  SHIPPED_HERO_ASSETS.map((a) => a.heroId)
+);
+
+export const ENABLED_HOLDOUT_MODELS: ReadonlySet<string> = new Set<string>(
+  HOLDOUT_REPLACEMENT_ASSETS.map((a) => a.heroId)
 );
 
 /** The manifest entry for a hero, but only when its model is actually available. */
 export function heroAssetEntry(heroId: string | undefined): HeroAssetManifestEntry | null {
   if (!heroId || !ENABLED_HERO_MODELS.has(heroId)) return null;
-  return PHASE5_STARTER_ASSETS.find((a) => a.heroId === heroId) ?? null;
+  return SHIPPED_HERO_ASSETS.find((a) => a.heroId === heroId) ?? null;
 }
 
 /**
- * A6: additive generated signature kits for the 11 procedural holdouts. These do
- * not replace the animated procedural rigs; scene.ts mounts them as extra visible
- * identity geometry over the rig, so missing files are harmless and no hero loses
- * its animation.
+ * A6 fallback: additive generated signature kits for the 11 procedural holdouts.
+ * A7 replacement GLBs are preferred, but these still mount over the animated
+ * procedural rigs if a replacement is missing or fails.
  */
 export const ENABLED_HOLDOUT_SIGNATURES: ReadonlySet<string> = new Set(PROCEDURAL_HOLDOUTS);
 
 export function holdoutSignatureUrl(heroId: string | undefined): string | null {
   return heroId && ENABLED_HOLDOUT_SIGNATURES.has(heroId) ? `/assets/holdouts/${heroId}.glb` : null;
+}
+
+export function holdoutReplacementUrl(heroId: string | undefined): string | null {
+  return heroId && ENABLED_HOLDOUT_MODELS.has(heroId) ? `/assets/holdouts/replacements/${heroId}.glb` : null;
 }
 
 /**

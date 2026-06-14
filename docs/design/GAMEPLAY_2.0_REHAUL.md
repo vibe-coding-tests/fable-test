@@ -39,7 +39,7 @@ There is no notion of "items per unit of playtime" anywhere. The cadence is what
 - The item-active AI only understands **5 items** (BKB, Force Staff, Glimmer, Mek, Eul). Blink, Scythe, Lotus, Manta, and every new 2.0 item are invisible to the scorer unless a player hand-authors a gambit rule.
 - The scorer **ignores mana budgeting** (it will try to blow a 300-mana ult with 80 mana in the pool and fall through) and has **no cooldown sequencing** (no "hold the ult for the cluster / for enrage").
 - `dangerousScore` is duplicated in `controllers.ts` and `utility.ts` and can drift. `fight-time-gt` reads absolute `sim.time` not encounter-relative time. `enemies-within` counts NPCs. ~40 magic numbers live inline in the AI files instead of `TUNING`.
-- Cluster detection is O(n²) per enemy (`OPTIMIZATION.md`).
+- Cluster detection is O(n²) per enemy (`OPTIMIZATION_SPEC.md`).
 
 None of this is broken. All of it is the difference between "the autobattler trades evenly" and "the autobattler plays like it read the patch notes."
 

@@ -6,6 +6,7 @@ import { applyDamage, attackImpact } from '../core/combat';
 import { applyStatus } from '../core/effects';
 import { makeItemState, itemReady, sortInventory, computeBuyPlan, executeBuy } from '../core/items';
 import { rollItemDrops } from '../core/phase3';
+import { affixDef, rollAffixesFor } from '../data/affixes';
 import { Rng } from '../core/rng';
 import type { Unit } from '../core/unit';
 
@@ -300,6 +301,26 @@ describe('rolled item identity', () => {
 
     expect(roll.items[0].id).toBe('broadsword');
     expect(roll.items[0].grade).not.toBe('broken');
+  });
+});
+
+describe('endgame T5 affix gating (§14)', () => {
+  function maxAffixTierSeen(endgameUnlocked: boolean): number {
+    const def = REG.item('octarine-core'); // caster-like; can roll the T5 'ancient-mind' signature
+    let max = 0;
+    for (let seed = 1; seed <= 600; seed++) {
+      const affixes = rollAffixesFor(def, 'pristine', 'hell', new Rng(seed), endgameUnlocked);
+      for (const rolled of affixes) max = Math.max(max, affixDef(rolled.affixId).tier);
+    }
+    return max;
+  }
+
+  it('caps the affix/signature tier at 4 on Hell before the endgame unlock', () => {
+    expect(maxAffixTierSeen(false)).toBeLessThanOrEqual(4);
+  });
+
+  it('opens the T5 ancient tier on Hell once full badges / a raid clear unlock it', () => {
+    expect(maxAffixTierSeen(true)).toBe(5);
   });
 });
 

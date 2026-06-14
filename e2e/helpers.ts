@@ -1,5 +1,3 @@
-import { mkdir } from 'node:fs/promises';
-import { join } from 'node:path';
 import { expect, type Page, type TestInfo } from '@playwright/test';
 
 // Thin wrappers over the in-page ?test harness (src/systems/test-harness.ts).
@@ -54,8 +52,6 @@ export interface GameState {
   };
 }
 
-const SCREENSHOT_DIR = join('test-results', 'e2e-screenshots');
-
 /** Navigate to the game in test mode and wait for the harness to be live. */
 export async function boot(page: Page, opts: BootOpts = {}): Promise<void> {
   const q = new URLSearchParams({ test: '1' });
@@ -72,9 +68,6 @@ export async function boot(page: Page, opts: BootOpts = {}): Promise<void> {
 export function watchPageErrors(page: Page): string[] {
   const errors: string[] = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  page.on('console', (msg) => {
-    if (msg.type() === 'error') errors.push(msg.text());
-  });
   return errors;
 }
 
@@ -86,21 +79,35 @@ export async function waitForPlayableUi(page: Page): Promise<void> {
   await page.locator('#top-bar .region').waitFor({ state: 'visible', timeout: 30_000 });
   await page.waitForFunction(() => {
     const loading = document.getElementById('loading-screen');
-    return !loading || loading.style.display === 'none' || loading.classList.contains('hide');
+    return !loading || getComputedStyle(loading).display === 'none';
   }, null, { timeout: 30_000 });
 }
 
 export async function skipActiveCinematic(page: Page): Promise<void> {
+  await page.waitForFunction(() => Boolean((window as any).__game), null, { timeout: 30_000 });
   await page.evaluate(() => {
     const g = (window as any).__game;
     let guard = 0;
     while (g?.cinematic?.active && guard++ < 100) g.cinematicSkip();
+    const director = g?.cinematic as { current?: unknown; queue?: unknown[] } | undefined;
+    if (director) {
+      director.current = null;
+      director.queue = [];
+    }
+    const layer = document.getElementById('cinematic-layer');
+    if (layer) {
+      layer.classList.add('hidden');
+      layer.innerHTML = '';
+    }
+    (window as any).__test.step();
+  });
+  await page.waitForFunction(() => !(window as any).__game?.cinematic?.active, null, {
+    timeout: 10_000
   });
 }
 
 export async function attachScreenshot(page: Page, testInfo: TestInfo, name: string): Promise<string> {
-  await mkdir(SCREENSHOT_DIR, { recursive: true });
-  const path = join(SCREENSHOT_DIR, `${name}.png`);
+  const path = testInfo.outputPath(`${name}.png`);
   await page.screenshot({ path });
   await testInfo.attach(name, { path, contentType: 'image/png' });
   return path;

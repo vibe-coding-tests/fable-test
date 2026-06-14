@@ -334,7 +334,7 @@ export interface CutsceneSettings {
   tieIns: boolean;                   // seasonal/legend homages can be fully suppressed
 }
 
-export type StingerId = 'capture' | 'merge' | 'levelup' | 'badge' | 'raid-clear' | 'loot';
+export type StingerId = 'capture' | 'merge' | 'levelup' | 'badge' | 'raid-clear' | 'loot' | 'loot-signature';
 
 // ---------- Abilities ----------
 export interface AbilityDef {

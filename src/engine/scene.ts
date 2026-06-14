@@ -5,7 +5,7 @@ import type { Unit } from '../core/unit';
 import { REG } from '../core/registry';
 import { buildTerrain, type TerrainInfo } from './terrain';
 import { applyAuthoredSilhouette, applyHeroLikeness, applyItemAppearances, attachHeroWeaponModel, attachHoldoutSignatureModel, buildUnitRig, buildSelectionRing, mountHeroModel, recolorToPalette, type UnitRig } from './models';
-import { HeroAssetLoader, heroAssetEntry, creepCreatureUrl, heroBaseId, holdoutSignatureUrl } from './assets';
+import { HeroAssetLoader, heroAssetEntry, creepCreatureUrl, ENABLED_HOLDOUT_MODELS, heroBaseId, holdoutSignatureUrl } from './assets';
 import { animateRig, applyCinematicGesture, newAnimState, type AnimState } from './animator';
 import { loadVfxBeamRamp, loadVfxTextureAtlas, VfxManager } from './vfx';
 import type { CinematicView } from './cinematic';
@@ -989,7 +989,19 @@ export class GameScene {
         }
       });
     };
+    const mountHoldoutSignatureFallback = (): void => {
+      // If a generated holdout replacement is absent or fails, keep the animated
+      // procedural rig live and add the older signature kit over it.
+      const signatureUrl = u.kind === 'hero' ? holdoutSignatureUrl(u.heroId) : null;
+      if (!signatureUrl) return;
+      void loadModelAsset(signatureUrl).then((asset) => {
+        if (asset && this.isLive() && token === this.sceneToken && this.views.get(u.uid)?.rig === rig) {
+          attachHoldoutSignatureModel(rig, cloneModel(asset.scene));
+        }
+      });
+    };
     const assetEntry = u.kind === 'hero' ? heroAssetEntry(u.heroId) : null;
+    const isHoldoutReplacement = !!(u.kind === 'hero' && u.heroId && ENABLED_HOLDOUT_MODELS.has(u.heroId));
     if (assetEntry) {
       void this.heroAssets.loadHero(assetEntry).then((asset) => {
         if (asset && this.isLive() && token === this.sceneToken && this.views.get(u.uid)?.rig === rig) {
@@ -997,34 +1009,26 @@ export class GameScene {
           // WS-A within-cohort variation: stretch the shared base to this hero's
           // proportions and layer its innate identity gear over the authored body,
           // before items so the weapon counter-scale reads the final model scale.
-          applyAuthoredSilhouette(rig, u.heroId!, palette);
+          if (!isHoldoutReplacement) applyAuthoredSilhouette(rig, u.heroId!, palette);
           // WS-B: re-apply worn items now that sockets resolved, so the weapon hangs
           // off the authored hand bone instead of the hidden procedural one.
           applyItemAppearances(rig, this.itemAppearancesFor(u));
-          void this.heroAssets.loadHeroWeapon(assetEntry).then((weapon) => {
-            if (weapon && this.isLive() && token === this.sceneToken && this.views.get(u.uid)?.rig === rig) {
-              attachHeroWeaponModel(rig, cloneModel(weapon.scene));
-              applyItemAppearances(rig, this.itemAppearancesFor(u));
-            }
-          });
+          if (!isHoldoutReplacement) {
+            void this.heroAssets.loadHeroWeapon(assetEntry).then((weapon) => {
+              if (weapon && this.isLive() && token === this.sceneToken && this.views.get(u.uid)?.rig === rig) {
+                attachHeroWeaponModel(rig, cloneModel(weapon.scene));
+                applyItemAppearances(rig, this.itemAppearancesFor(u));
+              }
+            });
+          }
         } else if (!asset) {
           mountSharedBase();
+          if (isHoldoutReplacement) mountHoldoutSignatureFallback();
         }
       });
     } else {
       mountSharedBase();
-    }
-
-    // A6 holdout signatures: the abstract/no-legs heroes keep their animated
-    // procedural rigs, then optionally load a small bespoke GLB identity kit over
-    // the top. Missing files are harmless and never block the procedural floor.
-    const signatureUrl = u.kind === 'hero' ? holdoutSignatureUrl(u.heroId) : null;
-    if (signatureUrl) {
-      void loadModelAsset(signatureUrl).then((asset) => {
-        if (asset && this.isLive() && token === this.sceneToken && this.views.get(u.uid)?.rig === rig) {
-          attachHoldoutSignatureModel(rig, cloneModel(asset.scene));
-        }
-      });
+      mountHoldoutSignatureFallback();
     }
 
     // Phase 3 (GRAPHICS_SPEC §13): mount an authored Quaternius creature (CC0)

@@ -1,6 +1,6 @@
 # STORY & CINEMATICS SPEC — "ANCIENTS"
 
-The story layer of **plot that lands, lore that deepens, and cinematic cut-scenes for the moments that matter** — recruiting a hero, breaking a boss, opening a raid, holding a legendary, crowning a champion. Companion to `SPEC.md` (design target), `PRESENTATION_SPEC.md` (look/feel/juice), `DECISIONS.md` (calls made), and `PROGRESS.md` (status). Same crunch-mode rules as `SPEC.md §0`: this is direction and priority, not a gate.
+The story layer of **plot that lands, lore that deepens, and cinematic cut-scenes for the moments that matter** — recruiting a hero, breaking a boss, opening a raid, holding a legendary, crowning a champion. Companion to `SPEC.md` (design target), `docs/design/PRESENTATION_SPEC.md` (look/feel/juice), `DECISIONS.md` (calls made), and `PROGRESS.md` (status). Same crunch-mode rules as `SPEC.md §0`: this is direction and priority, not a gate.
 
 The game is content-complete through Phase 5 and now has a juice layer planned in `PRESENTATION_SPEC.md`. The story layer now has its spine and machinery: the Loop codex assembles the lore, key milestones route through cut-scenes, and raids, festivals, legends, the Aegis, and the Tower all have directed narrative beats. This document remains the spec for keeping that layer coherent as content grows: every future hero, raid, region, and event should deepen the Mad Moon / Echo / Loop story instead of falling back to isolated flavor.
 

@@ -1,6 +1,9 @@
-// Generate original low-poly signature GLBs for the 11 procedural holdout heroes.
-// These are additive identity kits, not replacement rigs: the renderer mounts them
-// over the existing animated procedural model so abstract heroes keep their motion.
+// Generate original low-poly GLBs for the 11 abstract holdout heroes.
+//
+// Outputs two fallback-safe sets:
+// - holdouts/<id>.glb: additive identity kits for the procedural rig.
+// - holdouts/replacements/<id>.glb: hierarchy-animated replacement models with
+//   idle/run/attack/cast/channel/death clips for the authored-model mixer.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..', '..');
 const OUT_DIR = path.join(ROOT, 'public', 'assets', 'holdouts');
+const REPLACEMENT_DIR = path.join(OUT_DIR, 'replacements');
 
 const MATERIALS = ['primary', 'secondary', 'accent', 'dark'];
 
@@ -36,6 +40,18 @@ function hexToLinearFactor(hex) {
 
 function align4(n) {
   return (n + 3) & ~3;
+}
+
+function quatFromEuler(rx = 0, ry = 0, rz = 0) {
+  const cx = Math.cos(rx / 2), sx = Math.sin(rx / 2);
+  const cy = Math.cos(ry / 2), sy = Math.sin(ry / 2);
+  const cz = Math.cos(rz / 2), sz = Math.sin(rz / 2);
+  return [
+    sx * cy * cz - cx * sy * sz,
+    cx * sy * cz + sx * cy * sz,
+    cx * cy * sz - sx * sy * cz,
+    cx * cy * cz + sx * sy * sz
+  ];
 }
 
 function transformPoint(p, opts = {}) {
@@ -258,6 +274,61 @@ function partsFor(style) {
   return [...p, ...commonFlair()];
 }
 
+function replacementBase(style) {
+  switch (style) {
+    case 'wisp':
+    case 'void':
+      return [];
+    case 'water':
+    case 'siren':
+      return [
+        box('replacement-torso', 'secondary', 0.24, 0.52, 0.28, { y: 1.06 }),
+        box('replacement-shoulders', 'primary', 0.18, 0.18, 0.72, { y: 1.28 })
+      ];
+    case 'firebird':
+      return [
+        box('replacement-neck', 'primary', 0.18, 0.34, 0.16, { x: 0.24, y: 1.34, rz: -0.24 }),
+        box('replacement-tail-root', 'dark', 0.26, 0.2, 0.24, { x: -0.28, y: 0.78 })
+      ];
+    case 'bat-rider':
+      return [
+        box('replacement-bat-body', 'dark', 0.56, 0.34, 0.34, { y: 0.9 }),
+        cone('replacement-bat-head', 'secondary', 0.14, 0.28, 'x', { x: 0.42, y: 1.06 }, 8)
+      ];
+    case 'gorgon':
+      return [
+        box('replacement-torso', 'primary', 0.34, 0.66, 0.32, { y: 0.98 }),
+        cylinder('replacement-serpent-tail', 'secondary', 0.14, 0.9, 'y', { y: 0.34, rz: 0.24 }, 12)
+      ];
+    case 'bear-druid':
+      return [
+        box('replacement-robed-body', 'secondary', 0.36, 0.86, 0.34, { y: 0.85 }),
+        box('replacement-cloak-back', 'dark', 0.08, 0.92, 0.58, { x: -0.24, y: 0.86 })
+      ];
+    case 'nightmare':
+      return [
+        box('replacement-nightmare-body', 'dark', 0.34, 0.68, 0.36, { y: 0.95 }),
+        box('replacement-shoulder-eye', 'primary', 0.18, 0.18, 0.62, { y: 1.2 })
+      ];
+    case 'ice-wraith':
+      return [
+        box('replacement-ghost-core', 'primary', 0.24, 0.72, 0.26, { y: 0.82 }),
+        box('replacement-ghost-shroud', 'secondary', 0.08, 0.9, 0.58, { x: -0.18, y: 0.76 })
+      ];
+    case 'tormented':
+      return [
+        box('replacement-torso', 'dark', 0.34, 0.82, 0.34, { y: 0.92 }),
+        box('replacement-shoulders', 'secondary', 0.2, 0.16, 0.7, { y: 1.32 })
+      ];
+    default:
+      return [box('replacement-core', 'primary', 0.34, 0.72, 0.34, { y: 0.9 })];
+  }
+}
+
+function replacementPartsFor(style) {
+  return [...replacementBase(style), ...partsFor(style)];
+}
+
 function bounds(values) {
   const min = [Infinity, Infinity, Infinity];
   const max = [-Infinity, -Infinity, -Infinity];
@@ -270,7 +341,80 @@ function bounds(values) {
   return { min, max };
 }
 
-function writeGlb(file, heroId, palette, parts) {
+function addAccessor(json, chunks, array, type, target, minMax) {
+  const raw = Buffer.from(array.buffer);
+  const offset = chunks.reduce((sum, b) => sum + b.length, 0);
+  chunks.push(Buffer.concat([raw, Buffer.alloc(align4(raw.length) - raw.length)]));
+  const view = json.bufferViews.length;
+  const bufferView = { buffer: 0, byteOffset: offset, byteLength: raw.length };
+  if (target) bufferView.target = target;
+  json.bufferViews.push(bufferView);
+  const accessor = json.accessors.length;
+  json.accessors.push({
+    bufferView: view,
+    componentType: 5126,
+    count: array.length / (type === 'VEC4' ? 4 : type === 'VEC3' ? 3 : 1),
+    type,
+    ...(minMax ?? {})
+  });
+  return accessor;
+}
+
+function addAnimationClip(json, chunks, rigNode, name, frames) {
+  const times = new Float32Array(frames.map((f) => f.t));
+  const timeAccessor = addAccessor(json, chunks, times, 'SCALAR', undefined, {
+    min: [frames[0].t],
+    max: [frames[frames.length - 1].t]
+  });
+  const samplers = [];
+  const channels = [];
+  const addChannel = (pathName, values, type) => {
+    const out = new Float32Array(values.flat());
+    const output = addAccessor(json, chunks, out, type);
+    const sampler = samplers.length;
+    samplers.push({ input: timeAccessor, output, interpolation: 'LINEAR' });
+    channels.push({ sampler, target: { node: rigNode, path: pathName } });
+  };
+  addChannel('translation', frames.map((f) => f.translation ?? [0, 0, 0]), 'VEC3');
+  addChannel('rotation', frames.map((f) => f.rotation ?? quatFromEuler()), 'VEC4');
+  if (frames.some((f) => f.scale)) addChannel('scale', frames.map((f) => f.scale ?? [1, 1, 1]), 'VEC3');
+  json.animations.push({ name, samplers, channels });
+}
+
+function addHoldoutAnimations(json, chunks, rigNode) {
+  addAnimationClip(json, chunks, rigNode, 'idle', [
+    { t: 0, translation: [0, 0, 0], rotation: quatFromEuler(0, 0, -0.025) },
+    { t: 0.8, translation: [0, 0.07, 0], rotation: quatFromEuler(0, 0, 0.025) },
+    { t: 1.6, translation: [0, 0, 0], rotation: quatFromEuler(0, 0, -0.025) }
+  ]);
+  addAnimationClip(json, chunks, rigNode, 'run', [
+    { t: 0, translation: [0, 0, 0], rotation: quatFromEuler(0, 0, -0.08) },
+    { t: 0.25, translation: [0.04, 0.1, 0], rotation: quatFromEuler(0, 0, 0.08) },
+    { t: 0.5, translation: [0, 0, 0], rotation: quatFromEuler(0, 0, -0.08) }
+  ]);
+  addAnimationClip(json, chunks, rigNode, 'attack', [
+    { t: 0, translation: [0, 0, 0], rotation: quatFromEuler(0, 0, 0), scale: [1, 1, 1] },
+    { t: 0.16, translation: [0.14, 0.02, 0], rotation: quatFromEuler(0, 0, -0.24), scale: [1.08, 0.96, 1.08] },
+    { t: 0.34, translation: [-0.03, 0, 0], rotation: quatFromEuler(0, 0, 0.08), scale: [1, 1, 1] }
+  ]);
+  addAnimationClip(json, chunks, rigNode, 'cast', [
+    { t: 0, translation: [0, 0, 0], rotation: quatFromEuler(0, 0, 0), scale: [1, 1, 1] },
+    { t: 0.35, translation: [0, 0.16, 0], rotation: quatFromEuler(0, 0.18, 0), scale: [1.12, 1.12, 1.12] },
+    { t: 0.7, translation: [0, 0.03, 0], rotation: quatFromEuler(0, 0, 0), scale: [1, 1, 1] }
+  ]);
+  addAnimationClip(json, chunks, rigNode, 'channel', [
+    { t: 0, translation: [0, 0.02, 0], rotation: quatFromEuler(0, 0, -0.04), scale: [1.02, 1.02, 1.02] },
+    { t: 0.5, translation: [0, 0.14, 0], rotation: quatFromEuler(0, 0.28, 0.04), scale: [1.1, 1.1, 1.1] },
+    { t: 1, translation: [0, 0.02, 0], rotation: quatFromEuler(0, 0, -0.04), scale: [1.02, 1.02, 1.02] }
+  ]);
+  addAnimationClip(json, chunks, rigNode, 'death', [
+    { t: 0, translation: [0, 0, 0], rotation: quatFromEuler(0, 0, 0), scale: [1, 1, 1] },
+    { t: 0.45, translation: [-0.08, -0.16, 0], rotation: quatFromEuler(0, 0, 0.55), scale: [0.9, 0.62, 0.9] },
+    { t: 0.9, translation: [-0.08, -0.34, 0], rotation: quatFromEuler(0, 0, 1.08), scale: [0.72, 0.32, 0.72] }
+  ]);
+}
+
+function writeGlb(file, heroId, palette, parts, opts = {}) {
   const json = {
     asset: { version: '2.0', generator: 'ancients generate_holdout_signatures.mjs' },
     scene: 0,
@@ -291,7 +435,8 @@ function writeGlb(file, heroId, palette, parts) {
     }),
     buffers: [{ byteLength: 0 }],
     bufferViews: [],
-    accessors: []
+    accessors: [],
+    animations: []
   };
   const chunks = [];
   const pushTyped = (array, target) => {
@@ -302,6 +447,11 @@ function writeGlb(file, heroId, palette, parts) {
     json.bufferViews.push({ buffer: 0, byteOffset: offset, byteLength: raw.length, target });
     return view;
   };
+  const rigNode = opts.animated ? json.nodes.length : null;
+  if (rigNode !== null) {
+    json.nodes.push({ name: `${heroId}-replacement-rig`, children: [] });
+    json.scenes[0].nodes.push(rigNode);
+  }
   for (const part of parts) {
     const pos = new Float32Array(part.positions);
     const nor = new Float32Array(part.normals);
@@ -322,8 +472,11 @@ function writeGlb(file, heroId, palette, parts) {
     });
     const node = json.nodes.length;
     json.nodes.push({ name: `${heroId}-${part.name}`, mesh });
-    json.scenes[0].nodes.push(node);
+    if (rigNode !== null) json.nodes[rigNode].children.push(node);
+    else json.scenes[0].nodes.push(node);
   }
+  if (rigNode !== null) addHoldoutAnimations(json, chunks, rigNode);
+  if (json.animations.length === 0) delete json.animations;
   const bin = Buffer.concat(chunks);
   json.buffers[0].byteLength = bin.length;
   const jsonBytes = Buffer.from(JSON.stringify(json));
@@ -346,12 +499,23 @@ function writeGlb(file, heroId, palette, parts) {
 
 function main() {
   fs.mkdirSync(OUT_DIR, { recursive: true });
-  let count = 0;
+  fs.mkdirSync(REPLACEMENT_DIR, { recursive: true });
+  let signatures = 0;
+  let replacements = 0;
   for (const [heroId, def] of Object.entries(HOLDOUTS)) {
     writeGlb(path.join(OUT_DIR, `${heroId}.glb`), heroId, def.palette, partsFor(def.style));
-    count++;
+    signatures++;
+    writeGlb(
+      path.join(REPLACEMENT_DIR, `${heroId}.glb`),
+      heroId,
+      def.palette,
+      replacementPartsFor(def.style),
+      { animated: true }
+    );
+    replacements++;
   }
-  console.log(`generated ${count} holdout signature GLBs in ${path.relative(ROOT, OUT_DIR)}`);
+  console.log(`generated ${signatures} holdout signature GLBs in ${path.relative(ROOT, OUT_DIR)}`);
+  console.log(`generated ${replacements} holdout replacement GLBs in ${path.relative(ROOT, REPLACEMENT_DIR)}`);
 }
 
 main();

@@ -58,7 +58,7 @@ This is a full game, playable start to finish right now. A fresh save runs all t
 
 The combat core stays headless: it never imports Three.js or touches the DOM. Over 1,300 headless tests cover data linting, combat determinism, capture and merge, saves and migrations, gym and raid simulation, resonance, dungeon generation, loot quality, and a full critical-path playthrough.
 
-Design targets live in `SPEC.md`, current acceptance status in `PROGRESS.md`, and implementation calls in `DECISIONS.md`. The overhaul docs (`LOOT_OVERHAUL.md`, `DUNGEON_OVERHAUL.md`, `GRAPHICS_SPEC.md`, and others) track the work past the original phase plan.
+Design targets live in `SPEC.md`, current acceptance status in `PROGRESS.md`, and implementation calls in `DECISIONS.md`. The overhaul and design docs (`docs/design/LOOT_OVERHAUL.md`, `docs/design/DUNGEON_OVERHAUL.md`, `docs/design/GRAPHICS_SPEC.md`, and others) track the work past the original phase plan.
 
 ## Requirements
 

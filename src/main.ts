@@ -15,7 +15,7 @@ import { Hud } from './ui/hud';
 import { showTitle } from './ui/title';
 import { withLoading } from './ui/loading';
 import { preloadAssetGroups } from './engine/asset-loaders';
-import { ENABLED_HOLDOUT_SIGNATURES } from './engine/assets';
+import { ENABLED_HOLDOUT_SIGNATURES, holdoutReplacementUrl } from './engine/assets';
 import type { GameSave } from './core/types';
 
 registerAllContent();
@@ -100,7 +100,10 @@ function startGame(save: GameSave, opts: { headless?: boolean } = {}): void {
     if (enhancedAssets) {
       await preloadAssetGroups(['holdout'], {
         label: `${regionName} hero signatures`,
-        paths: [...ENABLED_HOLDOUT_SIGNATURES].map((id) => `holdouts/${id}.glb`),
+        paths: [...ENABLED_HOLDOUT_SIGNATURES].flatMap((id) => {
+          const replacement = holdoutReplacementUrl(id)?.replace('/assets/', '');
+          return [`holdouts/${id}.glb`, ...(replacement ? [replacement] : [])];
+        }),
         onProgress: progress
       });
     }

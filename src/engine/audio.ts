@@ -407,8 +407,8 @@ export class ProceduralAudio {
     if (!this.unlocked || this.settings.audio.muted) return;
     // Celebratory stingers get a sampled fanfare on medium+; the synth arpeggio
     // below still plays so the cue survives when the sample is absent.
-    if (id === 'levelup' || id === 'merge' || id === 'badge' || id === 'capture' || id === 'raid-clear' || id === 'loot') {
-      this.playSample('fanfare', id === 'raid-clear' || id === 'badge' ? 0.5 : 0.36, 'stinger');
+    if (id === 'levelup' || id === 'merge' || id === 'badge' || id === 'capture' || id === 'raid-clear' || id === 'loot' || id === 'loot-signature') {
+      this.playSample('fanfare', id === 'raid-clear' || id === 'badge' || id === 'loot-signature' ? 0.5 : 0.36, 'stinger');
     }
     switch (id) {
       case 'capture':
@@ -432,9 +432,14 @@ export class ProceduralAudio {
         this.arp([392, 523, 659, 784, 1047], 0.1, 0.18);
         setTimeout(() => this.thump(0.12, 0.14, 320), 120);
         break;
-      case 'loot': // bright rising cue for pristine/signature drops
+      case 'loot': // bright rising cue for a loud (refined+/immortal) drop
         this.arp([587, 740, 988, 1319], 0.075, 0.16);
         setTimeout(() => this.thump(0.08, 0.1, 220), 90);
+        break;
+      case 'loot-signature': // the godroll beat: taller arp, a sub thump, a shimmer tail
+        this.arp([523, 659, 880, 1175, 1568], 0.08, 0.2);
+        setTimeout(() => this.thump(0.16, 0.16, 180), 100);
+        setTimeout(() => this.tone(1976, 0.45, 'sine', 0.12, 'stinger'), 420);
         break;
       default:
         break;

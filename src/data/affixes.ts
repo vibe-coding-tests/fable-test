@@ -51,10 +51,20 @@ export function affixPoolForItem(def: ItemDef): AffixPoolId[] {
   return [...new Set(pools)];
 }
 
-function maxAffixTier(difficulty: DifficultyTier): 2 | 3 | 4 {
-  if (difficulty === 'hell') return 4;
+// Regular (prefix/suffix) affix tier ceiling by difficulty. The top T5 band only
+// opens on Hell once the endgame is unlocked (full badges or a raid clear, §14).
+function maxAffixTier(difficulty: DifficultyTier, endgameUnlocked = false): 2 | 3 | 4 | 5 {
+  if (difficulty === 'hell') return endgameUnlocked ? 5 : 4;
   if (difficulty === 'nightmare') return 3;
   return 2;
+}
+
+// Signatures gate separately (§5, §14): none on Normal, the minor/full pools on
+// Nightmare/Hell, and the loudest T5 "ancient tier" only on Hell + endgame.
+function maxSignatureTier(difficulty: DifficultyTier, endgameUnlocked = false): 0 | 4 | 5 {
+  if (difficulty === 'hell') return endgameUnlocked ? 5 : 4;
+  if (difficulty === 'nightmare') return 4;
+  return 0;
 }
 
 function pickWeighted(pool: ItemAffixDef[], rng: Rng): ItemAffixDef {
@@ -76,11 +86,11 @@ export function resolveAffix(def: ItemAffixDef, roll: number): StatModMap {
   return resolved;
 }
 
-export function rollAffixesFor(item: ItemDef, grade: ItemGrade, difficulty: DifficultyTier, rng: Rng): RolledAffix[] {
+export function rollAffixesFor(item: ItemDef, grade: ItemGrade, difficulty: DifficultyTier, rng: Rng, endgameUnlocked = false): RolledAffix[] {
   const gradeDef = GRADE_DEFS[grade];
   if (gradeDef.affixSlots <= 0) return [];
   const pools = new Set(affixPoolForItem(item));
-  const maxTier = maxAffixTier(difficulty);
+  const maxTier = maxAffixTier(difficulty, endgameUnlocked);
   const eligible = AFFIX_DEFS.filter((affix) => affix.kind !== 'signature' && affix.tier <= maxTier && affix.pools.some((pool) => pools.has(pool)));
   const picked: RolledAffix[] = [];
   const used = new Set<string>();
@@ -97,8 +107,9 @@ export function rollAffixesFor(item: ItemDef, grade: ItemGrade, difficulty: Diff
     picked.push({ affixId: affix.id, roll, resolved: resolveAffix(affix, roll) });
   }
 
-  if (gradeDef.signatureChance > 0 && rng.chance(gradeDef.signatureChance)) {
-    const signatures = AFFIX_DEFS.filter((affix) => affix.kind === 'signature' && affix.tier <= maxTier + 1 && affix.pools.some((pool) => pools.has(pool)));
+  const maxSigTier = maxSignatureTier(difficulty, endgameUnlocked);
+  if (maxSigTier > 0 && gradeDef.signatureChance > 0 && rng.chance(gradeDef.signatureChance)) {
+    const signatures = AFFIX_DEFS.filter((affix) => affix.kind === 'signature' && affix.tier <= maxSigTier && affix.pools.some((pool) => pools.has(pool)));
     if (signatures.length > 0) {
       const affix = pickWeighted(signatures, rng);
       const roll = Math.max(basePercentile, rng.next());
@@ -115,11 +126,12 @@ export function rollAffixForKind(
   grade: ItemGrade,
   difficulty: DifficultyTier,
   rng: Rng,
-  excludeIds: string[] = []
+  excludeIds: string[] = [],
+  endgameUnlocked = false
 ): RolledAffix | null {
   const pools = new Set(affixPoolForItem(item));
-  const maxTier = maxAffixTier(difficulty);
-  const tierLimit = kind === 'signature' ? maxTier + 1 : maxTier;
+  const tierLimit = kind === 'signature' ? maxSignatureTier(difficulty, endgameUnlocked) : maxAffixTier(difficulty, endgameUnlocked);
+  if (tierLimit <= 0) return null;
   const excluded = new Set(excludeIds);
   const eligible = AFFIX_DEFS.filter((affix) =>
     affix.kind === kind &&

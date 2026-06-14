@@ -4,7 +4,8 @@ import { defineConfig, devices } from '@playwright/test';
 // ?test harness (see src/systems/test-harness.ts). Most specs use the headless
 // render mode (?render=headless) and never touch WebGL; the boot smoke test
 // uses the real renderer with SwiftShader so it works in CI without a GPU.
-const PORT = 5174;
+const PORT = Number(process.env.PLAYWRIGHT_PORT ?? 5174);
+const HOST = '127.0.0.1';
 
 export default defineConfig({
   testDir: './e2e',
@@ -13,7 +14,7 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [['github'], ['list']] : 'list',
   use: {
-    baseURL: `http://localhost:${PORT}`,
+    baseURL: `http://${HOST}:${PORT}`,
     trace: 'on-first-retry'
   },
   projects: [
@@ -35,8 +36,8 @@ export default defineConfig({
     }
   ],
   webServer: {
-    command: `npm run dev -- --port ${PORT} --strictPort`,
-    url: `http://localhost:${PORT}`,
+    command: `npm run dev -- --host ${HOST} --port ${PORT} --strictPort`,
+    url: `http://${HOST}:${PORT}`,
     reuseExistingServer: !process.env.CI,
     timeout: 120_000
   }
