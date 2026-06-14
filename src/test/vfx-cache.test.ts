@@ -30,6 +30,25 @@ describe('vfx cache', () => {
     expect(vfxGeometryCacheSize()).toBe(afterFirst);
   });
 
+  it('renders projectile trails as soft pooled ribbons', () => {
+    const vfx = new VfxManager(() => 0);
+    vfx.handleEvent(
+      {
+        t: 'projectile-spawn',
+        pid: 1,
+        from: { x: 0, y: 0 },
+        vfx: { archetype: 'projectile', color: '#88ccff', scale: 1 }
+      },
+      () => null
+    );
+
+    const trail = vfx.group.children[1] as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
+    expect(trail.isMesh).toBe(true);
+    expect(trail.geometry.index?.count).toBeGreaterThan(0);
+    expect(trail.material.alphaMap).toBeDefined();
+    expect(trail.material.blending).toBe(THREE.AdditiveBlending);
+  });
+
   it('can install an optional atlas while keeping procedural fallback state', () => {
     const data = new Uint8Array(4 * 4 * 4).fill(255);
     const atlas = new THREE.DataTexture(data, 4, 4);
@@ -118,5 +137,23 @@ describe('vfx cache', () => {
     const material = beam.material as THREE.MeshBasicMaterial;
     expect(material.alphaMap).toBeDefined();
     expect(material.blending).toBe(THREE.AdditiveBlending);
+  });
+
+  it('adds a ground impact decal for tinted item hits', () => {
+    const vfx = new VfxManager(() => 0);
+
+    vfx.attackVisual(
+      { kind: 'tinted-impact', color: '#ffcc88', scale: 1 },
+      { x: 0, y: 0 },
+      { x: 500, y: 0 }
+    );
+
+    const decal = vfx.group.children.find((child) => {
+      const mesh = child as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
+      return mesh.isMesh && mesh.material instanceof THREE.MeshBasicMaterial && !!mesh.material.map;
+    }) as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial> | undefined;
+
+    expect(decal).toBeDefined();
+    expect(decal!.material.blending).toBe(THREE.AdditiveBlending);
   });
 });

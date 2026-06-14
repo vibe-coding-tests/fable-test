@@ -24,8 +24,9 @@ interface PooledProjectile {
   kind: ProjKind;
   core: THREE.MeshBasicMaterial;
   halo?: THREE.MeshBasicMaterial;
-  trail: THREE.Line;
+  trail: THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
   trailPos: Float32Array;
+  trailVerts: Float32Array;
   trailCol: Float32Array;
 }
 
@@ -300,6 +301,7 @@ export class VfxManager {
         break;
       case 'tinted-impact':
         this.burst(to.x, to.y, visual.color, 0.7 * (visual.scale ?? 1), 0.28, visual.color2);
+        this.impactDecal(to.x, to.y, visual.color, 0.55 * (visual.scale ?? 1), 0.32);
         break;
       case 'crit-lunge':
         this.critSlash(from, to, visual);
@@ -327,7 +329,10 @@ export class VfxManager {
         if (entry) {
           this.releaseProjectile(entry);
           this.projectiles.delete(ev.pid);
-          if (ev.t === 'projectile-hit') this.burst(ev.pos.x, ev.pos.y, '#ffffff', 0.6, 0.25);
+          if (ev.t === 'projectile-hit') {
+            this.burst(ev.pos.x, ev.pos.y, '#ffffff', 0.6, 0.25);
+            this.impactDecal(ev.pos.x, ev.pos.y, '#ffffff', 0.48, 0.3);
+          }
         }
         break;
       }
@@ -510,9 +515,12 @@ export class VfxManager {
     const col = new THREE.Color(vfx.color);
     for (let i = 0; i < TRAIL_LEN; i++) {
       const f = (i / (TRAIL_LEN - 1)) ** 1.6;
-      entry.trailCol[i * 3] = col.r * f;
-      entry.trailCol[i * 3 + 1] = col.g * f;
-      entry.trailCol[i * 3 + 2] = col.b * f;
+      for (let side = 0; side < 2; side++) {
+        const o = (i * 2 + side) * 3;
+        entry.trailCol[o] = col.r * f;
+        entry.trailCol[o + 1] = col.g * f;
+        entry.trailCol[o + 2] = col.b * f;
+      }
     }
     entry.trail.geometry.attributes.color.needsUpdate = true;
     return entry;
@@ -530,26 +538,50 @@ export class VfxManager {
     this.projAllocated++;
     const g = new THREE.Group();
     const trailPos = new Float32Array(TRAIL_LEN * 3);
-    const trailCol = new Float32Array(TRAIL_LEN * 3);
+    const trailVerts = new Float32Array(TRAIL_LEN * 2 * 3);
+    const trailCol = new Float32Array(TRAIL_LEN * 2 * 3);
+    const trailUv = new Float32Array(TRAIL_LEN * 2 * 2);
+    const trailIdx: number[] = [];
+    for (let i = 0; i < TRAIL_LEN; i++) {
+      const u = i / (TRAIL_LEN - 1);
+      trailUv[(i * 2) * 2] = u;
+      trailUv[(i * 2) * 2 + 1] = 0;
+      trailUv[(i * 2 + 1) * 2] = u;
+      trailUv[(i * 2 + 1) * 2 + 1] = 1;
+      if (i < TRAIL_LEN - 1) {
+        const a = i * 2;
+        trailIdx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+      }
+    }
     const tg = new THREE.BufferGeometry();
-    tg.setAttribute('position', new THREE.BufferAttribute(trailPos, 3));
+    tg.setAttribute('position', new THREE.BufferAttribute(trailVerts, 3));
     tg.setAttribute('color', new THREE.BufferAttribute(trailCol, 3));
-    const trail = new THREE.Line(
+    tg.setAttribute('uv', new THREE.BufferAttribute(trailUv, 2));
+    tg.setIndex(trailIdx);
+    const trail = new THREE.Mesh(
       tg,
-      new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false })
+      new THREE.MeshBasicMaterial({
+        vertexColors: true,
+        alphaMap: beamRampTexture(),
+        transparent: true,
+        opacity: 0.85,
+        side: THREE.DoubleSide,
+        blending: THREE.AdditiveBlending,
+        depthWrite: false
+      })
     );
     trail.frustumCulled = false;
     if (kind === 'hook') {
       const core = new THREE.MeshBasicMaterial({ color: '#ffffff' });
       g.add(new THREE.Mesh(sharedGeometry(new THREE.TorusGeometry(0.35, 0.1, 5, 8, Math.PI * 1.5)), core));
-      return { obj: g, kind, core, trail, trailPos, trailCol };
+      return { obj: g, kind, core, trail, trailPos, trailVerts, trailCol };
     }
     // Additive core + halo so the orb reads as a glowing magic projectile.
     const core = new THREE.MeshBasicMaterial({ color: '#ffffff', blending: THREE.AdditiveBlending, depthWrite: false });
     const halo = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false });
     g.add(new THREE.Mesh(sharedGeometry(new THREE.SphereGeometry(0.26, 8, 6)), core));
     g.add(new THREE.Mesh(sharedGeometry(new THREE.SphereGeometry(0.5, 8, 6)), halo));
-    return { obj: g, kind, core, halo, trail, trailPos, trailCol };
+    return { obj: g, kind, core, halo, trail, trailPos, trailVerts, trailCol };
   }
 
   /** Reset a projectile's trail to a single point (call on spawn). */
@@ -559,6 +591,7 @@ export class VfxManager {
       entry.trailPos[i * 3 + 1] = p.y;
       entry.trailPos[i * 3 + 2] = p.z;
     }
+    this.updateTrailRibbon(entry);
     entry.trail.geometry.attributes.position.needsUpdate = true;
     entry.trail.visible = true;
   }
@@ -571,7 +604,35 @@ export class VfxManager {
     a[(TRAIL_LEN - 1) * 3] = h.x;
     a[(TRAIL_LEN - 1) * 3 + 1] = h.y;
     a[(TRAIL_LEN - 1) * 3 + 2] = h.z;
+    this.updateTrailRibbon(entry);
     entry.trail.geometry.attributes.position.needsUpdate = true;
+  }
+
+  private updateTrailRibbon(entry: PooledProjectile): void {
+    const centers = entry.trailPos;
+    const verts = entry.trailVerts;
+    const scale = entry.obj.scale.x || 1;
+    for (let i = 0; i < TRAIL_LEN; i++) {
+      const prev = Math.max(0, i - 1);
+      const next = Math.min(TRAIL_LEN - 1, i + 1);
+      const dx = centers[next * 3] - centers[prev * 3];
+      const dz = centers[next * 3 + 2] - centers[prev * 3 + 2];
+      const len = Math.hypot(dx, dz) || 1;
+      const nx = -dz / len;
+      const nz = dx / len;
+      const t = i / (TRAIL_LEN - 1);
+      const width = (0.035 + t * 0.16) * scale;
+      const cx = centers[i * 3];
+      const cy = centers[i * 3 + 1];
+      const cz = centers[i * 3 + 2];
+      const l = i * 2 * 3;
+      verts[l] = cx + nx * width;
+      verts[l + 1] = cy;
+      verts[l + 2] = cz + nz * width;
+      verts[l + 3] = cx - nx * width;
+      verts[l + 4] = cy;
+      verts[l + 5] = cz - nz * width;
+    }
   }
 
   private buildBurstRing(): PooledBurstRing {
@@ -670,6 +731,31 @@ export class VfxManager {
       pts.geometry.attributes.position.needsUpdate = true;
       sparks.material.opacity = 0.9 * (1 - lifeT);
     }, () => this.releaseBurstSparks(sparks));
+  }
+
+  private impactDecal(x: number, y: number, color: string, radiusW: number, dur: number): void {
+    const decal = new THREE.Mesh(
+      sharedGeometry(new THREE.PlaneGeometry(1, 1)),
+      new THREE.MeshBasicMaterial({
+        color,
+        map: telegraphTexture('ring'),
+        transparent: true,
+        opacity: 0.62,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending
+      })
+    );
+    decal.rotation.x = -Math.PI / 2;
+    decal.rotation.z = this.time * 1.7;
+    decal.position.copy(this.w(x, y, 0.09));
+    const mat = decal.material as THREE.MeshBasicMaterial;
+    this.push(decal, dur, (t, lifeT) => {
+      const s = radiusW * (0.65 + lifeT * 0.75);
+      decal.scale.set(s, s, 1);
+      decal.rotation.z = t * 1.7;
+      mat.opacity = 0.62 * (1 - lifeT);
+    });
   }
 
   private blinkMark(x: number, y: number): void {
@@ -1044,6 +1130,7 @@ export class VfxManager {
       mat.opacity = 0.7 * (1 - lifeT);
     });
     this.burst(to.x, to.y, visual.color2 ?? visual.color, 0.5 * (visual.scale ?? 1), 0.18, visual.color);
+    this.impactDecal(to.x, to.y, visual.color2 ?? visual.color, 0.42 * (visual.scale ?? 1), 0.24);
   }
 
   private armorShredFlash(from: Vec2, to: Vec2, visual: AttackVisualSpec): void {
@@ -1080,6 +1167,7 @@ export class VfxManager {
       });
     }
     this.burst(to.x, to.y, visual.color, 0.42 * scale, 0.18, visual.color2, 'shard');
+    this.impactDecal(to.x, to.y, visual.color, 0.44 * scale, 0.24);
   }
 
   private bindingBeam(a: { x: number; y: number; h: number }, b: { x: number; y: number; h: number }, dur: number): void {
