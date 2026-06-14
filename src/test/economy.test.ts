@@ -576,6 +576,50 @@ describe('loot overhaul curated chase and black-market sinks', () => {
     expect(g.buildSave().lootMarks.early).toBe(0);
   });
 
+  it('assembles a specific Legendary from Armory components plus essence', () => {
+    const save = soloSave('juggernaut', 20);
+    save.inventoryStash = [{ id: 'hyperstone' }, { id: 'platemail' }, { id: 'chainmail' }];
+    save.essence = TUNING.blackMarket.assemblyEssence;
+    const g = Game.headless(save);
+    g.activeUnit()!.pos = { ...g.region.town.pos };
+
+    const quote = g.legendaryAssemblyOptions().find((o) => o.itemId === 'assault-cuirass');
+    expect(quote?.canCraft).toBe(true);
+    const marksBefore = { ...g.lootMarks };
+    const assembled = g.assembleLegendary('assault-cuirass');
+
+    expect(assembled).toEqual({ id: 'assault-cuirass', bound: true });
+    expect(g.inventoryStash.some((it) => it.id === 'hyperstone')).toBe(false);
+    expect(g.inventoryStash.some((it) => it.id === 'platemail')).toBe(false);
+    expect(g.inventoryStash.some((it) => it.id === 'chainmail')).toBe(false);
+    expect(g.inventoryStash.find((it) => it.id === 'assault-cuirass')?.bound).toBe(true);
+    expect(g.essence).toBe(0);
+    expect(g.lootMarks).toEqual(marksBefore);
+  });
+
+  it('optionally converts rich repeat loot into dry gold when resin is empty', () => {
+    const prevEnabled = TUNING.resin.enabled;
+    TUNING.resin.enabled = true;
+    try {
+      const save = fullPartySave(30);
+      save.resin = 0;
+      save.resinUpdatedAt = save.playtimeSec;
+      const g = Game.headless(save);
+      const goldBefore = g.gold;
+      const stashBefore = g.inventoryStash.length;
+      const marksBefore = g.lootMarks.early;
+
+      const boss = g.runBossFight('boss-phantom-assassin', 'normal');
+      expect(boss.won).toBe(true);
+      expect(g.inventoryStash.length).toBe(stashBefore);
+      expect(g.gold).toBeGreaterThan(goldBefore);
+      expect(g.lootMarks.early).toBe(marksBefore + 1); // clear mark, but no item marks without full loot
+      expect(g.resin).toBe(0);
+    } finally {
+      TUNING.resin.enabled = prevEnabled;
+    }
+  });
+
   it('salvages bound Armory dupes into essence without minting gold', () => {
     const save = soloSave('juggernaut', 20);
     save.inventoryStash = [{ id: 'battlefury', bound: true }, { id: 'broadsword' }];

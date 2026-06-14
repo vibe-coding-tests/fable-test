@@ -1578,6 +1578,11 @@ export class Game {
     const roll = rollItemDrops(table, tier, dryStreaks, new Rng(stableContentSeed(`${def.id}:room-reward:${tier}:${room.index}${modSalt}`, Math.round(this.playtime))));
     this.dungeonProgress[def.id] = { ...(prev ?? { clears: 0, wipes: 0, bestDepth: 0, bestTier: 'normal' as DifficultyTier }), dryStreaks: roll.dryStreaks };
     if (roll.items.length === 0) return;
+    if (reward.kind === 'guardian' && !this.spendResinForLoot(TUNING.resin.dungeonGuardianCost)) {
+      const gold = this.grantDryLootGold(roll.items, 'resin-dry', this.activeUnit()?.pos);
+      this.msg(`Moonflow dry: guardian loot converted to ${gold}g`, 'info');
+      return;
+    }
     const drops = this.addDroppedItems(roll.items);
     const names = drops.map((it) => REG.item(it.id).name).join(', ');
     const label = reward.kind === 'guardian' ? 'Guardian drop' : reward.kind === 'chest' ? 'Chest reward' : 'Dungeon reward';
