@@ -64,6 +64,30 @@ Three honest findings.
 
 ---
 
+## 0.5 STATUS — what has shipped (S0–S5 done; S6 channel-DPS + swap-grace done)
+
+This doc started as a design proposal; most of it is now code. Read this section as the honest ledger so the rest of the doc reads as the *full vision*, not a wishlist.
+
+**Shipped and green (`gameplay-overhaul.test.ts`, `data-lint.test.ts`, `boundary.test.ts`):**
+
+- **S0 — the seam.** `TagBoonDef` + `TagArchetype` + `HeroDef.tagBoon` (`core/types.ts`); the new stat fields `tagBoonAmpPct` / `tagGaugeReductionPct` / `tagChainWindowBonusSec`. `fireTagBoon` resolves a boon's `EffectNode`s through the same `execEffects` resolver abilities use (`systems/game.ts`). The legacy heal/burst is re-expressed as effects (`data/tag-boons.ts` `LEGACY_SWAP_EFFECTS`).
+- **S1 — the cooldown split.** `swapFloorSec: 1.5` / `resonanceSwapFloorSec: 1.0` replace the old 4s timer; per-hero `tagGaugeReadyAt` on the roster entry re-arms in real time on the bench; the boon fires only on a ready gauge. Gauge ring per portrait (`ui/hud.ts`).
+- **S2 — effects + budget.** The archetype set is authored and resolves as ordinary effects; `tagBoonPowerScore` / `tagBudgetTier` + the budget data-lint enforce the inverse-power law; a two-support rotation out-tempos a three-carry line in a fixed-seed harness.
+- **S3 — combos.** Tag Chain bookkeeping (`tagChainWindowSec` / `tagChainAmpPerStepPct` / `tagChainMaxSteps`) with the escalating amp; off-field bench-instead-of-remove under Resonance (`markOffField` / `reapOffFieldUnits`, `resonanceOffFieldPersistenceSec`); Imprint tag-out legacies.
+- **S4 — items + readability.** The new tag items (`relay-standard`, `heralds-token`, `vanguard-sigil`, `echo-conduit`, `chainweaver-band`); reaction-preview on the swap prompt; the chain counter and off-field markers in the combat readout. The AI gambit reads `tag-in-ready` and `combo-setup-active` (`core/controllers.ts`) also landed.
+- **S5 — the full §6 table + first-class Soak.** All ~122 heroes resolve a hand-authored signature tag from `AUTHORED` in `data/tag-boons.ts` (no hero left on the role-template path; `generatedBoon` is now only a safety net). **Soak** is a real archetype: `field()` lays a lingering enemy `zone` whose damage tick re-applies the hero's element (Kunkka's wet torrent, Razor's static field, Batrider's napalm, …), and `offField()` gives drop/imprint heroes a tag-out legacy field. Every authored boon stays inside the §4 budget bands — the inverse-power law and the budget data-lint stay green.
+- **S6 (partial) — §8 depth.** Off-field *channel* DPS (§8.2): a channel flagged `channel.offField: true` survives swap-out and keeps ticking while its caster is benched (`channelPersistsOffField` / `markOffField`); shipped on Drow's Multishot and Witch Doctor's Death Ward. The swap-cancel grace window (§8.3): a swap pressed during the active hero's cast point is queued (`pendingSwapIdx` / `flushPendingSwap`, `swapCancelGraceSec`) and fires once the cast resolves, so the input never eats a cast.
+
+**The element engine already works.** Zones carry the boon's element through the stored effect context, and zone ticks reuse it (`sim.ts`), so a zone with a damage tick re-applies the element every tick. Off-field zones keep ticking because the benched unit stays alive. Reactions fire through `applyElementAura` (`core/combat.ts`). So apply→swap→detonate is real today.
+
+**The honest gaps (what the *full vision* still wants):**
+
+1. ~~Per-hero signature tags are not yet individually authored.~~ **Closed in S5** — all ~122 heroes have a hand-authored signature tag.
+2. ~~Soak is not a first-class archetype.~~ **Closed in S5** — `field()` / `offField()` lay real lingering element zones.
+3. **The last of §8 depth.** Off-field *channel* DPS (§8.2) and the swap-cancel grace window (§8.3) **shipped in S6**. The remaining proposal is the **charge-meter alternative (§2.3)** — deliberately left in the back pocket per §2.3 (the design recommends against it as the default); building it would add a persisted-setting + save-migration surface for an opt-in the design leans away from. Also still a follow-on: real `summon` bodies for off-field summoners (S5 used lingering zones), pending exported summon specs.
+
+---
+
 ## 1. THE DESIGN GOALS — settled
 
 1. **The swap is a fluent combat verb.** Reposition-swapping is cheap and fast (a short floor, near Genshin's 1s), so you swap to dodge, to peel, to re-angle, freely.
@@ -541,7 +565,11 @@ Pure presentation, no core change, keyed off state the orchestrator already hold
 
 **S4 — The item tree + readability polish.** The new tag items (§7), `tagBoonAmpPct`/`tagGaugeReductionPct`, off-field markers, reaction-preview, arrival beats, and the combo chain counter. The pass that makes a support's *gear* part of the rotation and the whole loop — gauges, chains, reactions — legible.
 
-S0–S1 carry no balance risk and land fast. S2 is the design-dense slice; S3 is where combos come alive.
+**S5 — Author the full §6 table + first-class Soak.** Replace the role-templates with each hero's *signature* tag from §6 (§0.5 gap 1), keyed by hero id, so every hero is the combo piece the table describes. Promote **Soak** to a real archetype (§0.5 gap 2): a Soak tag lays a lingering **element field** — a `zone` whose tick re-applies the hero's element (and usually a slow/DoT) — so a benched soaker leaves the element on the ground for the next hero to detonate, on the overworld path, under Resonance. Off-field heroes (Enigma, Broodmother, Visage, Lone Druid, …) leave persistent off-field pressure on swap-out — a lingering field/legacy that keeps ticking while they are benched (the tested off-field path; real `summon` bodies are a follow-on once their specs are exported). All authored inside the §4 budget bands so the data-lint stays green and the inverse-power law holds. Pure data plus the Soak helper — no new core surface.
+
+**S6 — The remaining §8 depth.** *Shipped:* off-field *channel* DPS behind a per-ability `channel.offField: true` flag (§8.2) and the swap-cancel grace window (§8.3, reusing the dash's §3.0 timing contract — a swap during a cast point queues until the cast fires). *Deferred:* the optional charge-meter toggle (§2.3), kept in the back pocket per its own section rather than made the default. Each piece is independent and additive.
+
+S0–S1 carry no balance risk and land fast. S2 is the design-dense slice; S3 is where combos come alive; S5 is where every hero finally reads as itself.
 
 ---
 
@@ -554,6 +582,8 @@ S0–S1 carry no balance risk and land fast. S2 is the design-dense slice; S3 is
 | S2 | Each archetype resolves through the effect engine with a headless test (a tag-in `status` stun stuns; a `displace` gather pulls; a `heal` over `allies-in-radius` heals nearby; a `purge` cleanses; a `damage` strike nukes; a Soak applies the element); the §4 budget data-lint passes (no carry ships a support-sized boon) and a two-support rotation out-tempos a three-carry line in a fixed-seed harness; the gambit editor exposes `tag-in-ready`. |
 | S3 | A chained 2nd/3rd tag is measurably amplified inside the window and decays after; with Resonance on a benched hero's zone/summon keeps ticking and an apply→swap→detonate reaction resolves deterministically; Imprint leaves its legacy for its window; with Resonance off, plain effect-chaining still composes and the swap removes-on-swap as today; macro layer never benches mid-fight; `boundary.test.ts` green. |
 | S4 | The new tag items grant their stats and compose; `tagBoonAmpPct` scales boon magnitude, `tagGaugeReductionPct` shaves the gauge, the chain item extends the window; off-field markers, reaction-preview, arrival beats, and the combo chain counter render; no readout changes a combat result, so determinism tests stay green. |
+| S5 | Every hero resolves its own signature tag from §6 (no hero left on the role-template path); **Soak** lays a real lingering element field that a benched soaker leaves behind and a later tag detonates; off-field summoner tags leave persistent off-field pressure (lingering zones; real `summon` bodies are a follow-on); the §4 budget data-lint stays green for all authored boons and the inverse-power law holds; the full suite + `boundary.test.ts` stay green. |
+| S6 | A channel flagged `channel.offField` keeps ticking off-field after a swap-out and a non-flagged channel is still torn down (headless tests, `gameplay-overhaul.test.ts`); a swap pressed during the active hero's cast point is queued and fires once the cast resolves, never cancelling the cast (headless test); the full suite + `boundary.test.ts` stay green. The charge-meter toggle (§2.3) is deferred by design. |
 
 Cross-cutting gates (every slice): `npm test` + `npm run build` green; `boundary.test.ts` green (no `three`/DOM in core); save migration defaults cleanly; no exotic slots spent; gyms/Elite Five play identically with all of this toggled on or off.
 

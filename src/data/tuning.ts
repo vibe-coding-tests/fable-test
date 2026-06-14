@@ -266,6 +266,7 @@ export const TUNING = {
   tagChainAmpPerStepPct: 15,
   tagChainMaxSteps: 3,
   resonanceOffFieldPersistenceSec: 5,
+  swapCancelGraceSec: 0.6,    // §8.3: a swap pressed mid cast-point queues until the cast fires (no lost cast)
 
   // --- Genshin-overworld locomotion / traversal (GAMEPLAY_OVERHAUL G1/G3) ---
   locomotion: {

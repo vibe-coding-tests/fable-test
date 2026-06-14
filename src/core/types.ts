@@ -416,6 +416,10 @@ export interface AbilityDef {
     tick?: { interval: number; effects: EffectNode[] };
     onEnd?: EffectNode[];                // only if channel completes
     selfRootDuringCast?: boolean;
+    /** SWAP_COMBAT_OVERHAUL §8.2: this channel keeps ticking while its caster is
+     *  benched off-field (Resonance) — a swapped-out hero's turret/rain persists
+     *  for its remaining duration instead of being torn down on swap. */
+    offField?: boolean;
   };
   toggle?: {
     interval: number;                    // tick cadence while on

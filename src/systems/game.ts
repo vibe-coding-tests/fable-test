@@ -663,6 +663,14 @@ export class HeadlessScene implements SceneLike {
   pick(): { uid?: number; itemUid?: number; ground?: Vec2 } { return {}; }
   resetUnitViews(): void {}
   setDungeonRoom(): void {}
+  // Control/camera hooks the InputController calls directly (it is typed against
+  // the real GameScene). No-ops keep the ?hud=1 headless control path from
+  // throwing when the HUD is mounted over the headless scene for e2e tests.
+  clearCastPreview(): void {}
+  setCastPreview(): void {}
+  showOrderFeedback(): void {}
+  zoomBy(): void {}
+  toggleCameraMode(): void {}
 }
 
 /** No-op audio for headless runs. */
@@ -696,6 +704,10 @@ export class Game {
   private benchRoster = new Map<string, HeroSave>();
   activeIdx = 0;
   swapReadyAt = 0;
+  // §8.3 swap-cancel grace: a swap pressed during the active hero's cast point is
+  // queued here and flushed once the cast fires, so the input never eats a cast.
+  private pendingSwapIdx: number | null = null;
+  private pendingSwapAt = 0;
 
   caught: CreepInstanceSave[] = [];
   fielded: string[] = [];
@@ -5770,14 +5782,29 @@ export class Game {
     return !!this.settings.resonance && combatEligible && rec.respawnAt <= this.sim.time;
   }
 
+  // §8.2: a channel flagged offField keeps ticking while its caster is benched.
+  private channelPersistsOffField(u: Unit): boolean {
+    const ch = u.channel;
+    if (!ch || ch.source !== 'ability') return false;
+    return !!u.abilities[ch.slot]?.def.channel?.offField;
+  }
+
   private markOffField(rec: RosterEntry, u: Unit): void {
     const until = this.sim.time + TUNING.resonanceOffFieldPersistenceSec;
     // Entrance-only tag boons should not look like they replayed on a reposition swap.
     u.removeStatusWhere((s) => s.tag === 'swap-in-burst');
     u.offFieldUntil = until;
     u.ctrl = { kind: 'none' };
-    u.order = { kind: 'stop' };
-    this.sim.interruptActions(u);
+    // Keep an off-field-flagged channel alive (a benched turret/rain, §8.2); tear
+    // down anything else (windup, cast point, capture) so the swap reads clean.
+    if (this.channelPersistsOffField(u)) {
+      u.cast = null;
+      u.windupUntil = -1;
+      if (u.captureCh) this.sim.interruptCapture(u, 'off-field');
+    } else {
+      u.order = { kind: 'stop' };
+      this.sim.interruptActions(u);
+    }
     u.addStatus({
       status: 'buff',
       tag: 'off-field',
@@ -5828,6 +5855,20 @@ export class Game {
     }
   }
 
+  // §8.3: execute a swap that was queued during a cast point, once the cast has
+  // fired (or the grace window lapses). Keeps the swap input from cancelling a cast.
+  private flushPendingSwap(): void {
+    if (this.pendingSwapIdx === null) return;
+    const idx = this.pendingSwapIdx;
+    const cur = this.party[this.activeIdx]?.unit;
+    if (cur?.cast && this.sim.time < cur.cast.fireAt) {
+      if (this.sim.time - this.pendingSwapAt > TUNING.swapCancelGraceSec) this.pendingSwapIdx = null;
+      return; // still in the cast point — keep the swap queued
+    }
+    this.pendingSwapIdx = null;
+    if (idx !== this.activeIdx) this.trySwap(idx);
+  }
+
   trySwap(idx: number): boolean {
     if (this.liveGym) return this.selectLiveGymHero(idx);
     if (this.liveRaid) return this.selectLiveRaidHero(idx);
@@ -5838,6 +5879,14 @@ export class Game {
     if (rec.respawnAt > this.sim.time) {
       this.msg(`${REG.hero(rec.heroId).name} respawns in ${Math.ceil(rec.respawnAt - this.sim.time)}s`, 'bad');
       return false;
+    }
+    // §8.3: if the active hero is mid cast-point, queue the swap until the cast fires
+    // rather than discarding the cast. flushPendingSwap() re-issues it next frame.
+    const casting = this.party[this.activeIdx]?.unit?.cast;
+    if (casting && this.sim.time < casting.fireAt) {
+      this.pendingSwapIdx = idx;
+      this.pendingSwapAt = this.sim.time;
+      return true;
     }
     if (this.sim.time < this.swapReadyAt) {
       this.msg(`Swap on cooldown (${(this.swapReadyAt - this.sim.time).toFixed(1)}s)`, 'bad');
@@ -7651,6 +7700,7 @@ export class Game {
     }
 
     this.reapOffFieldUnits();
+    this.flushPendingSwap();
     this.updatePendingRecruit();
 
     // participation tracking for the active hero

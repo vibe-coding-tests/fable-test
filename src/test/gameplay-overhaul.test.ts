@@ -255,6 +255,87 @@ describe('gameplay overhaul: locomotion and discovery', () => {
     expect(game.party[0].unit).toBeNull();
   });
 
+  it('an offField-flagged channel keeps ticking while its caster is benched (§8.2)', () => {
+    const save = newGameSave('drow-ranger');
+    const jugSave = newGameSave('juggernaut').roster[0];
+    save.recruited.push('juggernaut');
+    save.party.push('juggernaut');
+    save.roster.push(jugSave);
+    const game = Game.headless(save);
+    const drow = game.activeUnit()!;
+    drow.lastEnemyDamageAt = game.sim.time;
+    drow.mana = drow.stats.maxMana;
+    const slot = drow.abilities.findIndex((a) => a.def.id === 'drow-multishot');
+    drow.abilities[slot].level = 1;
+    const enemy = game.sim.spawnCreep(REG.creep('kobold'), { team: 1, pos: { x: drow.pos.x + 120, y: drow.pos.y } });
+
+    game.sim.order(drow.uid, { kind: 'cast', slot });
+    advance(game, 0.35); // through the cast point — the channel is now running
+    expect(drow.channel).not.toBeNull();
+    const hpAtSwap = enemy.hp;
+
+    expect(game.trySwap(1)).toBe(true); // bench Drow mid-channel
+    game.update(0);
+    const benched = game.party[0].unit!;
+    expect(benched.offFieldUntil).toBeGreaterThan(game.sim.time);
+    expect(benched.channel).not.toBeNull(); // the turret survived the swap-out
+
+    advance(game, 1.0); // off-field ticks keep raining arrows
+    expect(enemy.hp).toBeLessThan(hpAtSwap);
+  });
+
+  it('a non-offField channel is still torn down on swap-out', () => {
+    // Pudge's Dismember is a plain channel (no offField flag): swapping should drop it.
+    const save = newGameSave('pudge');
+    const jugSave = newGameSave('juggernaut').roster[0];
+    save.recruited.push('juggernaut');
+    save.party.push('juggernaut');
+    save.roster.push(jugSave);
+    const game = Game.headless(save);
+    const pudge = game.activeUnit()!;
+    pudge.lastEnemyDamageAt = game.sim.time;
+    pudge.mana = pudge.stats.maxMana;
+    const slot = pudge.abilities.findIndex((a) => a.def.channel && !a.def.channel.offField);
+    expect(slot).toBeGreaterThanOrEqual(0);
+    pudge.abilities[slot].level = 1;
+    const enemy = game.sim.spawnCreep(REG.creep('kobold'), { team: 1, pos: { x: pudge.pos.x + 80, y: pudge.pos.y } });
+
+    game.sim.order(pudge.uid, { kind: 'cast', slot, uid: enemy.uid });
+    advance(game, 0.45);
+    expect(pudge.channel).not.toBeNull();
+
+    expect(game.trySwap(1)).toBe(true);
+    game.update(0);
+    const benched = game.party[0].unit;
+    // either reaped or kept off-field, but the channel must be gone
+    expect(benched?.channel ?? null).toBeNull();
+  });
+
+  it('a swap pressed during a cast point queues until the cast fires, never eating it (§8.3)', () => {
+    const save = newGameSave('drow-ranger');
+    const jugSave = newGameSave('juggernaut').roster[0];
+    save.recruited.push('juggernaut');
+    save.party.push('juggernaut');
+    save.roster.push(jugSave);
+    const game = Game.headless(save);
+    const drow = game.activeUnit()!;
+    drow.mana = drow.stats.maxMana;
+    const slot = drow.abilities.findIndex((a) => a.def.id === 'drow-gust');
+    drow.abilities[slot].level = 1;
+
+    game.sim.order(drow.uid, { kind: 'cast', slot, point: { x: drow.pos.x + 400, y: drow.pos.y } });
+    advance(game, 0.1); // inside the cast point (Gust castPoint 0.25)
+    expect(drow.cast).not.toBeNull();
+
+    const projBefore = game.sim.projectiles.length;
+    expect(game.trySwap(1)).toBe(true); // accepted, but queued
+    expect(game.activeIdx).toBe(0); // not swapped yet — the cast is still resolving
+
+    advance(game, 0.3); // cast fires, then the queued swap flushes
+    expect(game.sim.projectiles.length).toBeGreaterThan(projBefore); // the cast was NOT lost
+    expect(game.activeIdx).toBe(1); // queued swap executed once the cast point resolved
+  });
+
   it('tag-focused items expose S4 stats through normal item stat derivation', () => {
     const game = Game.headless(newGameSave('crystal-maiden'));
     const hero = game.activeUnit()!;
