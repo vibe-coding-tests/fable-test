@@ -96,6 +96,13 @@ export class InputController {
 
   private onMouseDown(e: MouseEvent): void {
     if (this.uiModalOpen) return;
+    if (this.game.cinematic.active) {
+      if (e.button === 0) {
+        e.preventDefault();
+        this.game.cinematicAdvance();
+      }
+      return;
+    }
     this.mouseX = e.clientX;
     this.mouseY = e.clientY;
     this.clickQueued = e.shiftKey;

@@ -88,6 +88,38 @@ function themedLoot(heroId: string, rank: BossDef['rank']): LootTable {
   };
 }
 
+const BOSS_LINES: Partial<Record<string, string[]>> = {
+  'phantom-assassin': ['The contract was written before this cycle began.', 'I will sign it in your shadow.'],
+  medusa: ['Look at what the Loop made of me.', 'Stone remembers better than flesh.'],
+  kunkka: ['The tide returns every oath I ever threw into it.', 'Stand fast or drown familiar.'],
+  tidehunter: ['Your little road ends under my reef.', 'Every cycle has an admiral. Every cycle, I eat one.'],
+  pudge: ['Fresh meat, old war.', 'The hook knows where history is soft.'],
+  doom: ['The seal thins. I only widen it.', 'Your Ancient is a door with a heartbeat.'],
+  'wraith-king': ['A crown is just a loop that learned posture.', 'Count me dead only when I stop counting myself.'],
+  invoker: ['At last, someone asks the right question incorrectly.', 'I have named this Loop twice and improved it both times.'],
+  zeus: ['Even thunder repeats when the sky is trapped.', 'Kneel, and I may let the next cycle hear you.'],
+  'natures-prophet': ['The forest remembers before banners.', 'Every root has chosen a side except you.'],
+  broodmother: ['The web is only the Loop made honest.', 'Come closer. I will teach your party geometry.'],
+  magnus: ['The mountain pulls all wars to one point.', 'You brought the Moon in pieces. I bring impact.'],
+  'elder-titan': ['I heard the first division. I hear this one too.', 'Not every broken thing deserves reunion.'],
+  tiny: ['Stone fell from the Moon. Stone learned to punch back.', 'The crater is only a larger me.'],
+  'storm-spirit': ['Round and round, hah! Even eternity needs rhythm.', 'Catch me before the next turn catches you.'],
+  'ember-spirit': ['The war repeats because no one has burned clean through it.', 'One spark can make a cycle confess.'],
+  spectre: ['The path behind you is also ahead.', 'At the crater, every self arrives armed.'],
+  'faceless-void': ['Time is not passing. It is circling.', 'I have seen your victory. It did not end things.'],
+  terrorblade: ['Your reflection has already betrayed you.', 'Break the Loop and see what climbs out of the mirror.'],
+  'templar-assassin': ['You see the blade only after it has already chosen you.', 'The secret at the heart of your world is poorly guarded.'],
+  'dragon-knight': ['The last of my brothers fell. I did not.', 'Your world keeps a stone at its heart. I came down for it.']
+};
+
+function bossDialogue(heroId: string, rank: BossDef['rank']): string[] {
+  const authored = BOSS_LINES[heroId];
+  if (authored) return authored;
+  return rank === 'boss'
+    ? ['This shard-road has a guardian.', 'Push harder. The next phase remembers teeth.']
+    : ['A small break in the road is still a break.', 'The wild does not yield its memory quietly.'];
+}
+
 function boss(id: string, heroId: string, region: string, rank: BossDef['rank']): BossDef {
   return {
     id,
@@ -101,7 +133,8 @@ function boss(id: string, heroId: string, region: string, rank: BossDef['rank'])
         ]
       : [{ atHpPct: 50, onEnter: [{ kind: 'status', status: 'buff', duration: 5, target: 'self', params: { mods: { moveSpeedPct: 12 }, tag: `${id}-mini-phase` } }] }],
     loot: themedLoot(heroId, rank),
-    tiers: ['normal', 'nightmare', 'hell']
+    tiers: ['normal', 'nightmare', 'hell'],
+    dialogue: bossDialogue(heroId, rank)
   };
 }
 

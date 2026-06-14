@@ -6,7 +6,7 @@ import { freshEchoProgress } from '../core/echo';
 import { rollLoot, scaledBounty } from '../core/phase3';
 import { overflowXpToGold } from '../core/progression';
 import { xpForLevel } from '../core/stats';
-import { GRADE_UP_COSTS, MASTERWORK_COSTS, REFORGE_COSTS } from '../data/forge';
+import { GRADE_UP_COSTS, IMPRINT_COSTS, MASTERWORK_COSTS, REFORGE_COSTS, REROLL_AFFIX_COSTS } from '../data/forge';
 import { gemDef } from '../data/gems';
 import { TUNING } from '../data/tuning';
 import { GATED_TOP_TIER, Game, itemAllowedFromSource, newGameSave } from '../systems/game';
@@ -293,6 +293,26 @@ describe('neutral-items-live (test 11)', () => {
     expect(g2.neutralStash.find((s) => s.id === 'trusty-shovel')).toBeUndefined();
     expect(g2.neutralStash.find((s) => s.id === enchanted!.id)?.count).toBe(1);
   });
+
+  it('preserves grade-only neutral copies through equip and reclaim', () => {
+    const save = soloSave('juggernaut', 20);
+    save.gold = 5000;
+    save.neutralStash = [{
+      id: 'trusty-shovel',
+      count: 1,
+      copies: [{ id: 'trusty-shovel', grade: 'sharp', gradeRoll: 0.9, resolvedMods: { maxHp: 12 } }]
+    }];
+    const g = Game.headless(save);
+
+    expect(g.equipNeutral(0, 'trusty-shovel')).toBe(true);
+    expect(g.party[0].neutralSlot?.grade).toBe('sharp');
+    expect(g.party[0].neutralSlot?.resolvedMods?.maxHp).toBe(12);
+
+    expect(g.reclaimNeutral(0)).toBe(true);
+    const copy = g.neutralStash.find((s) => s.id === 'trusty-shovel')?.copies?.[0];
+    expect(copy?.grade).toBe('sharp');
+    expect(copy?.resolvedMods?.maxHp).toBe(12);
+  });
 });
 
 describe('Armory and bound loot', () => {
@@ -316,6 +336,46 @@ describe('Armory and bound loot', () => {
 
     const roundTrip = g.buildSave();
     expect(roundTrip.inventoryStash).toContainEqual({ id: 'butterfly', bound: true });
+  });
+
+  it('enforces item level requirements before Armory equip', () => {
+    const save = soloSave('juggernaut', 1);
+    save.inventoryStash = [{ id: 'butterfly', bound: true, grade: 'pristine' }];
+    const g = Game.headless(save);
+
+    expect(g.equipArmoryItem(0, 0)).toBe(false);
+    expect(g.inventoryStash).toHaveLength(1);
+    expect(g.activeUnit()!.items.some((it) => it?.defId === 'butterfly')).toBe(false);
+  });
+
+  it('absorbs Aghanim items into permanent hero augments', () => {
+    const save = soloSave('juggernaut', 20);
+    save.inventoryStash = [{ id: 'aghanims-scepter', bound: true }];
+    const g = Game.headless(save);
+
+    expect(g.applyArmoryAugmentForHero('juggernaut', 0)).toBe(true);
+    expect(g.inventoryStash).toEqual([]);
+    expect(g.buildSave().roster[0].augments?.scepter).toBe(true);
+    expect(g.applyArmoryAugmentForHero('juggernaut', 0)).toBe(false);
+  });
+
+  it('rolls item identity for Black Market and gamble-vendor copies', () => {
+    const save = soloSave('juggernaut', 30, [...REG.gyms.values()].map((g) => g.badgeId));
+    save.gold = 100000;
+    const g = Game.headless(save);
+    g.activeUnit()!.pos = { ...g.region.town.pos };
+
+    const relic = g.blackMarketRelicWheel();
+    expect(relic).not.toBeNull();
+    expect(relic?.bound).toBe(true);
+    expect(relic?.grade).toBeDefined();
+    expect(relic?.resolvedMods).toBeDefined();
+
+    const gambled = g.gambleVendorRoll('t3');
+    expect(gambled).not.toBeNull();
+    expect(gambled?.bound).toBe(true);
+    expect(gambled?.grade).toBeDefined();
+    expect(gambled?.affixes).toBeDefined();
   });
 
   it('still sells liquid components for gold', () => {
@@ -590,7 +650,7 @@ describe('loot overhaul curated chase and black-market sinks', () => {
     const marksBefore = { ...g.lootMarks };
     const assembled = g.assembleLegendary('assault-cuirass');
 
-    expect(assembled).toEqual({ id: 'assault-cuirass', bound: true });
+    expect(assembled).toMatchObject({ id: 'assault-cuirass', bound: true });
     expect(g.inventoryStash.some((it) => it.id === 'hyperstone')).toBe(false);
     expect(g.inventoryStash.some((it) => it.id === 'platemail')).toBe(false);
     expect(g.inventoryStash.some((it) => it.id === 'chainmail')).toBe(false);
@@ -706,6 +766,78 @@ describe('loot overhaul curated chase and black-market sinks', () => {
     expect(g.inventoryStash[0].sockets).toEqual([null]);
     expect(g.inventoryStash[0].resolvedMods?.damage ?? 0).toBeLessThan(damageWithGem);
     expect(g.inventoryStash[1]).toEqual({ id: 'chipped-topaz' });
+  });
+
+  it('rerolls, imprints, and preserves an affix through reforge', () => {
+    const save = soloSave('juggernaut', 20);
+    save.gold = 10_000;
+    save.essence = 100;
+    save.inventoryStash = [{
+      id: 'daedalus',
+      bound: true,
+      grade: 'sharp',
+      gradeRoll: 0.5,
+      affixes: [
+        { affixId: 'heavy', roll: 0.2, resolved: { damage: 6 } },
+        { affixId: 'blooddrinkers', roll: 0.8, resolved: { lifestealPct: 9 } }
+      ],
+      sockets: []
+    }];
+    const g = Game.headless(save);
+
+    expect(g.imprintArmoryAffix(0, 0)).toBe(true);
+    expect(g.inventoryStash[0].imprintedAffixId).toBe('heavy');
+    expect(g.essence).toBe(100 - IMPRINT_COSTS.sharp.essence);
+    expect(g.rerollArmoryAffix(0, 0)).toBe(false);
+
+    const goldBeforeReroll = g.gold;
+    expect(g.rerollArmoryAffix(0, 1)).toBe(true);
+    expect(g.gold).toBe(goldBeforeReroll - REROLL_AFFIX_COSTS.sharp.gold);
+
+    expect(g.reforgeArmoryItem(0)).toBe(true);
+    expect(g.inventoryStash[0].affixes?.some((affix) => affix.affixId === 'heavy')).toBe(true);
+    expect(g.inventoryStash[0].imprintedAffixId).toBe('heavy');
+  });
+
+  it('adds sockets and fuses matching gems', () => {
+    const save = soloSave('juggernaut', 20);
+    save.gold = 10_000;
+    save.essence = 100;
+    save.inventoryStash = [
+      { id: 'daedalus', bound: true, grade: 'refined', gradeRoll: 0.5, affixes: [], sockets: [] },
+      { id: 'chipped-ruby' },
+      { id: 'chipped-ruby' },
+      { id: 'chipped-ruby' }
+    ];
+    const g = Game.headless(save);
+
+    expect(g.addArmorySocketQuote(0)?.cap).toBeGreaterThan(0);
+    expect(g.addArmorySocket(0)).toBe(true);
+    expect(g.inventoryStash[0].sockets).toEqual([null]);
+
+    const fuse = g.gemFuseOptions()[0];
+    expect(fuse.to).toBe('Flawed Ruby');
+    expect(g.fuseArmoryGems(fuse.indices)).toBe(true);
+    expect(g.inventoryStash.some((item) => item.id === 'flawed-ruby')).toBe(true);
+    expect(g.inventoryStash.filter((item) => item.id === 'chipped-ruby')).toHaveLength(0);
+  });
+
+  it('persists loot filter settings and salvages filtered unlocked junk only', () => {
+    const save = soloSave('juggernaut', 20);
+    save.inventoryStash = [
+      { id: 'crystalys', bound: true, grade: 'broken', gradeRoll: 0.1, affixes: [], sockets: [] },
+      { id: 'daedalus', bound: true, grade: 'pristine', gradeRoll: 1, affixes: [], sockets: [], locked: true }
+    ];
+    const g = Game.headless(save);
+    g.setLootFilter({ minGrade: 'standard', minRarity: 'rare', autoDisenchantBelowGrade: 'standard' });
+
+    const essence = g.salvageFilteredArmoryJunk();
+    expect(essence).toBeGreaterThan(0);
+    expect(g.inventoryStash.map((item) => item.id)).toEqual(['daedalus']);
+
+    const rebuilt = g.buildSave();
+    expect(rebuilt.lootFilter?.minGrade).toBe('standard');
+    expect(rebuilt.lootFilter?.autoDisenchantBelowGrade).toBe('standard');
   });
 
   it('exposes live Black Market wheel costs through the view-model', () => {

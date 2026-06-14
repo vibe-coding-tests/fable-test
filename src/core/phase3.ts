@@ -106,7 +106,7 @@ function gradeSourceForDrop(source?: DropSource | GradeFloorSource): GradeFloorS
   }
 }
 
-function instantiateDroppedItem(id: string, tier: DifficultyTier, rng: Rng, quality?: ItemQuality, source?: DropSource | GradeFloorSource): ItemSave {
+export function instantiateDroppedItem(id: string, tier: DifficultyTier, rng: Rng, quality?: ItemQuality, source?: DropSource | GradeFloorSource): ItemSave {
   const item: ItemSave = { id };
   if (quality) item.quality = quality;
   if (!itemSupportsRolledIdentity(id)) return item;

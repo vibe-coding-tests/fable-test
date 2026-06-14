@@ -262,7 +262,7 @@ const BOSS_CLEAR: CutsceneDef = {
     {
       shot: { angle: 'low', move: 'pull-back', palette: 'victory gold', mood: 'released' },
       stage: [{ kind: 'focus', target: 'boss' }],
-      line: { speaker: 'Boss Clear', text: '{boss} breaks. The shard-road opens wider.' },
+      line: { speaker: '{boss}', text: '{bossLine}' },
       sound: 'raid-clear',
       hold: 2.5
     }
@@ -282,7 +282,7 @@ const BOSS_PHASE_STINGER: CutsceneDef = {
     {
       shot: { angle: 'low', move: 'push-in', palette: 'phase ember', mood: 'committing' },
       stage: [{ kind: 'gesture', target: 'boss', gesture: 'ground-slam' }],
-      line: { speaker: '{boss}', text: 'You pushed it past something. Now it is serious.' },
+      line: { speaker: '{boss}', text: '{bossLine}' },
       sound: 'levelup',
       hold: 1.8
     }
@@ -377,6 +377,26 @@ const RESONANCE_FIRST_REACTION: CutsceneDef = {
       line: { speaker: 'Resonance', text: '{echoLine}' },
       sound: 'levelup',
       hold: 2.8
+    }
+  ]
+};
+
+const TRIAL_DIALOGUE_STINGER: CutsceneDef = {
+  id: 'trial-dialogue-stinger',
+  title: '{trial}',
+  tier: 'stinger',
+  trigger: { kind: 'trial-dialogue' },
+  skippable: true,
+  letterbox: false,
+  category: 'Binds',
+  replayable: false,
+  beats: [
+    {
+      shot: { angle: 'over-shoulder', move: 'rack-focus', palette: 'trial glass', mood: 'spoken challenge' },
+      stage: [{ kind: 'develop-character', target: 'boss', text: '{trial}', gesture: 'channel-loop' }],
+      line: { speaker: '{speaker}', text: '{trialLine}', portraitHeroId: '{heroId}' },
+      sound: 'capture',
+      hold: 3
     }
   ]
 };
@@ -489,7 +509,7 @@ const CHAMPION_CLEAR: CutsceneDef = {
     {
       shot: { angle: 'wide', move: 'push-in', palette: 'new dawn', mood: 'held open' },
       stage: [{ kind: 'focus', target: 'tower' }],
-      line: { speaker: 'The Tower', text: 'For one turn of the war, the reset does not close.' },
+      line: { speaker: 'The Tower', text: '{closing}' },
       hold: 3.2
     }
   ]
@@ -890,6 +910,7 @@ export const ALL_CUTSCENES: CutsceneDef[] = [
   LAST_ELDWURM_PHASE,
   ECHO_MILESTONE,
   RESONANCE_FIRST_REACTION,
+  TRIAL_DIALOGUE_STINGER,
   ELITE_OPEN,
   ...ELITE_PERSONAS,
   CHAMPION_INTRO,

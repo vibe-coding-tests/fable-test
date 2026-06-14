@@ -662,6 +662,61 @@ button:disabled { opacity: 0.45; cursor: default; }
 .svc-row .svc-main { flex: 1; min-width: 0; }
 .svc-row .svc-main .rr-sub { color: #8aa0c0; font-size: 11px; }
 .svc-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.svc-row.item-row { align-items: flex-start; }
+.svc-row.item-row.locked { background: rgba(255, 216, 106, 0.06); }
+.loot-filter-row { grid-column: 1 / -1; }
+.mini-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--dim);
+  font-size: 11px;
+}
+.small-select {
+  pointer-events: auto;
+  background: #101724;
+  color: var(--text);
+  border: 1px solid var(--panel-line);
+  border-radius: 5px;
+  padding: 3px 6px;
+  font-size: 11px;
+}
+.item-compare {
+  margin-top: 5px;
+  font-size: 11px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  align-items: baseline;
+}
+.item-compare b { letter-spacing: 0.08em; }
+.item-compare.good b { color: var(--good); }
+.item-compare.bad b { color: var(--bad); }
+.item-compare.side b { color: var(--gold); }
+.item-compare em { color: #b8c8df; font-style: normal; }
+.item-stat-lines {
+  margin-top: 4px;
+  color: #cbd8ea;
+  font-size: 11px;
+}
+.affix-lines {
+  margin-top: 5px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.affix-line {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+  color: #8fc7ff;
+  font-size: 11px;
+}
+.affix-line.signature { color: #ffb35c; }
+.affix-line.locked { color: var(--gold); }
+.affix-line em { color: #aebbd2; font-style: normal; }
+.affix-line b { font-size: 10px; letter-spacing: 0.08em; }
 .btn.tier-nightmare { border-color: #b06bd6; color: #e3b8ff; }
 .btn.tier-hell { border-color: #d6533f; color: #ff9f86; }
 
@@ -827,6 +882,7 @@ button:disabled { opacity: 0.45; cursor: default; }
   opacity: 0;
   transition: opacity 180ms ease;
 }
+#cinematic-layer.reduced-motion .cin-bar { transition: none; }
 #cinematic-layer.letterbox .cin-bar { opacity: 1; }
 .cin-bar.top { top: 0; }
 .cin-bar.bottom { bottom: 0; }
@@ -910,6 +966,7 @@ button:disabled { opacity: 0.45; cursor: default; }
   background: linear-gradient(90deg, #ffd86a, #ff9d4d);
   transition: width 60ms linear;
 }
+#cinematic-layer.reduced-motion .cin-skip-confirm span { transition: none; }
 
 .cin-gallery-entry { display: flex; align-items: center; gap: 12px; justify-content: space-between; }
 .cin-gallery-entry > div { flex: 1; }

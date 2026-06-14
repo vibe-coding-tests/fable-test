@@ -330,6 +330,8 @@ export interface CutsceneSettings {
   length: 'full' | 'short' | 'off'; // tier degrade matrix (§4.3): setpiece→stinger→toast
   defaultSpeed: 1 | 2 | 4;          // start fast-forwarded by default for impatient players
   alwaysSkip: boolean;              // one switch: route the line as a toast, never stage
+  photosensitive: boolean;           // cap flashes/shakes and use instant overlay transitions
+  tieIns: boolean;                   // seasonal/legend homages can be fully suppressed
 }
 
 export type StingerId = 'capture' | 'merge' | 'levelup' | 'badge' | 'raid-clear';
@@ -523,6 +525,7 @@ export interface CreepDef {
   elementalShield?: { element: ActiveElement; hp: number; weakTo: ActiveElement[]; weakMult: number };
   drops?: ItemDropTable;
   animProfile?: AnimProfile;
+  lore?: string;
 }
 
 // ---------- Items ----------
@@ -552,6 +555,13 @@ export interface RolledAffix {
   affixId: string;
   roll: number;
   resolved: StatModMap;
+}
+
+export interface LootFilterSave {
+  minGrade: ItemGrade;
+  minRarity: ItemRarity;
+  autoDisenchantBelowGrade?: ItemGrade;
+  autoDisenchantBelowRarity?: ItemRarity;
 }
 
 export interface ItemSetDef {
@@ -606,6 +616,7 @@ export interface ItemDef {
   active?: AbilityDef;         // item actives reuse the ability engine
   set?: string;
   socketCap?: number;
+  levelReq?: number;
   charges?: number;            // consumables / wand
   maxCharges?: number;
   consumesAllCharges?: boolean; // Magic Wand: active spends every charge
@@ -639,6 +650,7 @@ export interface BossDef {
   phases?: { atHpPct: number; onEnter: EffectNode[]; gambitBias?: string }[];
   loot: LootTable;
   tiers: DifficultyTier[];
+  dialogue: string[];
 }
 
 export interface RaidDef {
@@ -687,6 +699,7 @@ export type CutsceneTrigger =
   | { kind: 'raid-clear'; raidId?: string }
   | { kind: 'item-first-hold'; itemId: string }
   | { kind: 'echo-milestone' }
+  | { kind: 'trial-dialogue' }
   | { kind: 'elite-start' }
   | { kind: 'elite-persona'; index: number }
   | { kind: 'champion-clear' }
@@ -695,8 +708,8 @@ export type CutsceneTrigger =
   | { kind: 'seasonal-event'; eventId: string }
   | { kind: 'legend-callout'; legendId: string };
 
-export type ShotAngle = 'wide' | 'close' | 'low' | 'high' | 'over-shoulder' | 'title-card';
-export type ShotMove = 'hold' | 'push-in' | 'pull-back' | 'crane' | 'snap';
+export type ShotAngle = 'wide' | 'close' | 'low' | 'high' | 'bird-eye' | 'over-shoulder' | 'through-objects' | 'reflection' | 'title-card';
+export type ShotMove = 'hold' | 'push-in' | 'pull-back' | 'crane' | 'snap' | 'rack-focus' | 'orbit';
 
 export interface ShotSpec {
   angle: ShotAngle;
@@ -709,7 +722,15 @@ export type StageAction =
   | { kind: 'title'; text: string }
   | { kind: 'focus'; target: 'player' | 'ally' | 'boss' | 'region' | 'item' | 'tower' }
   | { kind: 'vfx'; archetype: VfxArchetype; color: string }
-  | { kind: 'gesture'; target: 'ally' | 'boss' | 'player'; gesture: AnimGesture };
+  | { kind: 'gesture'; target: 'ally' | 'boss' | 'player'; gesture: AnimGesture }
+  | { kind: 'describe-environment'; text: string }
+  | { kind: 'develop-character'; target: 'ally' | 'boss' | 'player'; text?: string; gesture?: AnimGesture }
+  | { kind: 'advance-plot'; text: string; target?: 'ally' | 'boss' | 'player' | 'item' | 'tower' }
+  | { kind: 'introduce-conflict'; text: string; target?: 'ally' | 'boss' | 'player' | 'tower' }
+  | { kind: 'reveal-mystery'; text: string; target?: 'ally' | 'boss' | 'region' | 'item' | 'tower' }
+  | { kind: 'set-tone'; text: string }
+  | { kind: 'explore-theme'; text: string }
+  | { kind: 'establish-history'; text: string };
 
 export interface DialogueCard {
   speaker: string;
@@ -1235,12 +1256,18 @@ export interface ItemSave {
   grade?: ItemGrade;
   gradeRoll?: number;
   affixes?: RolledAffix[];
+  imprintedAffixId?: string;
   sockets?: (string | null)[];
   resolvedMods?: StatModMap;
   locked?: boolean;
 }
 export type HeroLoadoutSlots = (string | null)[];
 export type ArmoryLoadouts = Record<string, Record<string, HeroLoadoutSlots>>;
+export interface NeutralStashEntry {
+  id: string;
+  count: number;
+  copies?: ItemSave[];
+}
 export interface DungeonProgressSave {
   clears: number;
   wipes: number;
@@ -1306,8 +1333,9 @@ export interface GameSave {
   eliteFive: { defeated: number; championDown: boolean };
   factionChoices: Record<string, string>;
   heldUniques: string[];
-  neutralStash: { id: string; count: number }[];
+  neutralStash: NeutralStashEntry[];
   lootMarks: Record<LootBand, number>;
+  lootFilter?: LootFilterSave;
   goldSinks: { buybacks: number; tomesUsed: number; respecs: number; gambleRolls: number; salvages: number };
   essence: number;
   loadouts: ArmoryLoadouts;

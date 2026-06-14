@@ -1,17 +1,35 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { registerAllContent } from '../data/index';
 import { REG } from '../core/registry';
-import { Game, HeadlessAudio, newGameSave } from '../systems/game';
+import { Game, HeadlessAudio, HeadlessScene, newGameSave, type AudioLike } from '../systems/game';
 import { CinematicDirector } from '../engine/cinematic';
 import { compileCutsceneDsl } from '../engine/cutscene-dsl';
 import { StoryDetector } from '../engine/story-detectors';
 import type { Sim } from '../core/sim';
-import type { CutsceneDef, SimEvent } from '../core/types';
+import type { CutsceneDef, GameSave, SimEvent, StingerId } from '../core/types';
+import type { CinematicMixMode } from '../engine/audio';
 
 beforeAll(() => registerAllContent());
 
 function freshGame(): Game {
   return Game.headless(newGameSave('juggernaut'));
+}
+
+class RecordingAudio implements AudioLike {
+  stingers: StingerId[] = [];
+  mixes: CinematicMixMode[] = [];
+  dialogue: string[] = [];
+  setSettings(): void {}
+  handleEvent(): void {}
+  playStinger(id: StingerId): void { this.stingers.push(id); }
+  setCinematicMix(mode: CinematicMixMode): void { this.mixes.push(mode); }
+  playDialogueBlip(seed = ''): void { this.dialogue.push(seed); }
+  update(): void {}
+}
+
+function recordedGame(save: GameSave = newGameSave('juggernaut')): { game: Game; audio: RecordingAudio } {
+  const audio = new RecordingAudio();
+  return { game: new Game(null, save, { scene: new HeadlessScene(), audio }), audio };
 }
 
 function fullPartyGame(regionId = 'tranquil-vale'): Game {
@@ -198,15 +216,23 @@ describe('STORY §3.4 cut-scene controls', () => {
     expect(d.view()?.beatCount).toBe(2);
   });
 
-  it('default speed and fast-forward stepping (2x/4x/8x) work', () => {
+  it('default speed and fast-forward stepping (4x/8x/2x) work', () => {
     const d = new CinematicDirector();
     d.setSettings({ defaultSpeed: 2 });
     d.play(setpiece, {}, false);
     expect(d.view()?.speed).toBe(2);
-    d.setFastForward(true); expect(d.view()?.speed).toBe(2);
     d.setFastForward(true); expect(d.view()?.speed).toBe(4);
     d.setFastForward(true); expect(d.view()?.speed).toBe(8);
+    d.setFastForward(true); expect(d.view()?.speed).toBe(2);
     d.setFastForward(false); expect(d.view()?.speed).toBe(2);
+  });
+
+  it('exposes reduced-motion and photosensitivity caps to presentation', () => {
+    const d = new CinematicDirector();
+    d.setSettings({ reducedMotion: true, photosensitive: true });
+    d.play(setpiece, {}, false);
+    expect(d.view()?.reducedMotion).toBe(true);
+    expect(d.view()?.photosensitive).toBe(true);
   });
 
   it('typewriter: a tap completes the line before the next tap advances', () => {
@@ -270,6 +296,25 @@ describe('STORY §5 cut-scene DSL', () => {
     expect(def.beats[0].line?.text).toContain('brothers fell');
     expect(def.beats[0].sound).toBe('raid-clear');
   });
+
+  it('resolves ref: dialogue without duplicating shipped strings', () => {
+    const def = compileCutsceneDsl(`
+      BEAT {
+        SHOT: through-objects/rack-focus/voidlight/withheld
+        STAGE: {RevealMystery(mystery="the claimant", target="boss")}
+        LINE: Claimant : "ref:last-eldwurm.dialogue[0]"
+        HOLD: 2.0
+      }
+    `, {
+      id: 'dsl-ref-last-eldwurm',
+      title: 'Ref',
+      tier: 'stinger',
+      trigger: { kind: 'raid-intro', raidId: 'last-eldwurm' }
+    });
+    expect(def.beats[0].shot.angle).toBe('through-objects');
+    expect(def.beats[0].shot.move).toBe('rack-focus');
+    expect(def.beats[0].line?.text).toBe(REG.raid('last-eldwurm').dialogue[0]);
+  });
 });
 
 // ----------------------------------------------------------------
@@ -321,6 +366,19 @@ describe('STORY gallery, titles & content', () => {
     expect(REG.item('aegis-of-the-immortal').lore.toLowerCase()).toContain('inscribed');
     const roster = [...REG.heroes.values()].filter((h) => h.lore.includes('turn of the Loop'));
     expect(roster.length).toBeGreaterThan(10);
+    expect(REG.hero('arc-warden').lore).toContain('turn of the Loop');
+    expect(REG.creep('kobold').lore).toContain('Moon-stone');
+    expect([...REG.bosses.values()].every((b) => b.dialogue.length >= 2)).toBe(true);
+  });
+
+  it('tie-in setting suppresses festivals and legend callouts independently', () => {
+    const g = freshGame();
+    while (g.cinematic.active) g.cinematicSkip();
+    g.settings.cutscene!.tieIns = false;
+    expect(g.runSeasonalEvent('wraith-night-altar')).toBe(false);
+    expect(g.triggerLegendCallout('pit-remembers')).toBe(false);
+    expect(g.codexUnlocks.has('festival:wraith-night-altar')).toBe(false);
+    expect(g.codexUnlocks.has('legend:pit-remembers')).toBe(false);
   });
 
   it('a festival that cannot launch its mode is remembered without paying its clear reward', () => {
@@ -364,5 +422,46 @@ describe('STORY gallery, titles & content', () => {
     expect(REG.legends.size).toBeGreaterThanOrEqual(5);
     for (const event of REG.seasonalEvents.values()) expect(REG.cutscenes.has(event.cutsceneId)).toBe(true);
     for (const legend of REG.legends.values()) expect(REG.cutscenes.has(legend.cutsceneId)).toBe(true);
+  });
+});
+
+// ----------------------------------------------------------------
+// STORY §3.2 / §4.4 / §6.12 — cinematic audio + climax flavor
+// ----------------------------------------------------------------
+describe('STORY cinematic presentation routing', () => {
+  it('applies cut-scene music directives and dialogue blips from the active view', () => {
+    const { game, audio } = recordedGame();
+    game.update(0.016);
+    expect(audio.mixes).toContain('silence');
+    game.cinematicAdvance();
+    game.update(0.016);
+    expect(audio.dialogue).toContain('Narration');
+    while (game.cinematic.active) game.cinematicSkip();
+    game.update(0.016);
+    expect(audio.mixes[audio.mixes.length - 1]).toBe('normal');
+  });
+
+  it('suppresses gameplay stingers while a cinematic owns the impact peak', () => {
+    const save = newGameSave('juggernaut');
+    save.playtimeSec = 0; // prologue active
+    const { game, audio } = recordedGame(save);
+    game.eliteFive.defeated = 5;
+    const playerTeam = ['juggernaut', 'axe', 'sven', 'sniper', 'crystal-maiden'].map((heroId) => ({ heroId, level: 80, items: ['heart-of-tarrasque', 'divine-rapier'] }));
+    const result = game.runChampion({ seed: 1, playerTeam });
+    expect(result.won).toBe(true);
+    expect(audio.stingers).not.toContain('raid-clear');
+  });
+
+  it('colors the champion closing line by reputation and faction choice', () => {
+    const g = freshGame();
+    g.reputation = 8;
+    expect(g.championClosingLine()).toContain('mercy');
+    g.reputation = -8;
+    expect(g.championClosingLine()).toContain('fear');
+    g.reputation = 0;
+    g.factionChoices['shadeshore'] = 'kunkka';
+    expect(g.championClosingLine()).toContain('fleet');
+    g.factionChoices['shadeshore'] = 'tidehunter';
+    expect(g.championClosingLine()).toContain('reef');
   });
 });

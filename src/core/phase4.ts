@@ -16,7 +16,7 @@ export function defaultGraphicsSettings(): GraphicsSettings {
 }
 
 export function defaultCutsceneSettings(): CutsceneSettings {
-  return { length: 'full', defaultSpeed: 1, alwaysSkip: false };
+  return { length: 'full', defaultSpeed: 1, alwaysSkip: false, photosensitive: false, tieIns: true };
 }
 
 /**
@@ -44,7 +44,9 @@ export function migrateAudioSettings(old: (LegacySettings & { audio?: AudioSetti
     cutscene: {
       length: cx?.length ?? cd.length,
       defaultSpeed: cx?.defaultSpeed ?? cd.defaultSpeed,
-      alwaysSkip: cx?.alwaysSkip ?? cd.alwaysSkip
+      alwaysSkip: cx?.alwaysSkip ?? cd.alwaysSkip,
+      photosensitive: cx?.photosensitive ?? cd.photosensitive,
+      tieIns: cx?.tieIns ?? cd.tieIns
     },
     audio: existing
       ? {

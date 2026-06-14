@@ -1,8 +1,8 @@
 import { TUNING } from '../data/tuning';
 import { DEFAULT_CREEP_DROP_TABLES, qualityOddsByTier } from '../data/creep-drops';
-import { GRADE_UP_COSTS, MASTERWORK_COSTS, REFORGE_COSTS, disenchant, gradeUp, masterwork, reforge, refreshResolvedMods } from '../data/forge';
-import { gemDef, isGemId } from '../data/gems';
-import { ITEM_GRADES } from '../data/grade';
+import { GRADE_UP_COSTS, IMPRINT_COSTS, MASTERWORK_COSTS, REFORGE_COSTS, REROLL_AFFIX_COSTS, addSocket, disenchant, gradeUp, imprintAffix, masterwork, reforge, refreshResolvedMods, rerollAffix, socketAddCost } from '../data/forge';
+import { fuseGems, gemDef, isGemId } from '../data/gems';
+import { ITEM_GRADES, levelReq, percentileForGrade, rollGrade, statMultiplier, type GradeFloorSource } from '../data/grade';
 import { QUALITY_GRADES, nextQuality, rarityColor } from '../data/quality';
 import { applyLootFilter, DEFAULT_LOOT_FILTER, type LootFilterRule } from './loot-filter';
 import { REG } from '../core/registry';
@@ -25,6 +25,7 @@ import {
   defaultPhase3SaveFields,
   draftTeams,
   enchantNeutralItem,
+  instantiateDroppedItem,
   migratePhase3Save,
   rerollNeutralItem,
   respecCost,
@@ -49,8 +50,8 @@ import { ELITE_DRAFT } from '../data/drafts';
 import { resonanceMods } from '../core/resonance';
 import { levelFromXp, xpForLevel } from '../core/stats';
 import { dist, fromAngle, norm, sub } from '../core/math2d';
-import type { ActiveElement, ArmoryLoadouts, BossDef, CreepTier, CreepInstanceSave, CutsceneDef, DifficultyTier, DraftDef, DropSource, DungeonDef, DungeonModifierDef, DungeonProgressSave, DungeonRoom, EchoProgress, GambitRule, GameSave, GraphicsSettings, HeroLoadoutSlots, HeroSave, ItemDropTable, ItemGrade, ItemQuality, ItemRarity, ItemSave, LootBand, LoreEntryDef, MacroHeroSetup, NeutralItemDef, Order, QuestProgress, RaidDef, RegionDef, RoomTemplate, RoomType, SeasonalEventDef, SimEvent, StingerId, Vec2 } from '../core/types';
-import { ProceduralAudio } from '../engine/audio';
+import type { ActiveElement, ArmoryLoadouts, BossDef, CreepTier, CreepInstanceSave, CutsceneDef, DifficultyTier, DraftDef, DropSource, DungeonDef, DungeonModifierDef, DungeonProgressSave, DungeonRoom, EchoProgress, GambitRule, GameSave, GraphicsSettings, HeroAugments, HeroLoadoutSlots, HeroSave, ItemDef, ItemDropTable, ItemGrade, ItemQuality, ItemRarity, ItemSave, ItemTier, LootBand, LoreEntryDef, MacroHeroSetup, NeutralItemDef, NeutralStashEntry, Order, QuestProgress, RaidDef, RegionDef, RoomTemplate, RoomType, SeasonalEventDef, SimEvent, StingerId, StatModMap, Vec2 } from '../core/types';
+import { ProceduralAudio, type CinematicMixMode } from '../engine/audio';
 import { CinematicDirector, type CinematicView, type CutsceneContext } from '../engine/cinematic';
 import { StoryDetector, type StoryObserveCtx, type StoryTrigger } from '../engine/story-detectors';
 import { GameScene } from '../engine/scene';
@@ -130,6 +131,7 @@ export interface RosterEntry {
   manaPct: number;
   items: (ItemSave | null)[];
   neutralSlot: ItemSave | null;
+  augments: HeroAugments;
   abilityCooldowns: number[]; // remaining sec at serialize time
   benchedAt: number;          // game time at swap-out
   respawnAt: number;          // 0 = alive
@@ -142,7 +144,14 @@ export interface RosterEntry {
 }
 
 function cloneItemSave(item: ItemSave | null | undefined): ItemSave | null {
-  return item ? { ...item } : null;
+  return item
+    ? {
+        ...item,
+        affixes: item.affixes?.map((affix) => ({ ...affix, resolved: { ...affix.resolved } })),
+        sockets: item.sockets ? [...item.sockets] : undefined,
+        resolvedMods: item.resolvedMods ? { ...item.resolvedMods } : undefined
+      }
+    : null;
 }
 
 function normalizeSavedItems(items: (ItemSave | null)[] | undefined): (ItemSave | null)[] {
@@ -160,6 +169,7 @@ function cloneHeroSave(save: HeroSave): HeroSave {
     xp: save.xp,
     items: normalizeSavedItems(save.items),
     neutralSlot: cloneItemSave(save.neutralSlot),
+    augments: { ...(save.augments ?? {}) },
     gambits: structuredClone(save.gambits ?? []),
     talentPicks: [...save.talentPicks],
     echo: normalizeEchoProgress(save.echo),
@@ -178,6 +188,7 @@ function heroSaveFromRosterEntry(rec: RosterEntry): HeroSave {
     xp: rec.xp,
     items: rec.items.map(cloneItemSave),
     neutralSlot: cloneItemSave(rec.neutralSlot),
+    augments: { ...rec.augments },
     gambits: structuredClone(rec.gambits),
     talentPicks: [...rec.talentPicks],
     echo: {
@@ -200,6 +211,7 @@ function freshHeroSave(heroId: string, level = 1): HeroSave {
     xp: xpForLevel(level),
     items: [null, null, null, null, null, null],
     neutralSlot: null,
+    augments: {},
     gambits: [],
     talentPicks: [null, null, null, null],
     echo: freshEchoProgress(),
@@ -231,11 +243,61 @@ function defaultQuestProgress(): QuestProgress {
   return { stage: 'unfound', attunement: 0, trialCompletions: 0 };
 }
 
+const NEUTRAL_ROLL_STATS = new Set<keyof StatModMap>([
+  'damage',
+  'armor',
+  'str',
+  'agi',
+  'int',
+  'maxHp',
+  'maxMana',
+  'attackSpeed',
+  'hpRegen',
+  'manaRegen',
+  'moveSpeed'
+]);
+
 /** Neutral-slot passive mods as a flat record (auras/actives apply through their own systems). */
-function neutralPassiveMods(neutralId: string | undefined): Record<string, number> {
-  if (!neutralId) return {};
-  const def = REG.neutralItem(neutralId);
-  return def.passiveMods ? { ...(def.passiveMods as Record<string, number>) } : {};
+function neutralPassiveMods(neutral: ItemSave | string | null | undefined): Record<string, number> {
+  if (!neutral) return {};
+  const item = typeof neutral === 'string' ? { id: neutral } : neutral;
+  const def = REG.neutralItem(item.id);
+  const mods: Record<string, number> = def.passiveMods ? { ...(def.passiveMods as Record<string, number>) } : {};
+  for (const [k, v] of Object.entries(item.resolvedMods ?? {})) {
+    mods[k] = Math.round(((mods[k] ?? 0) + v) * 10) / 10;
+  }
+  return mods;
+}
+
+function neutralGradeFloor(difficulty: DifficultyTier): ItemGrade {
+  if (difficulty === 'hell') return 'standard';
+  if (difficulty === 'nightmare') return 'worn';
+  return 'broken';
+}
+
+function neutralGradeMods(def: NeutralItemDef, grade: ItemGrade, gradeRoll: number): StatModMap {
+  const mods: StatModMap = {};
+  const mult = statMultiplier(percentileForGrade(grade, gradeRoll));
+  for (const [key, value] of Object.entries(def.passiveMods ?? {}) as [keyof StatModMap, number][]) {
+    if (!NEUTRAL_ROLL_STATS.has(key)) continue;
+    const delta = Math.round(value * (mult - 1) * 10) / 10;
+    if (delta !== 0) mods[key] = delta;
+  }
+  return mods;
+}
+
+function augmentMods(augments: HeroAugments | undefined): Record<string, number> {
+  const mods: Record<string, number> = {};
+  const add = (m: StatModMap) => {
+    for (const [k, v] of Object.entries(m)) mods[k] = (mods[k] ?? 0) + v;
+  };
+  if (augments?.scepter) add({ str: 10, agi: 10, int: 10, maxHp: 175, maxMana: 175 });
+  if (augments?.shard) add({ str: 3, agi: 3, int: 3, spellAmpPct: 4 });
+  return mods;
+}
+
+function itemLevelRequirement(item: ItemDef, grade: ItemGrade = 'standard'): number {
+  return item.levelReq ?? levelReq(item, grade);
 }
 
 export function newGameSave(starterHeroId: string): GameSave {
@@ -262,6 +324,7 @@ export function newGameSave(starterHeroId: string): GameSave {
         xp: 0,
         items: [null, null, null, null, null, null],
         neutralSlot: null,
+        augments: {},
         talentPicks: [null, null, null, null],
         gambits: [],
         echo: freshEchoProgress(),
@@ -287,7 +350,7 @@ export function newGameSave(starterHeroId: string): GameSave {
     ...phase5,
     explorationPct: { [region.id]: 0 },
     discovered: ['tv-waypoint-dawnshade'],
-    settings: { quickcast: true, resonance: true, minimap: true, audio: defaultAudioSettings(), graphics: defaultGraphicsSettings() }
+    settings: { quickcast: true, resonance: true, minimap: true, audio: defaultAudioSettings(), graphics: defaultGraphicsSettings(), cutscene: defaultCutsceneSettings() }
   };
 }
 
@@ -323,6 +386,8 @@ export interface AudioLike {
   setSettings(settings: GameSave['settings']): void;
   handleEvent(ev: SimEvent): void;
   playStinger(id: StingerId): void;
+  setCinematicMix?(mode: CinematicMixMode): void;
+  playDialogueBlip?(seed?: string): void;
   update?(env: { biome: string; dayTime: number; inCombat: boolean; dt: number }): void;
   /** Toggle the sampled-audio enhancement layer (medium+ tiers). */
   enableSampledAudio?(on: boolean): void;
@@ -344,6 +409,8 @@ export class HeadlessAudio implements AudioLike {
   setSettings(): void {}
   handleEvent(): void {}
   playStinger(): void {}
+  setCinematicMix(): void {}
+  playDialogueBlip(): void {}
   update(): void {}
 }
 
@@ -422,6 +489,7 @@ export class Game {
   private trialRelocations = new Map<string, number>();
 
   private camps = new Map<string, CampState>();
+  private eliteCreepUids = new Set<number>();
   private echoes = new Map<string, EchoState>();
   private accumulator = 0;
   private autosaveAt = TUNING.autosaveSec;
@@ -444,6 +512,8 @@ export class Game {
   private liveDungeonModifiers: string[] = [];
   cinematic = new CinematicDirector();
   private cinematicSoundBeatKey = '';
+  private cinematicDialogueBeatKey = '';
+  private cinematicMixMode: CinematicMixMode = 'normal';
   private pendingAfterCinematic: { label: string; run: () => void } | null = null;
   private story = new StoryDetector();
   /** HUD hook: open the gym pre-fight screen (§3.5). Null in headless. */
@@ -483,19 +553,20 @@ export class Game {
     );
     this.defeatedGyms = new Set(save.defeatedGyms);
     this.difficulty = structuredClone(save.difficulty);
-    this.inventoryStash = save.inventoryStash.map((i) => ({ ...i }));
+    this.inventoryStash = save.inventoryStash.map((i) => cloneItemSave(i)!);
     this.raidProgress = structuredClone(save.raidProgress);
     this.dungeonProgress = structuredClone(save.dungeonProgress ?? {});
     this.eliteFive = { ...save.eliteFive };
     this.factionChoices = { ...save.factionChoices };
     this.heldUniques = [...save.heldUniques];
-    this.neutralStash = save.neutralStash.map((n) => ({ ...n }));
+    this.neutralStash = save.neutralStash.map((n) => ({ ...n, copies: n.copies?.map((item) => cloneItemSave(item)!) }));
     const savedLootMarks = save.lootMarks as Partial<Record<LootBand, number>> | undefined;
     this.lootMarks = {
       early: savedLootMarks?.early ?? 0,
       mid: savedLootMarks?.mid ?? 0,
       late: savedLootMarks?.late ?? 0
     };
+    this.lootFilter = { ...DEFAULT_LOOT_FILTER, ...(save.lootFilter ?? {}) };
     this.loadouts = structuredClone(save.loadouts ?? {});
     this.goldSinks = {
       buybacks: save.goldSinks.buybacks ?? 0,
@@ -539,8 +610,9 @@ export class Game {
         facetIdx: hs.facetIdx,
         hpPct: hs.hpPct,
         manaPct: hs.manaPct,
-        items: hs.items.map((i) => (i ? { ...i } : null)),
-        neutralSlot: hs.neutralSlot ? { ...hs.neutralSlot } : null,
+        items: hs.items.map(cloneItemSave),
+        neutralSlot: cloneItemSave(hs.neutralSlot),
+        augments: { ...(hs.augments ?? {}) },
         abilityCooldowns: [...hs.abilityCooldowns],
         benchedAt: 0,
         respawnAt: 0,
@@ -661,6 +733,20 @@ export class Game {
     return true;
   }
 
+  private setHeroAugments(heroId: string, augments: HeroAugments): boolean {
+    const rec = this.partyEntryByHeroId(heroId);
+    if (rec) {
+      rec.augments = { ...augments };
+      if (rec.unit) this.rebuildHeroUnit(this.party.indexOf(rec));
+      return true;
+    }
+    const saved = this.benchRoster.get(heroId);
+    if (!saved) return false;
+    saved.augments = { ...augments };
+    this.benchRoster.set(heroId, cloneHeroSave(saved));
+    return true;
+  }
+
   private cleanLoadoutName(name: string): string {
     const trimmed = name.trim();
     return trimmed.length > 0 ? trimmed.slice(0, 32) : 'Default';
@@ -727,25 +813,39 @@ export class Game {
 
   armoryView(): {
     stash: ItemSave[];
-    heroes: { heroId: string; name: string; level: number; fielded: boolean; items: (ItemSave | null)[]; loadouts: string[]; conflicts: string[] }[];
+    heroes: { heroId: string; name: string; level: number; fielded: boolean; items: (ItemSave | null)[]; augments: HeroAugments; loadouts: string[]; conflicts: string[] }[];
     conflicts: { itemId: string; requested: number; owned: number; claimedBy: string[] }[];
     essence: number;
+    lootFilter: LootFilterRule;
   } {
     const conflicts = this.loadoutConflicts();
     return {
-      stash: this.inventoryStash.map((it) => ({ ...it })),
+      stash: this.inventoryStash.map((it) => cloneItemSave(it)!),
       heroes: this.allOwnedHeroSaves().map((hero) => ({
         heroId: hero.heroId,
         name: REG.hero(hero.heroId).name,
         level: hero.level,
         fielded: this.party.some((rec) => rec.heroId === hero.heroId),
         items: hero.items.map(cloneItemSave),
+        augments: { ...(hero.augments ?? {}) },
         loadouts: Object.keys(this.loadouts[hero.heroId] ?? {}),
         conflicts: conflicts.filter((c) => c.claimedBy.includes(hero.heroId)).map((c) => c.itemId)
       })),
       conflicts,
-      essence: this.essence
+      essence: this.essence,
+      lootFilter: { ...this.lootFilter }
     };
+  }
+
+  setLootFilter(next: Partial<LootFilterRule>): void {
+    const clean = { ...this.lootFilter, ...next };
+    this.lootFilter = {
+      minGrade: ITEM_GRADES.includes(clean.minGrade) ? clean.minGrade : DEFAULT_LOOT_FILTER.minGrade,
+      minRarity: clean.minRarity in RARITY_RANK ? clean.minRarity : DEFAULT_LOOT_FILTER.minRarity,
+      autoDisenchantBelowGrade: clean.autoDisenchantBelowGrade && ITEM_GRADES.includes(clean.autoDisenchantBelowGrade) ? clean.autoDisenchantBelowGrade : undefined,
+      autoDisenchantBelowRarity: clean.autoDisenchantBelowRarity && clean.autoDisenchantBelowRarity in RARITY_RANK ? clean.autoDisenchantBelowRarity : undefined
+    };
+    this.msg('Loot filter updated', 'info');
   }
 
   /** Select a player-side gym hero by party slot for the next Captain's Call. */
@@ -858,6 +958,7 @@ export class Game {
   private cutsceneSeenKey(id: string, ctx: CutsceneContext): string {
     const scoped = (suffix: unknown) => `cinematic:${id}:${String(suffix)}`;
     if (id === 'echo-milestone-stinger' && ctx.hero) return scoped(ctx.hero);
+    if (id === 'trial-dialogue-stinger' && ctx.trial) return scoped(ctx.trial);
     if ((id === 'boss-phase-stinger' || id === 'boss-clear-stinger') && ctx.boss) return scoped(ctx.boss);
     if (id === 'raid-clear-stinger' && ctx.raid) return scoped(ctx.raid);
     if (id === 'item-chase-first-hold' && ctx.item) return scoped(ctx.item);
@@ -895,7 +996,8 @@ export class Game {
       length: c.length,
       defaultSpeed: c.defaultSpeed,
       alwaysSkip: c.alwaysSkip,
-      reducedMotion
+      reducedMotion,
+      photosensitive: c.photosensitive
     });
   }
 
@@ -919,17 +1021,38 @@ export class Game {
     this.cinematic.setFastForward(active);
   }
 
+  private playPresentationStinger(id: StingerId, opts: { cinematic?: boolean } = {}): void {
+    // STORY §4.4: a narrative beat owns the peak while it is active. Gameplay
+    // fanfares still surface as toasts/messages; their audio waits for another moment.
+    if (this.cinematic.active && !opts.cinematic) return;
+    this.audio.playStinger(id);
+  }
+
+  private applyCinematicMix(mode: CinematicMixMode): void {
+    if (this.cinematicMixMode === mode) return;
+    this.cinematicMixMode = mode;
+    this.audio.setCinematicMix?.(mode);
+  }
+
   private cinematicPresentationView(): CinematicView | null {
     const view = this.cinematic.view();
     if (!view) {
       this.cinematicSoundBeatKey = '';
+      this.cinematicDialogueBeatKey = '';
+      this.applyCinematicMix('normal');
       return null;
     }
+    const mix = view.music === 'silence' ? 'silence' : view.music ? 'duck' : 'normal';
+    this.applyCinematicMix(mix);
     if (view.beatKey !== this.cinematicSoundBeatKey) {
       this.cinematicSoundBeatKey = view.beatKey;
       if (view.sound && CINEMATIC_STINGERS.has(view.sound as StingerId)) {
-        this.audio.playStinger(view.sound as StingerId);
+        this.playPresentationStinger(view.sound as StingerId, { cinematic: true });
       }
+    }
+    if (view.speaker && view.beatKey !== this.cinematicDialogueBeatKey) {
+      this.cinematicDialogueBeatKey = view.beatKey;
+      this.audio.playDialogueBlip?.(view.speaker);
     }
     return view;
   }
@@ -984,6 +1107,7 @@ export class Game {
     // §6.6 boss phase break. Marquee guardians get a bespoke set-piece on their first break,
     // then fall back to the templated stinger; everyone else always gets the stinger.
     const bossName = trig.bossHeroId ? REG.hero(trig.bossHeroId).name : 'The boss';
+    const bossLine = trig.bossHeroId ? this.bossStoryLine(trig.bossHeroId, 1) : 'You pushed it past something. Now it is serious.';
     if (trig.marqueeRaidId) {
       const marqueeId = trig.marqueeRaidId === 'void-prelate' ? 'void-prelate-phase-break' : 'last-eldwurm-phase-break';
       if (!this.journalSeen.has(`cinematic:${marqueeId}`)) {
@@ -991,7 +1115,11 @@ export class Game {
         return;
       }
     }
-    this.playCutscene('boss-phase-stinger', { boss: bossName });
+    this.playCutscene('boss-phase-stinger', { boss: bossName, bossLine });
+  }
+
+  private bossStoryLine(heroId: string, index: number): string | undefined {
+    return [...REG.bosses.values()].find((b) => b.heroId === heroId)?.dialogue[index];
   }
 
   private playRegionArrival(): void {
@@ -1033,28 +1161,26 @@ export class Game {
   }
 
   private activeFestival: string | null = null;
-  private seasonalModeTarget(event: SeasonalEventDef): { kind: 'raid' | 'dungeon'; id: string; endless?: boolean; maxSec?: number; modifiers?: string[] } {
-    switch (event.id) {
-      case 'diretide-roshan-candy':
-        return { kind: 'raid', id: 'roshan-pit' };
-      case 'wraith-night-altar':
-        return { kind: 'dungeon', id: 'frost-hollow', modifiers: ['frozen-oath', 'packed-halls'] };
-      case 'continuum-descent':
-        return { kind: 'dungeon', id: 'severed-dark', endless: true, modifiers: ['deep-map'] };
-      case 'cycle-beast':
-        return { kind: 'raid', id: 'last-eldwurm', maxSec: 90 };
-      case 'dark-reef-crawl':
-        return { kind: 'raid', id: 'renegade-marshal' };
-      case 'collapsing-hollow':
-        return { kind: 'dungeon', id: 'ember-caldera', maxSec: 180, modifiers: ['single-life'] };
-      case 'nemestice-fall':
-        return { kind: 'dungeon', id: 'ember-caldera', maxSec: 210, modifiers: ['single-life', 'packed-halls'] };
-      case 'crowns-fall':
-        return { kind: 'dungeon', id: 'worldstone-vault', modifiers: ['champion-sigil', 'deep-map'] };
-      case 'dark-moon-hunt':
-        return { kind: 'raid', id: 'forsaken-queen' };
+  private seasonalModeTarget(event: SeasonalEventDef): { kind: 'raid' | 'dungeon'; id: string; mode: SeasonalEventDef['mode']; rules: string; endless?: boolean; maxSec?: number; modifiers?: string[] } {
+    switch (event.mode) {
+      case 'roshan-candy':
+        return { kind: 'raid', id: 'roshan-pit', mode: event.mode, maxSec: 150, rules: 'Candy tribute: a timed Roshan rite with hungry-pit pacing.' };
+      case 'wave-defense':
+        return event.id === 'dark-moon-hunt'
+          ? { kind: 'raid', id: 'forsaken-queen', mode: event.mode, maxSec: 150, rules: 'Night defense: survive the moonlit pressure window.' }
+          : { kind: 'dungeon', id: 'frost-hollow', mode: event.mode, maxSec: 210, modifiers: ['frozen-oath', 'packed-halls'], rules: 'Wave defense: packed halls, frozen oath, and a hard altar timer.' };
+      case 'endless-descent':
+        return { kind: 'dungeon', id: 'severed-dark', mode: event.mode, endless: true, modifiers: ['deep-map'], rules: 'Continuum descent: endless map rules with deeper room routing.' };
+      case 'damage-race':
+        return { kind: 'raid', id: 'last-eldwurm', mode: event.mode, maxSec: 90, rules: 'Damage race: beat the boss before the cycle closes.' };
+      case 'linear-crawl':
+        return { kind: 'raid', id: 'renegade-marshal', mode: event.mode, rules: 'Linear crawl: one staged campaign fight, no repeat reward until clear.' };
+      case 'hazard-survival':
+        return { kind: 'dungeon', id: 'ember-caldera', mode: event.mode, maxSec: event.id === 'nemestice-fall' ? 210 : 180, modifiers: event.id === 'nemestice-fall' ? ['single-life', 'packed-halls'] : ['single-life'], rules: 'Hazard survival: single-life pressure with a collapsing clock.' };
+      case 'act-trials':
+        return { kind: 'dungeon', id: 'worldstone-vault', mode: event.mode, modifiers: ['champion-sigil', 'deep-map'], rules: 'Act trials: deeper map and champion sigils frame the festival as a mini-arc.' };
     }
-    return { kind: 'raid', id: 'roshan-pit' };
+    return { kind: 'raid', id: 'roshan-pit', mode: event.mode, rules: 'Festival wrapper.' };
   }
 
   /** True if this festival's underlying mode can launch right now (full party, in region, not busy). */
@@ -1080,7 +1206,7 @@ export class Game {
         const at = this.raidProgress[map.id]?.roshanRespawnAt ?? 0;
         if (at > this.playtime) return { launchable: false, target, detail: `Roshan returns in ${Math.ceil(at - this.playtime)}s.` };
       }
-      return { launchable: true, target, detail: `Launches ${target}.` };
+      return { launchable: true, target, detail: `Ready. ${map.rules}` };
     }
     const dungeon = REG.dungeon(map.id);
     if (dungeon.regionId !== this.region.id) {
@@ -1089,7 +1215,7 @@ export class Game {
     const mods = map.modifiers?.length
       ? ` · ${map.modifiers.map((id) => dungeon.modifiers?.find((m) => m.id === id)?.name ?? id).join(', ')}`
       : '';
-    return { launchable: true, target, detail: `Launches ${target}${mods}.` };
+    return { launchable: true, target, detail: `Ready${mods}. ${map.rules}` };
   }
 
   private grantFestivalReward(event: SeasonalEventDef): void {
@@ -1120,6 +1246,10 @@ export class Game {
   runSeasonalEvent(eventId: string): boolean {
     const event = REG.seasonalEvents.get(eventId);
     if (!event) return false;
+    if (this.settings.cutscene?.tieIns === false) {
+      this.msg('Seasonal and esports tie-ins are disabled in cut-scene settings.', 'info');
+      return false;
+    }
     this.codexUnlock('festival:' + event.id);
     this.playCutscene(event.cutsceneId, { event: event.name });
     // §7.5: festivals are new drivers over the existing raid/dungeon session machinery. Launch
@@ -1136,6 +1266,7 @@ export class Game {
 
   triggerLegendCallout(legendId: string): boolean {
     const legend = REG.legends.get(legendId);
+    if (this.settings.cutscene?.tieIns === false) return false;
     if (!legend || this.codexUnlocks.has('legend:' + legend.id)) return false;
     this.codexUnlock('legend:' + legend.id);
     this.playCutscene(legend.cutsceneId, { legend: legend.name });
@@ -1546,7 +1677,7 @@ export class Game {
       this.defeatedGyms.add(gym.id);
       this.badges.add(gym.badgeId);
       this.applyRecruitCeiling(); // a new badge raises the ceiling; banked XP catches up (§3.4)
-      this.audio.playStinger('badge');
+      this.playPresentationStinger('badge');
       this.msg(`${gym.leader} awards the ${gym.badgeId.replace('-', ' ')}!`, 'good');
       this.playCutscene(`badge-${gym.badgeId}`, { badge: gym.badgeId.replace(/-/g, ' ') });
       this.autosave('badge');
@@ -1621,7 +1752,7 @@ export class Game {
         ? `dropped ${REG.item(loot.assembled.id).name}${loot.pityUsed ? ' (pity!)' : ''}!`
         : `${loot.guaranteed.length} component${loot.guaranteed.length === 1 ? '' : 's'}`;
     this.msg(`${REG.hero(boss.heroId).name} (${tier}) defeated — ${drop}`, 'good');
-    this.playCutscene('boss-clear-stinger', { boss: REG.hero(boss.heroId).name });
+    this.playCutscene('boss-clear-stinger', { boss: REG.hero(boss.heroId).name, bossLine: boss.dialogue[0] });
     this.autosave('boss');
     return { won: true, loot };
   }
@@ -1714,7 +1845,7 @@ export class Game {
     this.recordOutworldClaimantClear(raidId);
     this.msg(`${def.name} cleared! (clear #${clears + 1})`, 'good');
     this.playCutscene('raid-clear-stinger', { raid: def.name });
-    this.audio.playStinger('raid-clear');
+    this.playPresentationStinger('raid-clear');
     this.autosave('raid');
     return { won: true, result };
   }
@@ -1801,7 +1932,7 @@ export class Game {
     this.completeActiveFestival(true);
     this.msg(`${def.name} cleared! (clear #${clears + 1})`, 'good');
     this.playCutscene('raid-clear-stinger', { raid: def.name });
-    this.audio.playStinger('raid-clear');
+    this.playPresentationStinger('raid-clear');
     this.autosave('raid');
   }
 
@@ -2030,7 +2161,7 @@ export class Game {
     } else {
       this.msg(`${def.name} cleared: ${clearedRooms.length}/${depth} rooms. You return to the portal.`, 'good');
     }
-    this.audio.playStinger('raid-clear');
+    this.playPresentationStinger('raid-clear');
     this.autosave('dungeon');
   }
 
@@ -2169,13 +2300,22 @@ export class Game {
     return this.resolveChampion(seed, player, enemy);
   }
 
+  championClosingLine(): string {
+    if (this.reputation >= 6) return 'For one turn of the war, mercy holds the reset open.';
+    if (this.reputation <= -6) return 'For one turn of the war, fear holds the reset open.';
+    const shore = this.factionChoices['shadeshore'];
+    if (shore === 'kunkka') return 'For one turn of the war, the fleet sails past the reset.';
+    if (shore === 'tidehunter') return 'For one turn of the war, the reef drags the reset under.';
+    return 'For one turn of the war, the reset does not close.';
+  }
+
   private resolveChampion(seed: number, player: MacroHeroSetup[], enemy: MacroHeroSetup[]): { won: boolean; winner: 0 | 1 | -1 } {
     const result = runMacroBattle({ seed, teamA: player, teamB: enemy });
     if (result.winner === 0) {
       this.eliteFive.championDown = true;
       this.msg('The Champion is dethroned. The ancients answer to you now.', 'good');
-      this.playCutscene('champion-clear');
-      this.audio.playStinger('raid-clear');
+      this.playCutscene('champion-clear', { closing: this.championClosingLine() });
+      this.playPresentationStinger('raid-clear');
     } else {
       this.msg('The Champion endures. Sharpen the draft and return.', 'bad');
     }
@@ -2248,6 +2388,19 @@ export class Game {
     }
   }
 
+  private claimantLore(raid: RaidDef): string {
+    const commentary: Record<string, string> = {
+      'renegade-marshal': 'Director note: dusty rifle silhouette, dead-fleet framing, and voidlight grade sell the space-marshal homage without borrowing a line.',
+      'void-prelate': 'Director note: withheld blade, dark-between-stars grade, and late reveal make the assassin readable before the name lands.',
+      'queen-of-blades': 'Director note: swarm geometry and fallen-star purple turn the crater into a closing web.',
+      'lord-of-terror': 'Director note: the hell-rift rises upward, one red accent in a black frame, so the room feels invaded from below.',
+      'prime-evil': 'Director note: worldstone ember and crown posture frame destruction as a claimant for the stone at the world heart.',
+      'lord-of-hatred': 'Director note: the hall going lightless is the signature; the name is original, the beat is recognizable.',
+      'forsaken-queen': 'Director note: banshee frost, a suspended arrow, and mercy lost to death carry the silhouette.'
+    };
+    return `${raid.title}. ${raid.location}. ${raid.dialogue.join(' ')} The Outworld Claimants came for the Ancients' power and were turned back. ${commentary[raid.id] ?? 'Director note: original name and lines, recognizable staging.'}`;
+  }
+
   /** Structured codex view-model — only entries unlocked on encounter (§3.14). */
   codexEntries(): {
     lore: { id: string; thread: string; stage: string; title: string; summary: string; body: string }[];
@@ -2267,11 +2420,11 @@ export class Game {
       heroes: [...REG.heroes.values()].filter((h) => has('hero:' + h.id)).map((h) => ({ id: h.id, name: h.name, sub: `${h.attribute.toUpperCase()} · ${h.roles.slice(0, 2).join(' / ')}`, lore: h.lore })),
       regions: [...REG.regions.values()].filter((r) => has('region:' + r.id)).map((r) => ({ id: r.id, name: r.name, lore: r.lore })),
       items: [...REG.items.values()].filter((i) => has('item:' + i.id)).map((i) => ({ id: i.id, name: i.name, lore: i.lore })),
-      creeps: [...REG.creeps.values()].filter((c) => has('creep:' + c.id)).map((c) => ({ id: c.id, name: c.name, lore: `A ${c.tier}-tier denizen of the wilds.` })),
+      creeps: [...REG.creeps.values()].filter((c) => has('creep:' + c.id)).map((c) => ({ id: c.id, name: c.name, lore: c.lore ?? `A ${c.tier}-tier denizen of the wilds.` })),
       raids: [...REG.raids.values()].filter((r) => has('raid:' + r.id)).map((r) => ({ id: r.id, name: r.name, title: r.title, lore: `${r.location}. “${r.dialogue[0]}”` })),
       claimants: [...REG.raids.values()]
         .filter((r) => has('claimant:' + r.id))
-        .map((r) => ({ id: r.id, name: r.name, lore: `${r.title}. ${r.location}. The Outworld Claimants came for the Ancients' power and were turned back.` })),
+        .map((r) => ({ id: r.id, name: r.name, lore: this.claimantLore(r) })),
       festivals: [...REG.seasonalEvents.values()].filter((e) => has('festival:' + e.id)).map((e) => ({ id: e.id, name: e.name, summary: e.summary, body: e.codexBody })),
       legends: [...REG.legends.values()].filter((l) => has('legend:' + l.id)).map((l) => ({ id: l.id, name: l.name, summary: l.triggerSummary, body: l.codexBody }))
     };
@@ -2486,12 +2639,26 @@ export class Game {
     return [...REG.neutralItems.values()];
   }
 
+  private instantiateNeutralCopy(id: string, difficulty: DifficultyTier, seed: number): ItemSave {
+    const rng = new Rng(seed);
+    const def = REG.neutralItem(id);
+    const grade = rollGrade(neutralGradeFloor(difficulty), rng.next());
+    const gradeRoll = rng.next();
+    return {
+      id,
+      grade,
+      gradeRoll,
+      resolvedMods: neutralGradeMods(def, grade, gradeRoll)
+    };
+  }
+
   private rollNeutralFor(tier: CreepTier, salt: number): void {
     const seed = this.region.seed + Math.round(this.sim.time * 1000) + salt;
     const drop = rollNeutralDrop(tier, this.neutralCandidates(), seed);
     if (!drop) return;
-    this.addNeutral(drop.id);
-    this.msg(`Neutral drop: ${drop.name} (→ stash)`, 'good');
+    const copy = this.instantiateNeutralCopy(drop.id, creepCombatTier(this.region.id), seed + 1);
+    this.addNeutralCopy(copy);
+    this.msg(`Neutral drop: ${drop.name} (${copy.grade ?? 'standard'}, → stash)`, 'good');
   }
 
   private rollItemDropsForCreep(creepId: string | undefined, tier: CreepTier, salt: number, difficulty: DifficultyTier = 'normal'): void {
@@ -2502,6 +2669,22 @@ export class Game {
     this.addDroppedItems(roll.items);
     const names = roll.items.map((it) => REG.item(it.id).name).join(', ');
     this.msg(`Creep drop: ${names} (→ stash)`, 'good', this.dropAccent(roll.items));
+  }
+
+  private rollEliteCreepDrop(tier: CreepTier, salt: number): void {
+    const difficulty = creepCombatTier(this.region.id);
+    const minRank = tier === 'small' ? RARITY_RANK.uncommon : tier === 'medium' ? RARITY_RANK.rare : RARITY_RANK.mythical;
+    const candidates = [...REG.items.values()]
+      .filter((item) => isMainItemTier(item.tier))
+      .filter((item) => RARITY_RANK[this.itemRarity(item.id)] >= minRank)
+      .filter((item) => itemAllowedFromSource(item.id, 'creep'))
+      .filter((item) => !GATED_TOP_TIER.has(item.id))
+      .map((item) => item.id);
+    const id = this.rollMarketItem(candidates, `elite-creep:${tier}:${salt}`);
+    if (!id) return;
+    const item = instantiateDroppedItem(id, difficulty, new Rng(stableContentSeed(`elite-creep-copy:${id}`, salt)), undefined, 'creep');
+    const drops = this.addDroppedItems([item]);
+    if (drops.length > 0) this.msg(`Elite drop: ${REG.item(id).name} (→ Armory)`, 'good', this.dropAccent(drops));
   }
 
   private addDroppedItems(items: ItemSave[], opts: { awardMarks?: boolean } = {}): ItemSave[] {
@@ -2587,25 +2770,36 @@ export class Game {
     else this.neutralStash.push({ id, count: n });
   }
 
-  private takeNeutral(id: string): boolean {
+  private addNeutralCopy(copy: ItemSave): void {
+    const slot = this.neutralStash.find((s) => s.id === copy.id);
+    if (slot) {
+      slot.count += 1;
+      slot.copies = [...(slot.copies ?? []), cloneItemSave(copy)!];
+    } else {
+      this.neutralStash.push({ id: copy.id, count: 1, copies: [cloneItemSave(copy)!] });
+    }
+  }
+
+  private takeNeutral(id: string): ItemSave | null {
     const slot = this.neutralStash.find((s) => s.id === id);
-    if (!slot || slot.count <= 0) return false;
+    if (!slot || slot.count <= 0) return null;
     slot.count -= 1;
+    const copy = slot.copies?.shift() ?? { id };
     if (slot.count <= 0) this.neutralStash = this.neutralStash.filter((s) => s.id !== id);
-    return true;
+    return copy;
   }
 
   /** Re-apply a hero's neutral-slot passive mods to its live unit (mirrors resonance/day-night). */
   private applyNeutralToUnit(rec: RosterEntry): void {
     const u = rec.unit;
     if (!u) {
-      rec.neutralMods = neutralPassiveMods(rec.neutralSlot?.id);
+      rec.neutralMods = neutralPassiveMods(rec.neutralSlot);
       return;
     }
     for (const [k, v] of Object.entries(rec.neutralMods ?? {})) {
       u.externalMods[k] = (u.externalMods[k] ?? 0) - v;
     }
-    rec.neutralMods = neutralPassiveMods(rec.neutralSlot?.id);
+    rec.neutralMods = neutralPassiveMods(rec.neutralSlot);
     for (const [k, v] of Object.entries(rec.neutralMods)) {
       u.externalMods[k] = (u.externalMods[k] ?? 0) + v;
     }
@@ -2617,12 +2811,13 @@ export class Game {
   equipNeutral(recIdx: number, neutralId: string): boolean {
     const rec = this.party[recIdx];
     if (!rec) return false;
-    if (!this.takeNeutral(neutralId)) {
+    const copy = this.takeNeutral(neutralId);
+    if (!copy) {
       this.msg('No such neutral in the stash', 'bad');
       return false;
     }
-    if (rec.neutralSlot) this.addNeutral(rec.neutralSlot.id); // never lost — returns to stash
-    rec.neutralSlot = { id: neutralId };
+    if (rec.neutralSlot) this.addNeutralCopy(rec.neutralSlot); // never lost — returns to stash
+    rec.neutralSlot = copy;
     this.applyNeutralToUnit(rec);
     this.msg(`${REG.hero(rec.heroId).name} slots ${REG.neutralItem(neutralId).name}`, 'good');
     return true;
@@ -2654,7 +2849,7 @@ export class Game {
     }
     const name = REG.neutralItem(rec.neutralSlot.id).name;
     this.gold -= cost;
-    this.addNeutral(rec.neutralSlot.id);
+    this.addNeutralCopy(rec.neutralSlot);
     rec.neutralSlot = null;
     this.applyNeutralToUnit(rec);
     this.msg(`Reclaimed ${name} to the stash (-${cost}g)`, 'info');
@@ -2670,6 +2865,12 @@ export class Game {
       this.msg('Gems must be socketed at the Tinker\'s Bench', 'bad');
       return false;
     }
+    const savedDef = REG.item(saved.id);
+    const req = itemLevelRequirement(savedDef, saved.grade ?? 'standard');
+    if (hero.level < req) {
+      this.msg(`${savedDef.name} requires level ${req}`, 'bad');
+      return false;
+    }
 
     const items = normalizeSavedItems(hero.items);
     const free = items.findIndex((it) => it === null);
@@ -2683,6 +2884,53 @@ export class Game {
     this.setHeroItems(heroId, items);
     this.codexUnlock('item:' + saved.id);
     this.msg(`${REG.hero(heroId).name} equips ${REG.item(saved.id).name}`, 'good');
+    return true;
+  }
+
+  private augmentKindForItem(itemId: string): keyof HeroAugments | null {
+    if (itemId === 'aghanims-scepter' || itemId === 'aghanims-blessing') return 'scepter';
+    if (itemId === 'aghanims-shard') return 'shard';
+    return null;
+  }
+
+  private applyHeroAugment(heroId: string, itemId: string): boolean {
+    const kind = this.augmentKindForItem(itemId);
+    const hero = this.heroSnapshot(heroId);
+    if (!kind || !hero) return false;
+    const augments = { ...(hero.augments ?? {}) };
+    if (augments[kind]) {
+      this.msg(`${REG.hero(heroId).name} already has that Aghanim augment`, 'info');
+      return false;
+    }
+    augments[kind] = true;
+    this.setHeroAugments(heroId, augments);
+    this.msg(`${REG.hero(heroId).name} absorbed ${REG.item(itemId).name}`, 'good');
+    return true;
+  }
+
+  applyArmoryAugmentForHero(heroId: string, stashIdx: number): boolean {
+    const saved = this.inventoryStash[stashIdx];
+    if (!saved || !this.augmentKindForItem(saved.id)) {
+      this.msg('Choose Aghanim\'s Scepter, Blessing, or Shard', 'bad');
+      return false;
+    }
+    if (!this.applyHeroAugment(heroId, saved.id)) return false;
+    this.inventoryStash.splice(stashIdx, 1);
+    return true;
+  }
+
+  applyEquippedAugmentForHero(heroId: string, invSlot: number): boolean {
+    const hero = this.heroSnapshot(heroId);
+    if (!hero) return false;
+    const items = normalizeSavedItems(hero.items);
+    const saved = items[invSlot];
+    if (!saved || !this.augmentKindForItem(saved.id)) {
+      this.msg('Choose an equipped Aghanim item', 'bad');
+      return false;
+    }
+    if (!this.applyHeroAugment(heroId, saved.id)) return false;
+    items[invSlot] = null;
+    this.setHeroItems(heroId, items);
     return true;
   }
 
@@ -2835,8 +3083,10 @@ export class Game {
     recipeRarities: ItemRarity[];
     relicCost: number;
     relicCeiling: ItemRarity;
+    gambleVendor: { tier: Extract<ItemTier, 't1' | 't2' | 't3' | 't4'>; price: number; canRoll: boolean }[];
   } {
     const bands: LootBand[] = ['early', 'mid', 'late'];
+    const gambleTiers = ['t1', 't2', 't3', 't4'] as const;
     return {
       inTown: this.inTown(),
       gold: Math.floor(this.gold),
@@ -2850,7 +3100,12 @@ export class Game {
       recipeCost: this.blackMarketCost('recipe'),
       recipeRarities: ['uncommon', 'rare', 'mythical'],
       relicCost: this.blackMarketCost('relic'),
-      relicCeiling: TUNING.blackMarket.relicRarityCeiling
+      relicCeiling: TUNING.blackMarket.relicRarityCeiling,
+      gambleVendor: gambleTiers.map((tier) => ({
+        tier,
+        price: TUNING.gambleVendor.tierPrice[tier],
+        canRoll: this.inTown() && this.gold >= TUNING.gambleVendor.tierPrice[tier]
+      }))
     };
   }
 
@@ -2894,6 +3149,18 @@ export class Game {
     return weighted[weighted.length - 1].id;
   }
 
+  private instantiateMarketItem(id: string, source: DropSource | GradeFloorSource, salt: string, opts: { bound?: boolean; quality?: ItemQuality } = {}): ItemSave {
+    const item = instantiateDroppedItem(
+      id,
+      creepCombatTier(this.region.id),
+      new Rng(stableContentSeed(`market-copy:${source}:${salt}:${id}`, Math.round(this.playtime))),
+      opts.quality,
+      source
+    );
+    if (opts.bound) item.bound = true;
+    return item;
+  }
+
   /** Cheap Black Market roll for liquid recipe pieces/components; reserved drops stay excluded. */
   blackMarketRecipeWheel(rarity: ItemRarity = 'rare'): ItemSave | null {
     if (!this.inTown()) {
@@ -2917,7 +3184,7 @@ export class Game {
     }
     this.gold -= cost;
     this.goldSinks.gambleRolls += 1;
-    const item: ItemSave = { id };
+    const item = this.instantiateMarketItem(id, 'gamble', `recipe:${rarity}:${this.goldSinks.gambleRolls}`);
     this.addDroppedItems([item], { awardMarks: false });
     this.msg(`Recipe wheel: ${REG.item(id).name} (→ Armory)`, 'good', this.dropAccent([item]));
     return item;
@@ -2955,8 +3222,7 @@ export class Game {
     );
     this.gold -= cost;
     this.goldSinks.gambleRolls += 1;
-    const item: ItemSave = { id, bound: true };
-    if (quality) item.quality = quality;
+    const item = this.instantiateMarketItem(id, 'gamble', `relic:${maxRarity}:${this.goldSinks.gambleRolls}`, { bound: true, quality });
     this.addDroppedItems([item], { awardMarks: false });
     const qTag = quality ? ` (${QUALITY_GRADES[quality].name})` : '';
     this.msg(`Relic wheel: ${REG.item(id).name}${qTag} (bound, → Armory)`, 'good', this.dropAccent([item]));
@@ -2991,9 +3257,37 @@ export class Game {
       return null;
     }
     this.lootMarks[band] -= quota;
-    const item: ItemSave = { id, bound: true };
+    const item = this.instantiateMarketItem(id, 'gamble', `loot-mark:${band}:${this.lootMarks[band]}:${this.inventoryStash.length}`, { bound: true });
     this.addDroppedItems([item], { awardMarks: false });
     this.msg(`${band} Loot Marks redeemed: ${REG.item(id).name} (bound, → Armory)`, 'good', this.dropAccent([item]));
+    return item;
+  }
+
+  gambleVendorRoll(tier: Extract<ItemTier, 't1' | 't2' | 't3' | 't4'>): ItemSave | null {
+    if (!this.inTown()) {
+      this.msg('The Gamble Vendor trades from town', 'bad');
+      return null;
+    }
+    const cost = TUNING.gambleVendor.tierPrice[tier];
+    if (this.gold < cost) {
+      this.msg(`${tier.toUpperCase()} gamble costs ${cost}g`, 'bad');
+      return null;
+    }
+    const candidates = [...REG.items.values()]
+      .filter((item) => item.tier === tier)
+      .filter((item) => itemAllowedFromSource(item.id, 'gamble'))
+      .filter((item) => !GATED_TOP_TIER.has(item.id))
+      .map((item) => item.id);
+    const id = this.rollMarketItem(candidates, `vendor:${tier}:${this.goldSinks.gambleRolls}`);
+    if (!id) {
+      this.msg(`No ${tier.toUpperCase()} gamble stock is available`, 'bad');
+      return null;
+    }
+    this.gold -= cost;
+    this.goldSinks.gambleRolls += 1;
+    const item = this.instantiateMarketItem(id, 'gamble', `vendor:${tier}:${this.goldSinks.gambleRolls}`, { bound: true });
+    this.addDroppedItems([item], { awardMarks: false });
+    this.msg(`Gamble vendor: ${REG.item(id).name} (bound, → Armory)`, 'good', this.dropAccent([item]));
     return item;
   }
 
@@ -3064,7 +3358,7 @@ export class Game {
     }
     for (const idx of [...plan.consume].sort((a, b) => b - a)) this.inventoryStash.splice(idx, 1);
     this.essence -= essenceCost;
-    const item: ItemSave = { id: itemId, bound: true };
+    const item = this.instantiateMarketItem(itemId, 'gamble', `assembly:${itemId}:${this.goldSinks.gambleRolls}`, { bound: true });
     this.addDroppedItems([item], { awardMarks: false });
     this.msg(`Assembled ${def.name} (bound, → Armory)`, 'good', this.dropAccent([item]));
     return item;
@@ -3083,6 +3377,37 @@ export class Game {
     this.goldSinks.salvages += 1;
     this.msg(`Salvaged ${REG.item(saved.id).name} (+${amount} essence)`, 'info');
     return amount;
+  }
+
+  toggleArmoryItemLock(stashIdx: number): boolean {
+    const item = this.inventoryStash[stashIdx];
+    if (!item) return false;
+    item.locked = !item.locked;
+    this.msg(`${REG.item(item.id).name} ${item.locked ? 'locked' : 'unlocked'}`, 'info');
+    return true;
+  }
+
+  salvageFilteredArmoryJunk(): number {
+    let total = 0;
+    let count = 0;
+    for (let i = this.inventoryStash.length - 1; i >= 0; i--) {
+      const item = this.inventoryStash[i];
+      if (!item.bound || item.locked) continue;
+      const result = applyLootFilter([item], (it) => this.itemRarity(it.id), this.lootFilter);
+      const junk = result.disenchanted[0];
+      if (!junk) continue;
+      total += junk.essence;
+      count += 1;
+      this.inventoryStash.splice(i, 1);
+    }
+    if (count === 0) {
+      this.msg('No unlocked bound items match the auto-disenchant filter', 'info');
+      return 0;
+    }
+    this.essence += total;
+    this.goldSinks.salvages += count;
+    this.msg(`Salvaged ${count} filtered item${count === 1 ? '' : 's'} (+${total} essence)`, 'good');
+    return total;
   }
 
   private nextItemGrade(item: ItemSave): Exclude<ItemGrade, 'broken'> | null {
@@ -3147,6 +3472,81 @@ export class Game {
     this.inventoryStash[stashIdx] = refreshResolvedMods({ ...target.item, sockets }, target.def);
     this.inventoryStash.push({ id: gemId });
     this.msg(`Returned ${gem.name} to the Armory`, 'info');
+    return true;
+  }
+
+  addArmorySocketQuote(stashIdx: number): { gold: number; essence: number; sockets: number; cap: number } | null {
+    const target = this.forgeableArmoryItem(stashIdx);
+    if (!target) return null;
+    const cap = target.def.socketCap ?? 0;
+    const sockets = target.item.sockets?.length ?? 0;
+    if (cap <= 0 || sockets >= cap) return null;
+    return { ...socketAddCost(target.def), sockets, cap };
+  }
+
+  addArmorySocket(stashIdx: number): boolean {
+    const quote = this.addArmorySocketQuote(stashIdx);
+    const target = this.forgeableArmoryItem(stashIdx);
+    if (!quote || !target) {
+      this.msg('That item cannot take another socket', 'bad');
+      return false;
+    }
+    if (this.gold < quote.gold) {
+      this.msg(`Need ${quote.gold}g to add a socket to ${target.def.name}`, 'bad');
+      return false;
+    }
+    if (this.essence < quote.essence) {
+      this.msg(`Need ${quote.essence} essence to add a socket to ${target.def.name}`, 'bad');
+      return false;
+    }
+    this.gold -= quote.gold;
+    this.essence -= quote.essence;
+    this.inventoryStash[stashIdx] = addSocket(target.item, target.def);
+    this.msg(`Added a socket to ${target.def.name}`, 'good');
+    return true;
+  }
+
+  gemFuseOptions(): { indices: number[]; from: string; to: string; cost: number; canFuse: boolean }[] {
+    const groups = new Map<string, number[]>();
+    for (const [idx, item] of this.inventoryStash.entries()) {
+      const gem = gemDef(item.id);
+      if (!gem) continue;
+      const key = `${gem.kind}:${gem.grade}`;
+      groups.set(key, [...(groups.get(key) ?? []), idx]);
+    }
+    const out: { indices: number[]; from: string; to: string; cost: number; canFuse: boolean }[] = [];
+    for (const indices of groups.values()) {
+      if (indices.length < 3) continue;
+      const picked = indices.slice(0, 3);
+      const result = fuseGems(picked.map((idx) => this.inventoryStash[idx].id));
+      const first = gemDef(this.inventoryStash[picked[0]].id);
+      if (!result || !first) continue;
+      const cost = Math.max(75, Math.round(REG.item(result.id).cost * 0.15));
+      out.push({ indices: picked, from: first.name, to: result.name, cost, canFuse: this.gold >= cost });
+    }
+    return out;
+  }
+
+  fuseArmoryGems(stashIdxs: number[]): boolean {
+    const indices = [...new Set(stashIdxs)].sort((a, b) => b - a);
+    if (indices.length !== 3 || indices.some((idx) => idx < 0 || idx >= this.inventoryStash.length)) {
+      this.msg('Choose three matching gems to fuse', 'bad');
+      return false;
+    }
+    const result = fuseGems(indices.map((idx) => this.inventoryStash[idx].id));
+    if (!result) {
+      this.msg('Gem fusion needs three matching gems of the same grade', 'bad');
+      return false;
+    }
+    const cost = Math.max(75, Math.round(REG.item(result.id).cost * 0.15));
+    if (this.gold < cost) {
+      this.msg(`Need ${cost}g to fuse ${result.name}`, 'bad');
+      return false;
+    }
+    this.gold -= cost;
+    for (const idx of indices) this.inventoryStash.splice(idx, 1);
+    this.inventoryStash.push({ id: result.id });
+    this.msg(`Fused gems into ${result.name}`, 'good');
     return true;
   }
 
@@ -3220,7 +3620,83 @@ export class Game {
     this.goldSinks.gambleRolls += 1;
     const seed = stableContentSeed(`forge:reforge:${target.item.id}:${quote.grade}:${this.goldSinks.gambleRolls}`, Math.round(this.playtime));
     this.inventoryStash[stashIdx] = reforge(target.item, target.def, new Rng(seed), creepCombatTier(this.region.id));
-    this.msg(`Reforged ${target.def.name}'s affixes`, 'good');
+    const locked = target.item.imprintedAffixId ? ' (imprint preserved)' : '';
+    this.msg(`Reforged ${target.def.name}'s affixes${locked}`, 'good');
+    return true;
+  }
+
+  rerollArmoryAffixQuote(stashIdx: number, affixIdx: number): { grade: ItemGrade; gold: number; essence: number; affixName: string; locked: boolean } | null {
+    const target = this.forgeableArmoryItem(stashIdx);
+    const affix = target?.item.affixes?.[affixIdx];
+    if (!target || !affix) return null;
+    const grade = target.item.grade ?? 'standard';
+    return {
+      grade,
+      ...REROLL_AFFIX_COSTS[grade],
+      affixName: affix.affixId,
+      locked: affix.affixId === target.item.imprintedAffixId
+    };
+  }
+
+  rerollArmoryAffix(stashIdx: number, affixIdx: number): boolean {
+    const quote = this.rerollArmoryAffixQuote(stashIdx, affixIdx);
+    const target = this.forgeableArmoryItem(stashIdx);
+    if (!quote || !target) {
+      this.msg('Choose an affix to reroll', 'bad');
+      return false;
+    }
+    if (quote.locked) {
+      this.msg('Imprinted affixes survive reforge and cannot be rerolled directly', 'bad');
+      return false;
+    }
+    if (this.gold < quote.gold) {
+      this.msg(`Need ${quote.gold}g to reroll that affix`, 'bad');
+      return false;
+    }
+    if (this.essence < quote.essence) {
+      this.msg(`Need ${quote.essence} essence to reroll that affix`, 'bad');
+      return false;
+    }
+    this.gold -= quote.gold;
+    this.essence -= quote.essence;
+    this.goldSinks.gambleRolls += 1;
+    const seed = stableContentSeed(`forge:reroll-affix:${target.item.id}:${affixIdx}:${this.goldSinks.gambleRolls}`, Math.round(this.playtime));
+    this.inventoryStash[stashIdx] = rerollAffix(target.item, target.def, affixIdx, new Rng(seed), creepCombatTier(this.region.id));
+    this.msg(`Rerolled ${target.def.name}'s affix`, 'good');
+    return true;
+  }
+
+  imprintArmoryAffixQuote(stashIdx: number, affixIdx: number): { grade: ItemGrade; gold: number; essence: number; active: boolean } | null {
+    const target = this.forgeableArmoryItem(stashIdx);
+    const affix = target?.item.affixes?.[affixIdx];
+    if (!target || !affix) return null;
+    const grade = target.item.grade ?? 'standard';
+    return { grade, ...IMPRINT_COSTS[grade], active: target.item.imprintedAffixId === affix.affixId };
+  }
+
+  imprintArmoryAffix(stashIdx: number, affixIdx: number): boolean {
+    const quote = this.imprintArmoryAffixQuote(stashIdx, affixIdx);
+    const target = this.forgeableArmoryItem(stashIdx);
+    if (!quote || !target) {
+      this.msg('Choose an affix to imprint', 'bad');
+      return false;
+    }
+    if (quote.active) {
+      this.msg('That affix is already imprinted', 'info');
+      return true;
+    }
+    if (this.gold < quote.gold) {
+      this.msg(`Need ${quote.gold}g to imprint that affix`, 'bad');
+      return false;
+    }
+    if (this.essence < quote.essence) {
+      this.msg(`Need ${quote.essence} essence to imprint that affix`, 'bad');
+      return false;
+    }
+    this.gold -= quote.gold;
+    this.essence -= quote.essence;
+    this.inventoryStash[stashIdx] = imprintAffix(target.item, affixIdx);
+    this.msg(`Imprinted an affix on ${target.def.name}`, 'good');
     return true;
   }
 
@@ -3317,7 +3793,7 @@ export class Game {
     const seed = this.region.seed + Math.round(this.playtime * 7) + this.goldSinks.respecs + this.neutralStash.length;
     const next = rerollNeutralItem(neutralId, this.neutralCandidates(), seed);
     this.gold -= cost;
-    this.addNeutral(next.id);
+    this.addNeutralCopy(this.instantiateNeutralCopy(next.id, creepCombatTier(this.region.id), seed + 1));
     this.msg(`Reroll: ${REG.neutralItem(neutralId).name} → ${next.name} (-${cost}g)`, 'good');
     return next;
   }
@@ -3333,18 +3809,21 @@ export class Game {
       this.msg(`Enchant costs ${cost}g`, 'bad');
       return null;
     }
-    let res: { item: NeutralItemDef; stash: { id: string; count: number }[] };
-    try {
-      res = enchantNeutralItem(neutralId, this.neutralStash, this.neutralCandidates());
-    } catch {
+    const current = REG.neutralItems.get(neutralId);
+    if (!current?.enchantsInto || (this.neutralStash.find((s) => s.id === neutralId)?.count ?? 0) < 3) {
       this.msg('Enchant needs 3 duplicates of an enchantable neutral', 'bad');
       return null;
     }
+    const consumed = [this.takeNeutral(neutralId), this.takeNeutral(neutralId), this.takeNeutral(neutralId)];
+    if (consumed.some((item) => !item)) {
+      this.msg('Enchant needs 3 duplicates of an enchantable neutral', 'bad');
+      return null;
+    }
+    const next = REG.neutralItem(current.enchantsInto);
     this.gold -= cost;
-    this.neutralStash = res.stash;
-    this.addNeutral(res.item.id);
-    this.msg(`Enchant: 3× ${REG.neutralItem(neutralId).name} → ${res.item.name} (-${cost}g)`, 'good');
-    return res.item;
+    this.addNeutralCopy(this.instantiateNeutralCopy(next.id, creepCombatTier(this.region.id), this.region.seed + Math.round(this.playtime * 11) + this.goldSinks.respecs));
+    this.msg(`Enchant: 3× ${REG.neutralItem(neutralId).name} → ${next.name} (-${cost}g)`, 'good');
+    return next;
   }
 
   // ---------- gold sinks (§3.8): buyback / Tome / respec / heal ----------
@@ -3495,7 +3974,18 @@ export class Game {
       const a = (i / camp.count) * Math.PI * 2;
       const r = camp.radius * 0.55;
       const pos = { x: camp.pos.x + Math.cos(a) * r, y: camp.pos.y + Math.sin(a) * r };
-      const u = this.sim.spawnCreep(def, { team: 1, pos, wild: true, homePos: { ...camp.pos }, regionId: this.region.id, combatTier: creepCombatTier(this.region.id) });
+      const eliteSeed = stableContentSeed(`${this.region.id}:elite-creep:${camp.id}:${this.playtime}`, i);
+      const elite = i === 0 && def.tier !== 'small' && Math.abs(eliteSeed % 100) < 35;
+      const u = this.sim.spawnCreep(def, {
+        team: 1,
+        pos,
+        wild: true,
+        homePos: { ...camp.pos },
+        regionId: this.region.id,
+        combatTier: creepCombatTier(this.region.id),
+        star: elite ? 2 : 1
+      });
+      if (elite) this.eliteCreepUids.add(u.uid);
       uids.push(u.uid);
     }
     return uids;
@@ -3576,7 +4066,10 @@ export class Game {
     for (const [k, v] of Object.entries(rec.resonanceMods)) {
       u.externalMods[k] = (u.externalMods[k] ?? 0) + v;
     }
-    rec.neutralMods = neutralPassiveMods(rec.neutralSlot?.id);
+    for (const [k, v] of Object.entries(augmentMods(rec.augments))) {
+      u.externalMods[k] = (u.externalMods[k] ?? 0) + v;
+    }
+    rec.neutralMods = neutralPassiveMods(rec.neutralSlot);
     for (const [k, v] of Object.entries(rec.neutralMods)) {
       u.externalMods[k] = (u.externalMods[k] ?? 0) + v;
     }
@@ -3902,7 +4395,14 @@ export class Game {
     this.activeTrial = new TrialRunner(this.sim, player.uid, trial, { level, gateCtx: this.trialGateCtx() });
     this.activeTrialHeroId = heroId;
     this.activeTrialNpcUid = npcUid;
-    if (trial.dialogue?.[0]) this.msg(trial.dialogue[0], 'bark');
+    if (trial.dialogue?.[0]) {
+      this.playCutscene('trial-dialogue-stinger', {
+        trial: trial.name,
+        trialLine: trial.dialogue[0],
+        speaker: REG.hero(heroId).name,
+        heroId
+      });
+    }
     this.msg(`Trial begins: ${trial.name} — ${trial.description}`, 'info');
   }
 
@@ -3942,7 +4442,14 @@ export class Game {
       qp.trialCompletions += 1;
       this.questProgress[questId] = qp;
       this.msg(`${REG.hero(heroId).name}'s trial complete. ${quest.bindText}`, 'good');
-      if (runner.trial.dialogue?.[1]) this.msg(runner.trial.dialogue[1], 'bark');
+      if (runner.trial.dialogue?.[1]) {
+        this.playCutscene('trial-dialogue-stinger', {
+          trial: `${runner.trial.name} complete`,
+          trialLine: runner.trial.dialogue[1],
+          speaker: REG.hero(heroId).name,
+          heroId
+        });
+      }
       this.autosave('trial');
     } else {
       this.relocateTrial(heroId, runner);
@@ -4006,6 +4513,7 @@ export class Game {
         manaPct: 1,
         items: [null, null, null, null, null, null],
         neutralSlot: null,
+        augments: {},
         abilityCooldowns: [0, 0, 0, 0],
         benchedAt: 0,
         respawnAt: 0,
@@ -4126,6 +4634,11 @@ export class Game {
       return;
     }
     const def = REG.item(itemId);
+    const req = itemLevelRequirement(def);
+    if (u.level < req) {
+      this.msg(`${def.name} requires level ${req}`, 'bad');
+      return;
+    }
     const plan = computeBuyPlan(def, u, this.gold);
     if (!plan.affordable) {
       this.msg('Not enough gold', 'bad');
@@ -4336,7 +4849,7 @@ export class Game {
       activeIdx: this.activeIdx,
       roster: [...partySaves, ...benchSaves],
       stash: [],
-      inventoryStash: this.inventoryStash.map((i) => ({ ...i })),
+      inventoryStash: this.inventoryStash.map((i) => cloneItemSave(i)!),
       caught: this.caught.map((c) => ({ ...c })),
       fielded: [...this.fielded],
       recruited: [...this.recruited],
@@ -4351,8 +4864,9 @@ export class Game {
       eliteFive: { ...this.eliteFive },
       factionChoices: { ...this.factionChoices },
       heldUniques: [...this.heldUniques],
-      neutralStash: this.neutralStash.map((n) => ({ ...n })),
+      neutralStash: this.neutralStash.map((n) => ({ ...n, copies: n.copies?.map((item) => cloneItemSave(item)!) })),
       lootMarks: { ...this.lootMarks },
+      lootFilter: { ...this.lootFilter },
       goldSinks: { ...this.goldSinks },
       essence: this.essence,
       loadouts: structuredClone(this.loadouts),
@@ -4491,10 +5005,20 @@ export class Game {
     if (!v.eliteFive || typeof v.eliteFive.defeated !== 'number' || typeof v.eliteFive.championDown !== 'boolean') return false;
     if (!v.factionChoices || typeof v.factionChoices !== 'object') return false;
     if (!Array.isArray(v.heldUniques) || !v.heldUniques.every((id) => typeof id === 'string' && REG.items.has(id))) return false;
-    if (!Array.isArray(v.neutralStash) || !v.neutralStash.every((n) => REG.neutralItems.has(n.id) && typeof n.count === 'number' && n.count >= 0)) return false;
+    if (!Array.isArray(v.neutralStash) || !v.neutralStash.every((n) =>
+      REG.neutralItems.has(n.id) &&
+      typeof n.count === 'number' &&
+      n.count >= 0 &&
+      (n.copies === undefined || (Array.isArray(n.copies) && n.copies.every((item) => item.id === n.id)))
+    )) return false;
     if (!v.lootMarks || typeof v.lootMarks !== 'object') return false;
     for (const band of ['early', 'mid', 'late'] as const) {
       if (typeof v.lootMarks[band] !== 'number' || v.lootMarks[band] < 0) return false;
+    }
+    if (v.lootFilter !== undefined) {
+      if (!ITEM_GRADES.includes(v.lootFilter.minGrade) || !(v.lootFilter.minRarity in RARITY_RANK)) return false;
+      if (v.lootFilter.autoDisenchantBelowGrade !== undefined && !ITEM_GRADES.includes(v.lootFilter.autoDisenchantBelowGrade)) return false;
+      if (v.lootFilter.autoDisenchantBelowRarity !== undefined && !(v.lootFilter.autoDisenchantBelowRarity in RARITY_RANK)) return false;
     }
     if (!v.goldSinks || typeof v.goldSinks.buybacks !== 'number' || typeof v.goldSinks.tomesUsed !== 'number' || typeof v.goldSinks.respecs !== 'number') return false;
     if (typeof v.goldSinks.gambleRolls !== 'number' || typeof v.goldSinks.salvages !== 'number') return false;
@@ -4665,6 +5189,7 @@ export class Game {
     // drop columns are live in deep regions, matching the creep-combat scaling (GAMEPLAY_2.0 §0.2).
     if (victim && victim.kind === 'creep' && victim.tier) {
       this.rollItemDropsForCreep(victim.creepId, victim.tier, ev.victimUid, creepCombatTier(this.region.id));
+      if (this.eliteCreepUids.delete(ev.victimUid)) this.rollEliteCreepDrop(victim.tier, ev.victimUid);
       this.rollNeutralFor(victim.tier, ev.victimUid);
     }
 
@@ -4698,7 +5223,7 @@ export class Game {
     const { list, merges } = mergeCreeps(this.caught);
     this.caught = list;
     for (const m of merges) {
-      this.audio.playStinger('merge');
+      this.playPresentationStinger('merge');
       this.msg(`Merge! 3× ${REG.creep(m.creepId).name} → ${'★'.repeat(m.toStar)}`, 'good');
       // merged-away instances may have been fielded; clean up stale fielded refs
       this.fielded = this.fielded.filter((id) => this.caught.some((c) => c.uid === id));

@@ -1,8 +1,8 @@
-import { rollAffixesFor } from './affixes';
+import { affixDef, rollAffixForKind, rollAffixesFor } from './affixes';
 import { GRADE_DEFS, ITEM_GRADES, gradeBaseStatMods, percentileForGrade } from './grade';
 import { gemMods } from './gems';
 import type { Rng } from '../core/rng';
-import type { DifficultyTier, ItemDef, ItemGrade, ItemSave, StatModMap } from '../core/types';
+import type { DifficultyTier, ItemDef, ItemGrade, ItemSave, ItemTier, StatModMap } from '../core/types';
 
 export const DISENCHANT_ESSENCE: Record<ItemGrade, number> = {
   broken: 1,
@@ -38,6 +38,40 @@ export const MASTERWORK_COSTS: Record<ItemGrade, { gold: number; essence: number
   refined: { gold: 900, essence: 7 },
   pristine: { gold: 1500, essence: 12 }
 };
+
+export const REROLL_AFFIX_COSTS: Record<ItemGrade, { gold: number; essence: number }> = {
+  broken: { gold: 0, essence: 0 },
+  worn: { gold: 100, essence: 0 },
+  standard: { gold: 160, essence: 0 },
+  sharp: { gold: 260, essence: 0 },
+  refined: { gold: 450, essence: 0 },
+  pristine: { gold: 800, essence: 0 }
+};
+
+export const IMPRINT_COSTS: Record<ItemGrade, { gold: number; essence: number }> = {
+  broken: { gold: 0, essence: 0 },
+  worn: { gold: 0, essence: 2 },
+  standard: { gold: 0, essence: 3 },
+  sharp: { gold: 0, essence: 6 },
+  refined: { gold: 0, essence: 10 },
+  pristine: { gold: 0, essence: 16 }
+};
+
+const SOCKET_ADD_COSTS: Record<ItemTier, { gold: number; essence: number }> = {
+  consumable: { gold: 0, essence: 0 },
+  component: { gold: 250, essence: 1 },
+  basic: { gold: 300, essence: 1 },
+  t1: { gold: 450, essence: 1 },
+  t2: { gold: 750, essence: 2 },
+  t3: { gold: 1200, essence: 4 },
+  t4: { gold: 1800, essence: 7 },
+  special: { gold: 0, essence: 0 },
+  core: { gold: 750, essence: 2 }
+};
+
+export function socketAddCost(def: ItemDef): { gold: number; essence: number } {
+  return SOCKET_ADD_COSTS[def.tier];
+}
 
 function mergeMods(...parts: (StatModMap | undefined)[]): StatModMap {
   const out: StatModMap = {};
@@ -92,13 +126,45 @@ export function gradeUp(item: ItemSave, def: ItemDef, rng: Rng, opts: { determin
 
 export function reforge(item: ItemSave, def: ItemDef, rng: Rng, difficulty: DifficultyTier, imprintedAffixId?: string): ItemSave {
   const grade = item.grade ?? 'standard';
-  const imprinted = item.affixes?.find((affix) => affix.affixId === imprintedAffixId);
+  const imprint = imprintedAffixId ?? item.imprintedAffixId;
+  const imprinted = item.affixes?.find((affix) => affix.affixId === imprint);
   const rerolled = rollAffixesFor(def, grade, difficulty, rng);
   const affixes = imprinted ? [imprinted, ...rerolled.filter((affix) => affix.affixId !== imprinted.affixId)] : rerolled;
-  return refreshResolvedMods({ ...item, affixes: affixes.slice(0, GRADE_DEFS[grade].affixSlots + 1) }, def);
+  return refreshResolvedMods({ ...item, affixes: affixes.slice(0, GRADE_DEFS[grade].affixSlots + 1), imprintedAffixId: imprinted?.affixId }, def);
 }
 
 export function masterwork(item: ItemSave, def: ItemDef, amount = 0.12): ItemSave {
   const gradeRoll = Math.min(1, (item.gradeRoll ?? 0.5) + amount * (1 - (item.gradeRoll ?? 0.5)));
   return refreshResolvedMods({ ...item, gradeRoll }, def);
+}
+
+export function rerollAffix(item: ItemSave, def: ItemDef, affixIdx: number, rng: Rng, difficulty: DifficultyTier): ItemSave {
+  const affixes = [...(item.affixes ?? [])];
+  const current = affixes[affixIdx];
+  if (!current || current.affixId === item.imprintedAffixId) return refreshResolvedMods(item, def);
+  const kind = affixDef(current.affixId).kind;
+  const replacement = rollAffixForKind(
+    def,
+    kind,
+    item.grade ?? 'standard',
+    difficulty,
+    rng,
+    affixes.map((affix, i) => (i === affixIdx ? '' : affix.affixId)).filter(Boolean)
+  );
+  if (!replacement) return refreshResolvedMods(item, def);
+  affixes[affixIdx] = replacement;
+  return refreshResolvedMods({ ...item, affixes }, def);
+}
+
+export function imprintAffix(item: ItemSave, affixIdx: number): ItemSave {
+  const affix = item.affixes?.[affixIdx];
+  return affix ? { ...item, imprintedAffixId: affix.affixId } : item;
+}
+
+export function addSocket(item: ItemSave, def: ItemDef): ItemSave {
+  const cap = def.socketCap ?? 0;
+  const sockets = [...(item.sockets ?? [])];
+  if (sockets.length >= cap) return refreshResolvedMods(item, def);
+  sockets.push(null);
+  return refreshResolvedMods({ ...item, sockets }, def);
 }

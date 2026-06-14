@@ -30,6 +30,7 @@ describe('save v6 round-trip and migration', () => {
     expect(save.settings.resonance).toBe(true);
     expect(save.settings.audio).toEqual({ master: 0.8, sfx: 0.8, voice: 0.7, stinger: 0.7, muted: false });
     expect(save.settings.graphics).toEqual({ quality: 'auto', exposure: 0.92, grade: 1, reducedMotion: false });
+    expect(save.settings.cutscene).toEqual({ length: 'full', defaultSpeed: 1, alwaysSkip: false, photosensitive: false, tieIns: true });
     expect(Game.validateSave(save)).toBe(true);
   });
 

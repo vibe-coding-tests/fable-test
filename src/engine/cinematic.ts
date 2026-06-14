@@ -9,6 +9,7 @@ export interface CutsceneRuntimeSettings {
   defaultSpeed: 1 | 2 | 4;
   alwaysSkip: boolean;
   reducedMotion: boolean;
+  photosensitive: boolean;
 }
 
 export interface CinematicView {
@@ -27,12 +28,15 @@ export interface CinematicView {
   stage: NonNullable<CutsceneBeat['stage']>;
   stageText: string;
   sound?: CutsceneBeat['sound'];
+  music?: CutsceneDef['music'];
   speaker?: string;
   portraitHeroId?: string;
   text?: string;
   revealedText: string;   // typewriter reveal (STORY §3.4: tap completes the line)
   skipProgress: number;   // 0..1 hold-to-confirm skip fill
   controls: string;
+  reducedMotion: boolean;
+  photosensitive: boolean;
 }
 
 interface Playback {
@@ -59,7 +63,8 @@ const DEFAULT_SETTINGS: CutsceneRuntimeSettings = {
   length: 'full',
   defaultSpeed: 1,
   alwaysSkip: false,
-  reducedMotion: false
+  reducedMotion: false,
+  photosensitive: false
 };
 
 function fillTemplate(text: string, ctx: CutsceneContext): string {
@@ -68,7 +73,18 @@ function fillTemplate(text: string, ctx: CutsceneContext): string {
 
 function stageText(beat: CutsceneBeat, ctx: CutsceneContext): string {
   const title = beat.stage?.find((s) => s.kind === 'title');
-  return title?.kind === 'title' ? fillTemplate(title.text, ctx) : '';
+  if (title?.kind === 'title') return fillTemplate(title.text, ctx);
+  const narrative = beat.stage?.find((s) =>
+    s.kind === 'describe-environment' ||
+    s.kind === 'advance-plot' ||
+    s.kind === 'introduce-conflict' ||
+    s.kind === 'reveal-mystery' ||
+    s.kind === 'set-tone' ||
+    s.kind === 'explore-theme' ||
+    s.kind === 'establish-history' ||
+    s.kind === 'develop-character'
+  );
+  return narrative && 'text' in narrative && narrative.text ? fillTemplate(narrative.text, ctx) : '';
 }
 
 export class CinematicDirector {
@@ -189,7 +205,7 @@ export class CinematicDirector {
     const p = this.current;
     if (!p) return;
     if (active) {
-      p.ffStep = (p.ffStep + 1) % FF_STEPS.length;
+      p.ffStep = p.ffStep < 0 ? 1 : (p.ffStep + 1) % FF_STEPS.length;
       p.speed = FF_STEPS[p.ffStep];
     } else {
       p.ffStep = -1;
@@ -231,6 +247,7 @@ export class CinematicDirector {
       stage: beat.stage ?? [],
       stageText: stageText(beat, ctx),
       sound: beat.sound,
+      music: def.music,
       speaker: line ? fillTemplate(line.speaker, ctx) : undefined,
       portraitHeroId: line?.portraitHeroId ? fillTemplate(line.portraitHeroId, ctx) : undefined,
       text: fullText,
@@ -238,7 +255,9 @@ export class CinematicDirector {
       skipProgress: p.skipHeld ? Math.min(1, p.skipHold / SKIP_HOLD_SEC) : 0,
       controls: seen
         ? 'Space: next · Tab: fast-forward · Esc: skip'
-        : 'Space: advance · hold Tab: fast-forward · hold Esc: skip'
+        : 'Space/click: advance · hold Tab: fast-forward · hold Esc: skip',
+      reducedMotion: this.settings.reducedMotion,
+      photosensitive: this.settings.photosensitive
     };
   }
 

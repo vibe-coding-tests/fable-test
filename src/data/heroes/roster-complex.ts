@@ -60,6 +60,7 @@ function talents(id: string, abilities: AbilityDef[]): HeroDef['talents'] {
 function hero(input: HeroInput): HeroDef {
   const ranged = input.ranged ?? input.attribute === 'int';
   const abilities = input.abilities.map(tagged);
+  const loopTurn = [...input.id].reduce((n, ch) => n + ch.charCodeAt(0), 0) % 997 + 4;
   return {
     id: input.id,
     name: input.name,
@@ -67,7 +68,7 @@ function hero(input: HeroInput): HeroDef {
     attribute: input.attribute,
     roles: input.roles,
     region: input.region,
-    lore: `${input.name} keeps the signature Dota decision while scaling the execution down to one controlled hero and AI-driven extras.`,
+    lore: `${input.name} keeps the signature Dota decision while scaling the execution down to one controlled hero and AI-driven extras. Their Echo last surfaced on the ${loopTurn}th turn of the Loop, where the trick survived even after the army around it reset.`,
     baseStats: baseStats(input.attribute, ranged),
     abilities,
     skillOrder: [0, 1, 2],

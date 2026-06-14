@@ -65,6 +65,7 @@ export interface ItemState {
   grade?: ItemGrade;
   gradeRoll?: number;
   affixes?: RolledAffix[];
+  imprintedAffixId?: string;
   sockets?: (string | null)[];
   resolvedMods?: StatModMap;
   locked?: boolean;

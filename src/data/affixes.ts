@@ -106,3 +106,28 @@ export function rollAffixesFor(item: ItemDef, grade: ItemGrade, difficulty: Diff
 
   return picked;
 }
+
+export function rollAffixForKind(
+  item: ItemDef,
+  kind: ItemAffixDef['kind'],
+  grade: ItemGrade,
+  difficulty: DifficultyTier,
+  rng: Rng,
+  excludeIds: string[] = []
+): RolledAffix | null {
+  const pools = new Set(affixPoolForItem(item));
+  const maxTier = maxAffixTier(difficulty);
+  const tierLimit = kind === 'signature' ? maxTier + 1 : maxTier;
+  const excluded = new Set(excludeIds);
+  const eligible = AFFIX_DEFS.filter((affix) =>
+    affix.kind === kind &&
+    affix.tier <= tierLimit &&
+    !excluded.has(affix.id) &&
+    affix.pools.some((pool) => pools.has(pool))
+  );
+  if (eligible.length === 0) return null;
+  const basePercentile = percentileForGrade(grade, rng.next());
+  const affix = pickWeighted(eligible, rng);
+  const roll = Math.max(basePercentile, rng.next());
+  return { affixId: affix.id, roll, resolved: resolveAffix(affix, roll) };
+}

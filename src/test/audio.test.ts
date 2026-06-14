@@ -61,6 +61,10 @@ describe('test 20 — audio-coverage + safety', () => {
       audio.handleEvent({ t: 'bark', uid: 1, line: 'For the Isle!' });
       audio.playStinger('badge');
       audio.playStinger('raid-clear');
+      audio.setCinematicMix('duck');
+      audio.playDialogueBlip('Narration');
+      audio.setCinematicMix('silence');
+      audio.setCinematicMix('normal');
       audio.setSettings(settings(true));
       audio.dispose();
       audio.dispose(); // idempotent

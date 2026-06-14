@@ -402,7 +402,15 @@ export const PHASE3_CREEPS: CreepDef[] = [
 // The hand-authored Phase 1 creeps predate the anim/sound schema; default
 // their tags + animProfile from each ability's data (§3.11). Factory creeps
 // already carry these, so the ?? defaults are no-ops for them.
+function creepLore(c: CreepDef): string {
+  const ability = c.abilities[0]?.name;
+  const tier = c.tier === 'ancient' ? 'ancient camp' : `${c.tier}-tier wild`;
+  const hook = ability ? `It is known for ${ability}, a trick the local camps repeat whenever the Loop stirs.` : 'It survives by simple teeth, numbers, and knowing when a shard-road is weak.';
+  return `${c.name} is a ${tier} denizen whose camp has learned to live beside fallen Moon-stone. ${hook}`;
+}
+
 function normalizeCreep(c: CreepDef): CreepDef {
+  c.lore = c.lore ?? creepLore(c);
   if (!c.animProfile) {
     const ranged = c.stats.attackRange > 350;
     c.animProfile = {

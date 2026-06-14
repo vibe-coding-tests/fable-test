@@ -4,6 +4,7 @@ import { SampledAudioBank, type SfxKey } from './sampled-audio';
 
 type AudioSettings = GameSave['settings'];
 type Channel = 'sfx' | 'voice' | 'stinger' | 'music';
+export type CinematicMixMode = 'normal' | 'duck' | 'silence';
 
 export interface AudioEnvironment {
   biome: string;
@@ -49,6 +50,7 @@ export class ProceduralAudio {
   private samplesEnabled = false;
   private sampleMusic: { biome: string; src: AudioBufferSourceNode; gain: GainNode } | null = null;
   private combatHotUntil = 0;
+  private cinematicMix: CinematicMixMode = 'normal';
   // Damage-impact throttle (§2.4): cap how many hit sounds fire in a short window
   // so a big AoE reads as one crunch instead of a machine-gun wall of mush.
   private damageSoundTimes: number[] = [];
@@ -132,6 +134,10 @@ export class ProceduralAudio {
       this.stopMusic();
       this.stopSampleMusic();
     }
+  }
+
+  setCinematicMix(mode: CinematicMixMode): void {
+    this.cinematicMix = mode;
   }
 
   /** Live count of active pooled voices (for perf assertions). */
@@ -220,14 +226,15 @@ export class ProceduralAudio {
     // whenever the file is absent/undecoded).
     const sampleActive = this.updateSampleMusic(env, ctx, now, night, combat);
     const drone = sampleActive ? 0.28 : 1;
-    const base = this.volume(0.11, 'music');
+    const cinMult = this.cinematicMix === 'silence' ? 0 : this.cinematicMix === 'duck' ? 0.35 : 1;
+    const base = this.volume(0.11, 'music') * cinMult;
     this.music.master.gain.setTargetAtTime(base * (night ? 0.78 : 1) * drone, now, 0.55);
     this.music.combat.gain.setTargetAtTime(base * (combat ? 0.9 : 0.04), now, combat ? 0.08 : 0.9);
-    this.music.ambient.gain.setTargetAtTime(this.volume(night ? 0.055 : 0.038, 'music') * (sampleActive ? 0.5 : 1), now, 0.8);
+    this.music.ambient.gain.setTargetAtTime(this.volume(night ? 0.055 : 0.038, 'music') * cinMult * (sampleActive ? 0.5 : 1), now, 0.8);
 
     const filterTarget = ({ snow: 1700, desert: 900, wasteland: 720, forest: 1300, grass: 1250, coast: 1800 } as Record<string, number>)[env.biome] ?? 1200;
     this.music.ambientFilter.frequency.setTargetAtTime(filterTarget * (night ? 0.72 : 1), now, 1.2);
-    if (this.reverbGain) this.reverbGain.gain.setTargetAtTime(this.volume(combat ? 0.08 : 0.13, 'music'), now, 0.8);
+    if (this.reverbGain) this.reverbGain.gain.setTargetAtTime(this.volume(combat ? 0.08 : 0.13, 'music') * cinMult, now, 0.8);
     void env.dt;
   }
 
@@ -383,6 +390,15 @@ export class ProceduralAudio {
     const p = 0.92 + (Math.abs(uid) % 8) / 24; // 0.92..1.21 per speaker
     this.tone(360 * p, 0.05, 'square', 0.08, 'voice');
     setTimeout(() => this.tone(300 * p, 0.05, 'square', 0.07, 'voice'), 55);
+  }
+
+  playDialogueBlip(seed = ''): void {
+    if (!this.unlocked || this.settings.audio.muted) return;
+    if (!this.requestVoice(0.12)) return;
+    const hash = [...seed].reduce((n, ch) => (n * 31 + ch.charCodeAt(0)) | 0, 17);
+    const p = 0.92 + (Math.abs(hash) % 10) / 28;
+    this.tone(330 * p, 0.045, 'triangle', 0.06, 'voice');
+    setTimeout(() => this.tone(410 * p, 0.04, 'sine', 0.045, 'voice'), 48);
   }
 
   // ---------- stingers (own channel) ----------
@@ -563,7 +579,8 @@ export class ProceduralAudio {
       src.start();
       this.sampleMusic = { biome: env.biome, src, gain };
     }
-    const target = this.volume(0.5, 'music') * (night ? 0.8 : 1) * (combat ? 0.62 : 1);
+    const cinMult = this.cinematicMix === 'silence' ? 0 : this.cinematicMix === 'duck' ? 0.35 : 1;
+    const target = this.volume(0.5, 'music') * cinMult * (night ? 0.8 : 1) * (combat ? 0.62 : 1);
     this.sampleMusic.gain.gain.setTargetAtTime(Math.max(0.0001, target), now, 0.7);
     return true;
   }

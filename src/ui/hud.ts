@@ -13,7 +13,7 @@ import { abilityIcon, itemIcon, heroPortrait } from '../engine/icons';
 import { WORLD_SCALE } from '../engine/scale';
 import { Game } from '../systems/game';
 import type { InputController } from '../systems/input';
-import type { DifficultyTier, GambitAction, GambitCondition, GambitRule, GambitTargetMode, GraphicsSettings, ItemDef, ItemRarity, ItemSave, SimEvent } from '../core/types';
+import type { DifficultyTier, GambitAction, GambitCondition, GambitRule, GambitTargetMode, GraphicsSettings, ItemDef, ItemRarity, ItemSave, SimEvent, StatModMap } from '../core/types';
 import * as THREE from 'three';
 
 // ------------------------------------------------------------------
@@ -24,6 +24,150 @@ import * as THREE from 'three';
 const ABILITY_KEYS = ['Q', 'W', 'E', 'R', 'D', 'F'];
 const ITEM_KEYS = ['Z', 'X', 'C', 'V', '·', '·'];
 const GOLD_STREAK_WINDOW_MS = 1500;
+const RARITY_ORDER: ItemRarity[] = ['common', 'uncommon', 'rare', 'mythical', 'legendary', 'immortal', 'arcana'];
+const STAT_LABELS: Partial<Record<keyof StatModMap, string>> = {
+  str: 'STR',
+  agi: 'AGI',
+  int: 'INT',
+  damage: 'Damage',
+  damagePct: 'Damage %',
+  armor: 'Armor',
+  attackSpeed: 'Attack speed',
+  moveSpeed: 'Move speed',
+  moveSpeedPct: 'Move speed %',
+  hpRegen: 'HP regen',
+  manaRegen: 'Mana regen',
+  manaRegenPctMax: 'Mana % regen',
+  maxHp: 'Max HP',
+  maxMana: 'Max mana',
+  magicResistPct: 'Magic resist',
+  spellAmpPct: 'Spell amp',
+  statusResistPct: 'Status resist',
+  evasionPct: 'Evasion',
+  lifestealPct: 'Lifesteal',
+  attackRange: 'Attack range',
+  hpRegenPctMax: 'HP % regen',
+  damageTakenReductionPct: 'Damage taken',
+  attackDamageTakenReductionPct: 'Attack damage taken',
+  castRange: 'Cast range',
+  visionPct: 'Vision',
+  swapCdReductionPct: 'Swap CD',
+  swapInDamagePct: 'Swap-in damage',
+  swapInHealPct: 'Swap-in heal',
+  reactionAmpPct: 'Reaction amp',
+  elementalGaugeSec: 'Element gauge',
+  staminaBonus: 'Stamina'
+};
+const STAT_WEIGHTS: Partial<Record<keyof StatModMap, number>> = {
+  damage: 1.5,
+  damagePct: 3,
+  str: 1.2,
+  agi: 1.2,
+  int: 1.2,
+  armor: 4,
+  attackSpeed: 0.6,
+  moveSpeed: 0.4,
+  moveSpeedPct: 2,
+  hpRegen: 2,
+  manaRegen: 2,
+  manaRegenPctMax: 8,
+  maxHp: 0.03,
+  maxMana: 0.02,
+  magicResistPct: 2,
+  spellAmpPct: 3,
+  statusResistPct: 2,
+  evasionPct: 3,
+  lifestealPct: 3,
+  attackRange: 0.05,
+  hpRegenPctMax: 8,
+  damageTakenReductionPct: -2,
+  attackDamageTakenReductionPct: 2,
+  castRange: 0.04,
+  visionPct: 0.5,
+  swapCdReductionPct: 2,
+  swapInDamagePct: 2,
+  swapInHealPct: 2,
+  reactionAmpPct: 2,
+  elementalGaugeSec: 8,
+  staminaBonus: 0.04
+};
+
+function esc(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
+}
+
+function statLabel(key: keyof StatModMap): string {
+  return STAT_LABELS[key] ?? key;
+}
+
+function fmtStatValue(key: keyof StatModMap, value: number, signed = true): string {
+  const sign = signed && value > 0 ? '+' : '';
+  const pct = key.toLowerCase().includes('pct') ? '%' : '';
+  const rounded = Math.abs(value) >= 10 ? Math.round(value) : Math.round(value * 10) / 10;
+  return `${sign}${rounded}${pct}`;
+}
+
+function mergeMods(...parts: (StatModMap | undefined)[]): StatModMap {
+  const out: StatModMap = {};
+  for (const mods of parts) {
+    for (const [key, value] of Object.entries(mods ?? {}) as [keyof StatModMap, number][]) {
+      out[key] = Math.round(((out[key] ?? 0) + value) * 10) / 10;
+    }
+  }
+  return out;
+}
+
+function itemMods(item: ItemSave, def: ItemDef): StatModMap {
+  return mergeMods(def.passiveMods, item.resolvedMods);
+}
+
+function statLines(mods: StatModMap, limit = 6): string[] {
+  return (Object.entries(mods) as [keyof StatModMap, number][])
+    .filter(([, value]) => Math.abs(value) > 0.0001)
+    .sort(([a], [b]) => statLabel(a).localeCompare(statLabel(b)))
+    .slice(0, limit)
+    .map(([key, value]) => `${fmtStatValue(key, value)} ${statLabel(key)}`);
+}
+
+function itemScore(item: ItemSave, def: ItemDef): number {
+  return (Object.entries(itemMods(item, def)) as [keyof StatModMap, number][])
+    .reduce((sum, [key, value]) => sum + value * (STAT_WEIGHTS[key] ?? 1), 0);
+}
+
+function compareItems(candidate: ItemSave, equipped: ItemSave | null): { verdict: string; cls: string; delta: number; lines: string[] } | null {
+  if (!equipped) return null;
+  const candDef = REG.item(candidate.id);
+  const eqDef = REG.item(equipped.id);
+  const candScore = itemScore(candidate, candDef);
+  const eqScore = itemScore(equipped, eqDef);
+  const delta = Math.round((candScore - eqScore) * 10) / 10;
+  const threshold = Math.max(6, Math.abs(eqScore) * 0.08);
+  const verdict = delta > threshold ? 'UPGRADE' : delta < -threshold ? 'DOWNGRADE' : 'SIDEGRADE';
+  const cls = verdict === 'UPGRADE' ? 'good' : verdict === 'DOWNGRADE' ? 'bad' : 'side';
+  const candMods = itemMods(candidate, candDef);
+  const eqMods = itemMods(equipped, eqDef);
+  const keys = [...new Set([...Object.keys(candMods), ...Object.keys(eqMods)])] as (keyof StatModMap)[];
+  const lines = keys
+    .map((key) => [key, Math.round(((candMods[key] ?? 0) - (eqMods[key] ?? 0)) * 10) / 10] as const)
+    .filter(([, value]) => Math.abs(value) > 0.0001)
+    .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
+    .slice(0, 4)
+    .map(([key, value]) => `${fmtStatValue(key, value)} ${statLabel(key)}`);
+  return { verdict, cls, delta, lines };
+}
+
+function comparableEquipped(candidate: ItemSave, heroItems: (ItemSave | null)[]): ItemSave | null {
+  const candDef = REG.item(candidate.id);
+  const candActive = !!candDef.active;
+  const pool = heroItems
+    .filter((item): item is ItemSave => !!item && !gemDef(item.id))
+    .filter((item) => {
+      const def = REG.item(item.id);
+      return def.tier !== 'consumable' && def.tier !== 'special' && !!def.active === candActive;
+    });
+  if (pool.length === 0) return null;
+  return pool.sort((a, b) => itemScore(a, REG.item(a.id)) - itemScore(b, REG.item(b.id)))[0];
+}
 
 function gradeLabel(item: { grade?: ItemSave['grade']; affixes?: ItemSave['affixes']; sockets?: ItemSave['sockets'] }): string {
   const grade = item.grade ?? 'standard';
@@ -32,6 +176,26 @@ function gradeLabel(item: { grade?: ItemSave['grade']; affixes?: ItemSave['affix
   const affixes = (item.affixes ?? []).map((affix) => affixDef(affix.affixId).name).join(', ');
   const sockets = item.sockets && item.sockets.length > 0 ? ` · ${item.sockets.length} socket${item.sockets.length === 1 ? '' : 's'}` : '';
   return `${def.name}${pips}${affixes ? ` · ${affixes}` : ''}${sockets}`;
+}
+
+function itemTooltip(def: ItemDef, item: ItemSave): string {
+  const lines = [
+    def.name,
+    gradeLabel(item),
+    ...statLines(itemMods(item, def), 10),
+    ...(item.affixes ?? []).map((affix) => {
+      const defn = affixDef(affix.affixId);
+      const mods = statLines(affix.resolved, 4).join(', ');
+      return `${defn.kind === 'signature' ? 'Signature: ' : ''}${defn.name}${mods ? ` (${mods})` : ''}${item.imprintedAffixId === affix.affixId ? ' [imprinted]' : ''}`;
+    }),
+    ...(item.sockets ?? []).map((socket, i) => {
+      const gem = socket ? gemDef(socket) : null;
+      return `Socket ${i + 1}: ${gem ? gem.name : 'empty'}`;
+    }),
+    def.set ? `Set: ${def.set}` : '',
+    def.lore
+  ].filter(Boolean);
+  return lines.join('\n');
 }
 
 interface Floater {
@@ -141,6 +305,8 @@ export class Hud {
     this.cinematicLayer.addEventListener('click', (e) => {
       const btn = (e.target as HTMLElement).closest('[data-cinematic]') as HTMLElement | null;
       if (btn?.dataset.cinematic === 'next') this.game.cinematicAdvance();
+      if (btn) return;
+      this.game.cinematicAdvance();
     });
     this.cinematicLayer.addEventListener('mousedown', (e) => {
       const btn = (e.target as HTMLElement).closest('[data-cinematic]') as HTMLElement | null;
@@ -386,10 +552,11 @@ export class Hud {
         : '';
       const qBorder = hasQuality ? `box-shadow: inset 0 0 0 2px ${qualityColor(it.quality)};` : '';
       const gDef = GRADE_DEFS[it.grade ?? 'standard'];
-      const gTip = ` [${gradeLabel(it)}]`;
+      const savedItem: ItemSave = { ...it, id: it.defId };
+      const gTip = ` [${gradeLabel(savedItem)}]`;
       const gradeFrame = `outline:2px solid ${gDef.frame};`;
       itemsHtml += `
-        <div class="item-slot ${keyed ? '' : 'passive-slot'} ${lockout ? 'lockout' : ''}" title="${idef.name}${qTip}${gTip} — ${idef.lore}" style="border-color:${rarityColor(idef.rarity)};${gradeFrame}${qBorder}">
+        <div class="item-slot ${keyed ? '' : 'passive-slot'} ${lockout ? 'lockout' : ''}" title="${esc(itemTooltip(idef, savedItem))}${qTip}${gTip}" style="border-color:${rarityColor(idef.rarity)};${gradeFrame}${qBorder}">
           <img src="${itemIcon(idef)}" alt="">
           ${cdLeft > 0 ? `<span class="cd-num">${cdLeft.toFixed(cdLeft > 5 ? 0 : 1)}</span>` : ''}
           ${it.charges >= 0 ? `<span class="charges">${it.charges}</span>` : ''}
@@ -1343,14 +1510,49 @@ export class Hud {
         return gem ? `<option value="${i}">${gem.name}</option>` : '';
       })
       .join('');
+    const gradeOptions = (['broken', 'worn', 'standard', 'sharp', 'refined', 'pristine'] as const)
+      .map((grade) => `<option value="${grade}" ${armory.lootFilter.minGrade === grade ? 'selected' : ''}>${GRADE_DEFS[grade].name}</option>`)
+      .join('');
+    const rarityOptions = RARITY_ORDER
+      .map((rarity) => `<option value="${rarity}" ${armory.lootFilter.minRarity === rarity ? 'selected' : ''}>${cap(rarity)}</option>`)
+      .join('');
+    const autoGradeOptions = [
+      `<option value="">Off</option>`,
+      ...(['broken', 'worn', 'standard', 'sharp', 'refined', 'pristine'] as const)
+        .map((grade) => `<option value="${grade}" ${armory.lootFilter.autoDisenchantBelowGrade === grade ? 'selected' : ''}>Below ${GRADE_DEFS[grade].name}</option>`)
+    ].join('');
+    const autoRarityOptions = [
+      `<option value="">Off</option>`,
+      ...RARITY_ORDER.map((rarity) => `<option value="${rarity}" ${armory.lootFilter.autoDisenchantBelowRarity === rarity ? 'selected' : ''}>Below ${cap(rarity)}</option>`)
+    ].join('');
+    const filterHtml = `<div class="svc-row loot-filter-row">
+      <div class="svc-main"><b>Loot Filter</b><div class="rr-sub">Toast and keep at or above these thresholds; optional auto-disenchant turns junk into essence.</div></div>
+      <div class="svc-actions">
+        <label class="mini-label">Keep grade <select class="small-select" data-lf="minGrade">${gradeOptions}</select></label>
+        <label class="mini-label">Keep rarity <select class="small-select" data-lf="minRarity">${rarityOptions}</select></label>
+        <label class="mini-label">Auto grade <select class="small-select" data-lf="autoGrade">${autoGradeOptions}</select></label>
+        <label class="mini-label">Auto rarity <select class="small-select" data-lf="autoRarity">${autoRarityOptions}</select></label>
+        <button class="btn small accent" data-lf-apply="1">Apply</button>
+        <button class="btn small" data-arm-salvage-filtered="1">Salvage Filtered</button>
+      </div>
+    </div>`;
     const conflictHtml = armory.conflicts.length === 0
       ? ''
       : `<div class="rr-sub bad">Contention: ${armory.conflicts.map((c) => `${REG.item(c.itemId).name} claimed ${c.requested}×, owned ${c.owned}×`).join(' · ')}</div>`;
+    const activeHero = armory.heroes.find((hero) => hero.heroId === g.party[g.activeIdx].heroId) ?? armory.heroes[0];
+    const fuseOptions = g.gemFuseOptions();
+    const fuseHtml = fuseOptions.length === 0
+      ? `<p class="dim">No matching gem triples ready to fuse.</p>`
+      : fuseOptions.map((opt) => `<div class="svc-row">
+          <div class="svc-main"><b>${opt.from}</b> <em>×3 → ${opt.to}</em><div class="rr-sub">${opt.cost}g fusion cost</div></div>
+          <div class="svc-actions"><button class="btn small" data-arm-fuse="${opt.indices.join(',')}" ${opt.canFuse ? '' : 'disabled'}>Fuse</button></div>
+        </div>`).join('');
     const armoryHtml = armory.stash.length === 0
       ? `<p class="dim">No stashed items yet. Bosses, raids, chests, and wild creeps can stock the Armory.</p>`
       : armory.stash.map((it, i) => {
           const def = REG.item(it.id);
           const gem = gemDef(it.id);
+          const augmentKind = it.id === 'aghanims-scepter' || it.id === 'aghanims-blessing' ? 'scepter' : it.id === 'aghanims-shard' ? 'shard' : null;
           const qLabel = it.quality && it.quality !== 'standard'
             ? ` · <span style="color:${qualityColor(it.quality)}">${QUALITY_GRADES[it.quality].name}</span>`
             : '';
@@ -1364,6 +1566,30 @@ export class Hud {
           const gradeGamble = !gem && it.bound ? g.forgeGradeUpQuote(i, false) : null;
           const reforge = !gem && it.bound ? g.reforgeArmoryItemQuote(i) : null;
           const masterwork = !gem && it.bound ? g.masterworkArmoryItemQuote(i) : null;
+          const addSocket = !gem && it.bound ? g.addArmorySocketQuote(i) : null;
+          const equipped = !gem && activeHero ? comparableEquipped(it, activeHero.items) : null;
+          const comparison = !gem ? compareItems(it, equipped) : null;
+          const comparisonHtml = comparison
+            ? `<div class="item-compare ${comparison.cls}"><b>${comparison.verdict}</b> vs ${equipped ? REG.item(equipped.id).name : 'empty'} <span>${comparison.delta > 0 ? '+' : ''}${comparison.delta}</span>${comparison.lines.length ? `<em>${comparison.lines.join(' · ')}</em>` : ''}</div>`
+            : '';
+          const detailLines = !gem ? statLines(itemMods(it, def), 8) : statLines(gem.mods, 4);
+          const detailsHtml = [
+            detailLines.length ? `<div class="item-stat-lines">${detailLines.map(esc).join(' · ')}</div>` : '',
+            !gem && (it.affixes ?? []).length > 0
+              ? `<div class="affix-lines">${(it.affixes ?? []).map((affix, affixIdx) => {
+                  const aDef = affixDef(affix.affixId);
+                  const aQuote = g.rerollArmoryAffixQuote(i, affixIdx);
+                  const imprint = g.imprintArmoryAffixQuote(i, affixIdx);
+                  const mods = statLines(affix.resolved, 4).join(', ');
+                  const lock = it.imprintedAffixId === affix.affixId ? ' locked' : '';
+                  return `<div class="affix-line ${aDef.kind}${lock}">
+                    <span>${aDef.kind === 'signature' ? 'Signature: ' : ''}${esc(aDef.name)}${mods ? ` <em>${esc(mods)}</em>` : ''}${lock ? ' <b>IMPRINTED</b>' : ''}</span>
+                    ${aQuote ? `<button class="btn tiny" data-arm-reroll-affix="${i}:${affixIdx}" ${aQuote.locked || g.gold < aQuote.gold || g.essence < aQuote.essence ? 'disabled' : ''}>Reroll ${aQuote.gold}g</button>` : ''}
+                    ${imprint ? `<button class="btn tiny ${imprint.active ? 'on' : ''}" data-arm-imprint-affix="${i}:${affixIdx}" ${imprint.active || g.gold < imprint.gold || g.essence < imprint.essence ? 'disabled' : ''}>Imprint ${imprint.essence}e</button>` : ''}
+                  </div>`;
+                }).join('')}</div>`
+              : ''
+          ].join('');
           const socketControls = !gem && it.bound && (it.sockets ?? []).length > 0
             ? (it.sockets ?? []).map((socketed, socketIdx) => {
                 const socketedGem = socketed ? gemDef(socketed) : null;
@@ -1381,14 +1607,20 @@ export class Hud {
             gradeGamble ? `<button class="btn small" data-arm-grade-gamble="${i}">Gamble ${gradeGamble.to} (${gradeGamble.gold}g/${gradeGamble.essence}e · ${Math.round(gradeGamble.chance * 100)}%)</button>` : '',
             reforge ? `<button class="btn small" data-arm-reforge="${i}">Reforge (${reforge.gold}g/${reforge.essence}e)</button>` : '',
             masterwork ? `<button class="btn small" data-arm-masterwork="${i}">Masterwork (${masterwork.gold}g/${masterwork.essence}e)</button>` : '',
+            addSocket ? `<button class="btn small" data-arm-add-socket="${i}">Add Socket (${addSocket.gold}g/${addSocket.essence}e)</button>` : '',
             socketControls
           ].join('');
-          return `<div class="svc-row" style="border-left:3px solid ${rarityColor(def.rarity)}; outline:1px solid ${gDef.frame}">
-            <div class="svc-main"><b style="color:${rarityColor(def.rarity)}">${def.name}</b> <em>${flags}${qLabel}</em><div class="rr-sub">${def.lore}</div></div>
+          const augmentButton = augmentKind
+            ? `<button class="btn small accent" data-arm-augment="${i}" ${activeHero?.augments?.[augmentKind] ? 'disabled' : ''}>Absorb</button>`
+            : '';
+          return `<div class="svc-row item-row ${it.locked ? 'locked' : ''}" title="${esc(itemTooltip(def, it))}" style="border-left:3px solid ${rarityColor(def.rarity)}; outline:1px solid ${gDef.frame}">
+            <div class="svc-main"><b style="color:${rarityColor(def.rarity)}">${def.name}</b> <em>${flags}${qLabel}${it.locked ? ' · locked' : ''}</em><div class="rr-sub">${def.lore}</div>${comparisonHtml}${detailsHtml}</div>
             <div class="svc-actions">
               ${gem ? '' : `<select class="small-select" data-arm-pick="${i}">${heroOptions}</select><button class="btn small" data-arm-hero-eq="${i}">Equip</button>`}
+              ${augmentButton}
               ${powerForge}
               ${qualityForge}
+              <button class="btn small ${it.locked ? 'on' : ''}" data-arm-lock="${i}">${it.locked ? 'Unlock' : 'Lock'}</button>
               ${!gem && it.bound ? `<button class="btn small" data-arm-salvage="${i}">Salvage</button>` : ''}
             </div>
           </div>`;
@@ -1412,16 +1644,20 @@ export class Hud {
       const bound = hero.items
         .map((it, slot) => (it?.bound ? { it, slot } : null))
         .filter((x): x is { it: ItemSave; slot: number } => !!x);
+      const augmentStatus = `${hero.augments.scepter ? 'Scepter' : 'no Scepter'} · ${hero.augments.shard ? 'Shard' : 'no Shard'}`;
       const rows = bound.length === 0
         ? `<div class="rr-sub">no bound main-slot items</div>`
-        : bound.map(({ it, slot }) => `<button class="btn small" data-arm-rec-hero="${hero.heroId}:${slot}">Reclaim ${REG.item(it.id).name}</button>`).join('');
+        : bound.map(({ it, slot }) => {
+            const aug = it.id === 'aghanims-scepter' || it.id === 'aghanims-blessing' ? 'scepter' : it.id === 'aghanims-shard' ? 'shard' : null;
+            return `<button class="btn small" data-arm-rec-hero="${hero.heroId}:${slot}">Reclaim ${REG.item(it.id).name}</button>${aug ? `<button class="btn small accent" data-arm-eq-augment="${hero.heroId}:${slot}" ${hero.augments[aug] ? 'disabled' : ''}>Absorb</button>` : ''}`;
+          }).join('');
       const loadoutText = hero.loadouts.length > 0 ? `loadouts: ${hero.loadouts.join(', ')}` : 'no saved loadout';
       const conflicts = hero.conflicts.length > 0
         ? `<div class="rr-sub bad">waiting on ${hero.conflicts.map((id) => REG.item(id).name).join(', ')}</div>`
         : '';
       return `<div class="svc-row">
         <div class="svc-main"><b>${hero.name}</b> <em>Lv ${hero.level}${hero.fielded ? ' · fielded' : ' · bench'}</em>
-          <div class="rr-sub">${loadoutText}</div>${conflicts}
+          <div class="rr-sub">${loadoutText} · ${augmentStatus}</div>${conflicts}
         </div>
         <div class="svc-actions">
           ${rows}
@@ -1439,6 +1675,9 @@ export class Hud {
       .join('');
     const markBtns = bm.lootMarks
       .map((m) => `<button class="btn small" data-bm-mark="${m.band}" ${m.canRedeem ? '' : 'disabled'}>${cap(m.band)} ${m.marks}/${m.quota}</button>`)
+      .join('');
+    const gambleBtns = bm.gambleVendor
+      .map((gbl) => `<button class="btn small" data-bm-gamble="${gbl.tier}" ${gbl.canRoll ? '' : 'disabled'}>${gbl.tier.toUpperCase()} ${gbl.price}g</button>`)
       .join('');
     const bmHtml = `
       <div class="svc-row">
@@ -1458,6 +1697,12 @@ export class Hud {
           <div class="rr-sub">One bound assembled relic up to <span style="color:${rarityColor(bm.relicCeiling)}">${bm.relicCeiling}</span>; cost climbs each spin and never reaches the reserved peak.</div>
         </div>
         <div class="svc-actions"><button class="btn small accent" data-bm-relic="1" ${bm.inTown && bm.gold >= bm.relicCost ? '' : 'disabled'}>Spin</button></div>
+      </div>
+      <div class="svc-row">
+        <div class="svc-main"><b>Gamble Vendor</b>
+          <div class="rr-sub">Pick a core tier; receive one random bound rolled copy with grade, affixes, and sockets.</div>
+        </div>
+        <div class="svc-actions">${gambleBtns}</div>
       </div>`;
 
     // Raids, executed (§3.9): scripted 5v1 with mechanics firing in the sim
@@ -1534,7 +1779,9 @@ export class Hud {
         <section><h3>Armory <span class="gold">${armory.essence} essence</span></h3>
           ${conflictHtml}
           <div class="svc-actions"><button class="btn small accent" data-arm-gear-field="1">Gear Fielded Loadouts</button></div>
+          ${filterHtml}
           ${armoryHtml}
+          <div class="svc-sub">Gem Fusion</div>${fuseHtml}
           <div class="svc-sub">Assembly Bench</div>${assemblyHtml}
           <div class="svc-sub">Bound items</div>${armorySlotsHtml}
         </section>
@@ -1579,12 +1826,36 @@ export class Hud {
       if (select) g.equipArmoryItemForHero(select.value, idx);
       rerender();
     }));
+    this.modal.querySelectorAll<HTMLElement>('[data-arm-augment]').forEach((el) => el.addEventListener('click', () => {
+      const idx = Number(el.dataset.armAugment);
+      const select = this.modal.querySelector<HTMLSelectElement>(`select[data-arm-pick="${idx}"]`);
+      if (select) g.applyArmoryAugmentForHero(select.value, idx);
+      rerender();
+    }));
+    this.modal.querySelectorAll<HTMLElement>('[data-arm-eq-augment]').forEach((el) => el.addEventListener('click', () => {
+      const [heroId, slotRaw] = el.dataset.armEqAugment!.split(':');
+      g.applyEquippedAugmentForHero(heroId, Number(slotRaw));
+      rerender();
+    }));
     this.modal.querySelectorAll<HTMLElement>('[data-arm-salvage]').forEach((el) => el.addEventListener('click', () => { g.salvageArmoryItem(Number(el.dataset.armSalvage)); rerender(); }));
+    this.modal.querySelectorAll<HTMLElement>('[data-arm-lock]').forEach((el) => el.addEventListener('click', () => { g.toggleArmoryItemLock(Number(el.dataset.armLock)); rerender(); }));
+    this.modal.querySelector<HTMLElement>('[data-arm-salvage-filtered]')?.addEventListener('click', () => { g.salvageFilteredArmoryJunk(); rerender(); });
     this.modal.querySelectorAll<HTMLElement>('[data-arm-upgrade]').forEach((el) => el.addEventListener('click', () => { g.upgradeArmoryItemQuality(Number(el.dataset.armUpgrade)); rerender(); }));
     this.modal.querySelectorAll<HTMLElement>('[data-arm-grade-det]').forEach((el) => el.addEventListener('click', () => { g.forgeArmoryItemGrade(Number(el.dataset.armGradeDet), true); rerender(); }));
     this.modal.querySelectorAll<HTMLElement>('[data-arm-grade-gamble]').forEach((el) => el.addEventListener('click', () => { g.forgeArmoryItemGrade(Number(el.dataset.armGradeGamble), false); rerender(); }));
     this.modal.querySelectorAll<HTMLElement>('[data-arm-reforge]').forEach((el) => el.addEventListener('click', () => { g.reforgeArmoryItem(Number(el.dataset.armReforge)); rerender(); }));
+    this.modal.querySelectorAll<HTMLElement>('[data-arm-reroll-affix]').forEach((el) => el.addEventListener('click', () => {
+      const [idxRaw, affixRaw] = el.dataset.armRerollAffix!.split(':');
+      g.rerollArmoryAffix(Number(idxRaw), Number(affixRaw));
+      rerender();
+    }));
+    this.modal.querySelectorAll<HTMLElement>('[data-arm-imprint-affix]').forEach((el) => el.addEventListener('click', () => {
+      const [idxRaw, affixRaw] = el.dataset.armImprintAffix!.split(':');
+      g.imprintArmoryAffix(Number(idxRaw), Number(affixRaw));
+      rerender();
+    }));
     this.modal.querySelectorAll<HTMLElement>('[data-arm-masterwork]').forEach((el) => el.addEventListener('click', () => { g.masterworkArmoryItem(Number(el.dataset.armMasterwork)); rerender(); }));
+    this.modal.querySelectorAll<HTMLElement>('[data-arm-add-socket]').forEach((el) => el.addEventListener('click', () => { g.addArmorySocket(Number(el.dataset.armAddSocket)); rerender(); }));
     this.modal.querySelectorAll<HTMLElement>('[data-arm-socket]').forEach((el) => el.addEventListener('click', () => {
       const [idxRaw, socketRaw] = el.dataset.armSocket!.split(':');
       const select = this.modal.querySelector<HTMLSelectElement>(`select[data-arm-gem-pick="${idxRaw}:${socketRaw}"]`);
@@ -1596,6 +1867,20 @@ export class Hud {
       g.unsocketArmoryGem(Number(idxRaw), Number(socketRaw));
       rerender();
     }));
+    this.modal.querySelectorAll<HTMLElement>('[data-arm-fuse]').forEach((el) => el.addEventListener('click', () => {
+      g.fuseArmoryGems(el.dataset.armFuse!.split(',').map(Number));
+      rerender();
+    }));
+    this.modal.querySelector<HTMLElement>('[data-lf-apply]')?.addEventListener('click', () => {
+      const value = (field: string) => this.modal.querySelector<HTMLSelectElement>(`select[data-lf="${field}"]`)?.value ?? '';
+      g.setLootFilter({
+        minGrade: value('minGrade') as NonNullable<ItemSave['grade']>,
+        minRarity: value('minRarity') as ItemRarity,
+        autoDisenchantBelowGrade: value('autoGrade') ? value('autoGrade') as NonNullable<ItemSave['grade']> : undefined,
+        autoDisenchantBelowRarity: value('autoRarity') ? value('autoRarity') as ItemRarity : undefined
+      });
+      rerender();
+    });
     this.modal.querySelectorAll<HTMLElement>('[data-arm-assemble]').forEach((el) => el.addEventListener('click', () => { g.assembleLegendary(el.dataset.armAssemble!); rerender(); }));
     this.modal.querySelectorAll<HTMLElement>('[data-arm-rec-hero]').forEach((el) => el.addEventListener('click', () => {
       const [heroId, slotRaw] = el.dataset.armRecHero!.split(':');
@@ -1609,6 +1894,7 @@ export class Hud {
     this.modal.querySelectorAll<HTMLElement>('[data-bm-recipe]').forEach((el) => el.addEventListener('click', () => { g.blackMarketRecipeWheel(el.dataset.bmRecipe as ItemRarity); rerender(); }));
     this.modal.querySelector<HTMLElement>('[data-bm-relic]')?.addEventListener('click', () => { g.blackMarketRelicWheel(); rerender(); });
     this.modal.querySelectorAll<HTMLElement>('[data-bm-mark]').forEach((el) => el.addEventListener('click', () => { g.blackMarketRedeemLootMark(el.dataset.bmMark as 'early' | 'mid' | 'late'); rerender(); }));
+    this.modal.querySelectorAll<HTMLElement>('[data-bm-gamble]').forEach((el) => el.addEventListener('click', () => { g.gambleVendorRoll(el.dataset.bmGamble as 't1' | 't2' | 't3' | 't4'); rerender(); }));
     this.modal.querySelectorAll<HTMLElement>('[data-tome]').forEach((el) => el.addEventListener('click', () => { g.buyTome(Number(el.dataset.tome)); rerender(); }));
     this.modal.querySelectorAll<HTMLElement>('[data-respec]').forEach((el) => el.addEventListener('click', () => { g.respec(Number(el.dataset.respec)); rerender(); }));
     this.modal.querySelector<HTMLElement>('[data-heal]')?.addEventListener('click', () => { g.healParty(); rerender(); });
@@ -1710,6 +1996,7 @@ export class Hud {
     }
     this.cinematicLayer.classList.remove('hidden');
     this.cinematicLayer.classList.toggle('letterbox', view.letterbox);
+    this.cinematicLayer.classList.toggle('reduced-motion', view.reducedMotion || view.photosensitive);
     const portraitHero = view.portraitHeroId && REG.heroes.has(view.portraitHeroId)
       ? REG.hero(view.portraitHeroId)
       : null;
@@ -2175,6 +2462,8 @@ export class Hud {
             </select>
           </label>
           <label class="opt-row"><input type="checkbox" id="opt-cutscene-skip" ${g.settings.cutscene?.alwaysSkip ? 'checked' : ''}> Always skip cut-scenes</label>
+          <label class="opt-row"><input type="checkbox" id="opt-cutscene-photosensitive" ${g.settings.cutscene?.photosensitive ? 'checked' : ''}> Limit cinematic flashes</label>
+          <label class="opt-row"><input type="checkbox" id="opt-cutscene-tieins" ${(g.settings.cutscene?.tieIns ?? true) ? 'checked' : ''}> Seasonal and esports tie-ins</label>
           <button class="btn" id="open-journal">Quest Journal</button>
           <button class="btn" id="open-codex">Codex</button>
           <button class="btn" id="export-save">Export save (JSON)</button>
@@ -2253,6 +2542,13 @@ export class Hud {
     this.modal.querySelector('#opt-cutscene-skip')?.addEventListener('change', (e) => {
       if (g.settings.cutscene) g.settings.cutscene.alwaysSkip = (e.target as HTMLInputElement).checked;
       g.applyCutsceneSettings();
+    });
+    this.modal.querySelector('#opt-cutscene-photosensitive')?.addEventListener('change', (e) => {
+      if (g.settings.cutscene) g.settings.cutscene.photosensitive = (e.target as HTMLInputElement).checked;
+      g.applyCutsceneSettings();
+    });
+    this.modal.querySelector('#opt-cutscene-tieins')?.addEventListener('change', (e) => {
+      if (g.settings.cutscene) g.settings.cutscene.tieIns = (e.target as HTMLInputElement).checked;
     });
     this.modal.querySelector('#export-save')?.addEventListener('click', () => g.exportSave());
     this.modal.querySelector('#open-journal')?.addEventListener('click', () => this.toggleModal('journal'));

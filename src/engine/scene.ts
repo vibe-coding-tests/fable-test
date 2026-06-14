@@ -4,7 +4,7 @@ import type { Sim } from '../core/sim';
 import type { Unit } from '../core/unit';
 import { REG } from '../core/registry';
 import { buildTerrain, type TerrainInfo } from './terrain';
-import { applyHeroLikeness, applyItemAppearances, attachHeroWeaponModel, buildUnitRig, buildSelectionRing, mountHeroModel, recolorToPalette, type UnitRig } from './models';
+import { applyAuthoredSilhouette, applyHeroLikeness, applyItemAppearances, attachHeroWeaponModel, buildUnitRig, buildSelectionRing, mountHeroModel, recolorToPalette, type UnitRig } from './models';
 import { HeroAssetLoader, heroAssetEntry, creepCreatureUrl, heroBaseId } from './assets';
 import { animateRig, applyCinematicGesture, newAnimState, type AnimState } from './animator';
 import { loadVfxTextureAtlas, VfxManager } from './vfx';
@@ -970,6 +970,10 @@ export class GameScene {
       void this.heroAssets.loadHero(assetEntry).then((asset) => {
         if (asset && this.isLive() && token === this.sceneToken && this.views.get(u.uid)?.rig === rig) {
           mountHeroModel(rig, cloneModel(asset.scene), asset.animations, assetEntry.clips);
+          // WS-A within-cohort variation: stretch the shared base to this hero's
+          // proportions and layer its innate identity gear over the authored body,
+          // before items so the weapon counter-scale reads the final model scale.
+          applyAuthoredSilhouette(rig, u.heroId!, palette);
           // WS-B: re-apply worn items now that sockets resolved, so the weapon hangs
           // off the authored hand bone instead of the hidden procedural one.
           applyItemAppearances(rig, this.itemAppearancesFor(u));
@@ -1312,7 +1316,7 @@ export class GameScene {
     );
   }
 
-  private stageUnit(target: Extract<StageAction, { kind: 'focus' | 'gesture' }>['target'], sim: Sim, follow: Unit | null): Unit | null {
+  private stageUnit(target: 'player' | 'ally' | 'boss' | 'region' | 'item' | 'tower', sim: Sim, follow: Unit | null): Unit | null {
     if (target === 'player') return follow ?? sim.unitsArr.find((u) => u.alive && u.team === this.playerTeam) ?? null;
     if (target === 'ally') return sim.unitsArr.find((u) => u.alive && u.team === this.playerTeam && u.uid !== follow?.uid) ?? follow ?? null;
     if (target === 'boss') {
@@ -1323,11 +1327,15 @@ export class GameScene {
     return null;
   }
 
-  private primaryStageTarget(view: CinematicView): Extract<StageAction, { kind: 'focus' | 'gesture' }>['target'] | null {
+  private primaryStageTarget(view: CinematicView): 'player' | 'ally' | 'boss' | 'region' | 'item' | 'tower' | null {
     const explicit = view.stage.find((s): s is Extract<StageAction, { kind: 'focus' }> => s.kind === 'focus');
     if (explicit) return explicit.target;
     const gesture = view.stage.find((s): s is Extract<StageAction, { kind: 'gesture' }> => s.kind === 'gesture');
-    return gesture?.target ?? null;
+    if (gesture) return gesture.target;
+    const narrative = view.stage.find((s) =>
+      (s.kind === 'develop-character' || s.kind === 'advance-plot' || s.kind === 'introduce-conflict' || s.kind === 'reveal-mystery') && !!s.target
+    );
+    return narrative && 'target' in narrative ? narrative.target ?? null : null;
   }
 
   private stageWorldTarget(view: CinematicView, sim: Sim, follow: Unit | null): THREE.Vector3 {
@@ -1366,18 +1374,20 @@ export class GameScene {
       this.cinematicBeatKey = view.beatKey;
       for (const action of view.stage) {
         if (action.kind !== 'vfx') continue;
-        const vfx: VfxSpec = { archetype: action.archetype, color: action.color };
+        const vfx: VfxSpec = { archetype: action.archetype, color: view.photosensitive ? '#d8d0aa' : action.color };
         this.vfx.cinematicStage(this.stageSimTarget(view, sim, follow), vfx);
-        this.accentGrade(action.color, 0.38);
-        if (!this.reducedMotion) this.addShake(action.archetype === 'storm' || action.archetype === 'global-mark' ? 0.22 : 0.12);
+        this.accentGrade(vfx.color, view.photosensitive ? 0.12 : 0.38);
+        if (!this.reducedMotion && !view.photosensitive) this.addShake(action.archetype === 'storm' || action.archetype === 'global-mark' ? 0.22 : 0.12);
       }
     }
 
     for (const action of view.stage) {
-      if (action.kind !== 'gesture') continue;
-      const u = this.stageUnit(action.target, sim, follow);
+      const gesture = action.kind === 'gesture' ? action.gesture : action.kind === 'develop-character' ? action.gesture : undefined;
+      const target = action.kind === 'gesture' || action.kind === 'develop-character' ? action.target : undefined;
+      if (!gesture || !target) continue;
+      const u = this.stageUnit(target, sim, follow);
       const unitView = u ? this.views.get(u.uid) : undefined;
-      if (unitView) applyCinematicGesture(unitView.rig, action.gesture, this.time);
+      if (unitView) applyCinematicGesture(unitView.rig, gesture, this.time);
     }
   }
 
@@ -1395,6 +1405,7 @@ export class GameScene {
     const move =
       view.shot.move === 'push-in' ? 1.18 + (0.72 - 1.18) * ease :
       view.shot.move === 'pull-back' ? 0.82 + (1.42 - 0.82) * ease :
+      view.shot.move === 'rack-focus' ? 1.06 + Math.sin(ease * Math.PI) * -0.24 :
       1;
 
     let back = 15;
@@ -1407,8 +1418,14 @@ export class GameScene {
         back = 9.5; up = 3.2; break;
       case 'high':
         back = 9; up = 23; break;
+      case 'bird-eye':
+        back = 4; up = 31; break;
       case 'over-shoulder':
         back = 8; up = 5.5; side = 2.8; break;
+      case 'through-objects':
+        back = 13; up = 6.2; side = -4.2; break;
+      case 'reflection':
+        back = 7.5; up = 2.8; side = 1.5; break;
       case 'title-card':
         back = 14; up = 15; break;
       case 'wide':
@@ -1416,6 +1433,7 @@ export class GameScene {
         back = 21; up = 15; break;
     }
     if (view.shot.move === 'crane') up += 8 * ease;
+    if (view.shot.move === 'orbit') side += 5.5 * Math.sin(ease * Math.PI * 2);
     if (view.shot.move === 'snap') {
       back *= 0.78;
       up *= 0.86;

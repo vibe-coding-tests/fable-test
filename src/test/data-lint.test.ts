@@ -43,8 +43,8 @@ const STATUS_IDS = [
 const ANIM_GESTURES: AnimGesture[] = ['melee-swing', 'ranged-shot', 'staff-cast', 'ground-slam', 'dash', 'channel-loop', 'summon-gesture', 'item-use', 'global-cast', 'toggle-stance'];
 const SOUND_ARCHETYPES: SoundArchetype[] = ['blade', 'bow', 'impact', 'frost', 'fire', 'storm', 'void', 'heal', 'summon', 'item', 'roar', 'lightning'];
 const STINGER_IDS = ['capture', 'merge', 'levelup', 'badge', 'raid-clear'];
-const CUTSCENE_SHOT_ANGLES = ['wide', 'close', 'low', 'high', 'over-shoulder', 'title-card'];
-const CUTSCENE_SHOT_MOVES = ['hold', 'push-in', 'pull-back', 'crane', 'snap'];
+const CUTSCENE_SHOT_ANGLES = ['wide', 'close', 'low', 'high', 'bird-eye', 'over-shoulder', 'through-objects', 'reflection', 'title-card'];
+const CUTSCENE_SHOT_MOVES = ['hold', 'push-in', 'pull-back', 'crane', 'snap', 'rack-focus', 'orbit'];
 const GATED_TOP_TIER = ['divine-rapier', 'butterfly', 'scythe-of-vyse', 'heart-of-tarrasque', 'eye-of-skadi', 'refresher-orb', 'aghanims-scepter', 'abyssal-blade', 'bloodthorn', 'radiance', 'satanic', 'octarine-core', 'aghanims-blessing', 'aghanims-shard', 'aegis-of-the-immortal', 'refresher-shard', 'cheese'];
 const RARITY_RANK = { common: 0, uncommon: 1, rare: 2, mythical: 3, legendary: 4, immortal: 5, arcana: 6 } as const;
 const RESERVED_DROP_SOURCES: DropSource[] = ['boss', 'raid', 'dungeon', 'special-battle'];
@@ -584,6 +584,7 @@ describe('data lint: Phase 3 registries', () => {
     for (const boss of ALL_BOSSES) {
       expect(REG.heroes.has(boss.heroId), `${boss.id}: hero`).toBe(true);
       expect(REG.regions.has(boss.region), `${boss.id}: region`).toBe(true);
+      expect(boss.dialogue.length, `${boss.id}: dialogue`).toBeGreaterThanOrEqual(2);
       for (const id of [...boss.loot.guaranteed, ...boss.loot.assembledPool]) expect(REG.items.has(id), `${boss.id}: loot ${id}`).toBe(true);
     }
     expect(ALL_RAIDS.length).toBe(10);
@@ -673,6 +674,7 @@ describe('data lint: Phase 3 registries', () => {
             expectHex(action.color, `${scene.id}: stage color`);
           }
           if (action.kind === 'gesture') expect(ANIM_GESTURES, `${scene.id}: stage gesture`).toContain(action.gesture);
+          if (action.kind === 'develop-character' && action.gesture) expect(ANIM_GESTURES, `${scene.id}: stage develop-character gesture`).toContain(action.gesture);
         }
         if (beat.line?.portraitHeroId && !beat.line.portraitHeroId.includes('{')) expect(REG.heroes.has(beat.line.portraitHeroId), `${scene.id}: portrait`).toBe(true);
       }
@@ -830,7 +832,10 @@ describe('data lint: lore + esports denylist (test 23)', () => {
     for (const r of ALL_REGIONS) expect(r.lore.trim().length, `region ${r.id} lore`).toBeGreaterThan(0);
     for (const i of ALL_ITEMS) expect(i.lore.trim().length, `item ${i.id} lore`).toBeGreaterThan(0);
     for (const raid of ALL_RAIDS) expect(raid.name.trim().length, `raid ${raid.id} name`).toBeGreaterThan(0);
-    for (const c of ALL_CREEPS) expect(c.name.trim().length, `creep ${c.id} name`).toBeGreaterThan(0);
+    for (const c of ALL_CREEPS) {
+      expect(c.name.trim().length, `creep ${c.id} name`).toBeGreaterThan(0);
+      expect(c.lore?.trim().length ?? 0, `creep ${c.id} lore`).toBeGreaterThan(20);
+    }
   });
 
   it('the denylist matcher catches real trademarks and handles verbatim (positive control)', () => {

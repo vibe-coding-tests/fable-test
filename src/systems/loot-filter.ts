@@ -1,13 +1,8 @@
 import { disenchant } from '../data/forge';
 import { ITEM_GRADES } from '../data/grade';
-import type { ItemGrade, ItemRarity, ItemSave } from '../core/types';
+import type { ItemGrade, ItemRarity, ItemSave, LootFilterSave } from '../core/types';
 
-export interface LootFilterRule {
-  minGrade: ItemGrade;
-  minRarity: ItemRarity;
-  autoDisenchantBelowGrade?: ItemGrade;
-  autoDisenchantBelowRarity?: ItemRarity;
-}
+export interface LootFilterRule extends LootFilterSave {}
 
 export interface LootFilterResult {
   kept: ItemSave[];

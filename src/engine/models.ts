@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { ItemAppearanceSpec, ItemWeaponVisualKind, SilhouetteSpec } from '../core/types';
+import { heroBaseId } from './assets';
 
 // ------------------------------------------------------------------
 // Procedural unit models (SPEC §3): primitive-built, palette-driven,
@@ -637,6 +638,261 @@ export function mountHeroModel(
       rig.activeAction = actions.idle ? 'idle' : actions.run ? 'run' : 'channel';
     }
   }
+}
+
+// ------------------------------------------------------------------
+// WS-A "within-cohort variation" + marquee silhouette pass (VFX_ASSETS §3).
+// The 80 authored humanoids share four KayKit base meshes and one clip set, so a
+// Knight-base Juggernaut and Sven would otherwise read identically. Two cheap,
+// fully procedural, headless-safe tweaks differentiate them without new art:
+//   1. Per-hero proportions — a non-uniform scale on the mounted model (brutes
+//      read broad, dwarves short, casters slim), re-seating feet after the stretch.
+//   2. Innate identity overlays — crown / horns / antlers / wings / cape / halo
+//      derived from each hero's likeness `features` and parented (visible) over the
+//      authored body. This is the head/back re-parent upgrade WS-B §4 reserved for
+//      the GLB heroes; marquee heroes carry the richest feature lists, so they get
+//      the richest overlays for free.
+// Scene only calls this for the humanoid GLB cohort (gated on heroAssetEntry); the
+// procedural floor and creature/holdout paths never run it, and every piece is a
+// primitive built from the live palette (no GL context, no external asset).
+// ------------------------------------------------------------------
+
+export interface HeroProportions {
+  /** vertical stretch of the silhouette-fitted model (1 = unchanged). */
+  height: number;
+  /** lateral (x/z) widen (>1) or narrow (<1). */
+  broad: number;
+}
+
+// Cohort baselines give every hero in a base a recognizable body class for free;
+// the per-hero table then pushes marquee and distinctive heroes off that baseline.
+const COHORT_PROPORTIONS: Record<string, HeroProportions> = {
+  knight: { height: 1, broad: 1.06 },
+  barbarian: { height: 1.05, broad: 1.16 },
+  mage: { height: 1, broad: 0.95 },
+  rogue: { height: 0.97, broad: 0.95 }
+};
+
+// Hand-authored offsets from the cohort baseline. Marquee heroes (raid chassis,
+// Elite Five / Champion, gym aces) are all represented so they stop sharing a body.
+const HERO_PROPORTION_OVERRIDES: Record<string, Partial<HeroProportions>> = {
+  // --- Knight cohort: armored melee, read by mass ---
+  sven: { height: 1.12, broad: 1.24 },
+  'wraith-king': { height: 1.14, broad: 1.12 },
+  'dragon-knight': { broad: 1.14 },
+  kunkka: { height: 1.04, broad: 1.12 },
+  mars: { height: 1.05, broad: 1.16 },
+  omniknight: { broad: 1.12 },
+  dawnbreaker: { height: 1.04, broad: 1.14 },
+  juggernaut: { height: 1, broad: 0.98 },
+  'faceless-void': { height: 1.06, broad: 1.05 },
+  'chaos-knight': { height: 1.06, broad: 1.1 },
+  abaddon: { broad: 1.08 },
+  slardar: { broad: 1.12 },
+  clockwerk: { height: 0.9, broad: 1.14 },
+  timbersaw: { height: 0.94, broad: 1.18 },
+  pangolier: { height: 0.96 },
+  // --- Barbarian cohort: brutes (baseline already broad) ---
+  pudge: { height: 0.98, broad: 1.4 },
+  magnus: { height: 1.08, broad: 1.22 },
+  earthshaker: { height: 1.02, broad: 1.18 },
+  alchemist: { broad: 1.3 },
+  'ogre-magi': { height: 1.04, broad: 1.3 },
+  axe: { broad: 1.2 },
+  underlord: { height: 1.06, broad: 1.24 },
+  bristleback: { broad: 1.22 },
+  huskar: { broad: 1 },
+  brewmaster: { broad: 1.18 },
+  slark: { height: 0.96, broad: 0.98 },
+  undying: { height: 1.04, broad: 1.18 },
+  // --- Mage cohort: casters, read slim/tall ---
+  invoker: { height: 1.06 },
+  zeus: { height: 1.05, broad: 1.05 },
+  lich: { height: 1.02, broad: 0.96 },
+  'crystal-maiden': { height: 0.98, broad: 0.92 },
+  lina: { height: 1, broad: 0.9 },
+  razor: { height: 1.04, broad: 0.98 },
+  necrophos: { height: 1.04 },
+  pugna: { height: 0.96, broad: 0.88 },
+  enchantress: { height: 0.9, broad: 0.9 },
+  'outworld-destroyer': { height: 1.08, broad: 1.02 },
+  warlock: { broad: 1.05 },
+  'skywrath-mage': { height: 1.02, broad: 0.92 },
+  'winter-wyvern': { broad: 1.06 },
+  // --- Rogue cohort: agile / ranged, read short/lean ---
+  sniper: { height: 0.8, broad: 1.04 },
+  meepo: { height: 0.82, broad: 0.95 },
+  marci: { height: 0.92, broad: 0.98 },
+  luna: { height: 0.94, broad: 0.95 },
+  'monkey-king': { height: 0.92 },
+  'drow-ranger': { height: 1, broad: 0.92 },
+  'templar-assassin': { height: 1, broad: 0.94 },
+  clinkz: { height: 1.02, broad: 0.86 },
+  riki: { height: 0.86, broad: 0.95 },
+  'bounty-hunter': { height: 0.9 },
+  'ember-spirit': { height: 0.96 }
+};
+
+/** Cosmetic body proportions for a hero, cohort baseline with per-hero overrides. */
+export function heroProportions(heroId: string): HeroProportions {
+  const base = COHORT_PROPORTIONS[heroBaseId(heroId)] ?? { height: 1, broad: 1 };
+  const o = HERO_PROPORTION_OVERRIDES[heroId];
+  return { height: o?.height ?? base.height, broad: o?.broad ?? base.broad };
+}
+
+/**
+ * Re-derive a hero's innate identity gear (crown/horns/cape/…) from its likeness
+ * `features` and parent it, visible, over the now-mounted authored body. Idempotent:
+ * a prior overlay group is removed first so a re-mount never stacks duplicates.
+ */
+function applyIdentityOverlay(
+  rig: UnitRig,
+  heroId: string,
+  palette: readonly [string, string, string] | readonly string[]
+): void {
+  const s = rig.scale;
+  const P = palette[0] ?? '#8a8a8a';
+  const S = palette[1] ?? '#444444';
+  const A = palette[2] ?? '#dddddd';
+
+  const prev = rig.body.children.find((c) => c.userData.authoredOverlay);
+  if (prev) rig.body.remove(prev);
+  const g = new THREE.Group();
+  g.userData.authoredOverlay = true;
+
+  const box = (w: number, h: number, d: number, c: string, e = 0): THREE.Mesh =>
+    mesh(new THREE.BoxGeometry(w * s, h * s, d * s), lam(c, e));
+  const cone = (r: number, h: number, c: string, e = 0): THREE.Mesh =>
+    mesh(new THREE.ConeGeometry(r * s, h * s, 10), lam(c, e));
+  const torus = (r: number, t: number, c: string, e = 0, arc = Math.PI * 2): THREE.Mesh =>
+    mesh(new THREE.TorusGeometry(r * s, t * s, 8, 22, arc), lam(c, e));
+  const sphere = (r: number, c: string, e = 0): THREE.Mesh =>
+    mesh(new THREE.SphereGeometry(r * s, 12, 8), lam(c, e));
+
+  const feats = (HERO_LIKENESS_PROFILES.find((p) => p.heroId === heroId)?.features ?? [])
+    .join(' ')
+    .toLowerCase();
+  const has = (...needles: string[]): boolean => needles.some((n) => feats.includes(n));
+
+  const crown = (): void => {
+    const n = 5;
+    for (let i = 0; i < n; i++) {
+      const sp = cone(0.05, 0.24 + (i % 2) * 0.12, A, 0x141008);
+      sp.position.set(0.02 * s, (2.0 + (i % 2) * 0.04) * s, (i - (n - 1) / 2) * 0.1 * s);
+      g.add(sp);
+    }
+  };
+  const horns = (): void => {
+    const hL = cone(0.07, 0.4, S);
+    hL.position.set(0.02 * s, 2.0 * s, 0.16 * s);
+    hL.rotation.set(0.4, 0, 0.5);
+    const hR = hL.clone();
+    hR.position.z = -0.16 * s;
+    hR.rotation.set(-0.4, 0, 0.5);
+    g.add(hL, hR);
+  };
+  const antlers = (): void => {
+    for (const dz of [0.16, -0.16]) {
+      const a = cone(0.05, 0.5, S);
+      a.position.set(0, 2.12 * s, dz * s);
+      a.rotation.x = dz > 0 ? 0.55 : -0.55;
+      const b = cone(0.035, 0.24, S);
+      b.position.set(0.02 * s, 2.34 * s, dz * 1.8 * s);
+      b.rotation.x = dz > 0 ? 1 : -1;
+      g.add(a, b);
+    }
+  };
+  const crest = (): void => {
+    for (let i = 0; i < 3; i++) {
+      const fin = box(0.04, 0.18 + i * 0.06, 0.04, A, 0x141008);
+      fin.position.set(-0.02 * s, (2.04 + i * 0.04) * s, (i - 1) * 0.07 * s);
+      fin.rotation.z = -0.2;
+      g.add(fin);
+    }
+  };
+  const hood = (): void => {
+    const h = sphere(0.27, P);
+    h.scale.set(0.95, 1.05, 1.12);
+    h.position.set(-0.04 * s, 1.9 * s, 0);
+    const peak = cone(0.13, 0.32, P);
+    peak.position.set(-0.1 * s, 2.06 * s, 0);
+    peak.rotation.z = 0.4;
+    g.add(h, peak);
+  };
+  const halo = (): void => {
+    const ring = torus(0.22, 0.03, A, 0x33280a);
+    ring.rotation.x = Math.PI / 2;
+    ring.position.set(0, 2.24 * s, 0);
+    g.add(ring);
+  };
+  const wings = (): void => {
+    const wL = box(0.05, 0.8, 0.34, S);
+    wL.position.set(-0.4 * s, 1.34 * s, 0.42 * s);
+    wL.rotation.z = 0.4;
+    const wR = wL.clone();
+    wR.position.z = -0.42 * s;
+    g.add(wL, wR);
+  };
+  const cape = (): void => {
+    const c = box(0.05, 1.05, 0.66, P);
+    c.position.set(-0.34 * s, 1.0 * s, 0);
+    g.add(c);
+  };
+  const tusks = (): void => {
+    const tL = cone(0.045, 0.24, '#f0ead8');
+    tL.rotation.set(0, 0, 2.6);
+    tL.position.set(0.28 * s, 1.5 * s, 0.12 * s);
+    const tR = tL.clone();
+    tR.position.z = -0.12 * s;
+    g.add(tL, tR);
+  };
+  const beard = (): void => {
+    const b = cone(0.17, 0.4, S);
+    b.rotation.z = Math.PI;
+    b.position.set(0.15 * s, 1.56 * s, 0);
+    g.add(b);
+  };
+
+  // One head silhouette wins (priority crown → antlers → horns → crest → hood),
+  // then independent back, jaw, and halo reads layer on. Capped + keyword-gated so
+  // we never re-add the weapon (which the GLB already carries) and stay readable.
+  if (has('crown', 'circlet', 'tiara', 'diadem')) crown();
+  else if (has('antler')) antlers();
+  else if (has('horn')) horns();
+  else if (has('crest', 'fins', 'fin', 'plume')) crest();
+  else if (has('hood', 'cowl', 'veil')) hood();
+
+  if (has('halo')) halo();
+  if (has('wing')) wings();
+  else if (has('cape', 'cloak', 'coat')) cape();
+  if (has('tusk')) tusks();
+  if (has('beard', 'moustache')) beard();
+
+  if (g.children.length > 0) rig.body.add(g);
+}
+
+/**
+ * Differentiate an authored humanoid hero from its cohort siblings after mounting:
+ * apply per-hero proportions to the mounted model (re-seating feet) and layer its
+ * innate identity overlay over the authored body. No-ops safely on a rig with no
+ * mounted model (proportions skipped, overlay still derived). Call after
+ * `mountHeroModel` and before `applyItemAppearances` so the weapon counter-scale
+ * reads the final model scale.
+ */
+export function applyAuthoredSilhouette(
+  rig: UnitRig,
+  heroId: string,
+  palette: readonly [string, string, string] | readonly string[]
+): void {
+  const props = heroProportions(heroId);
+  const model = rig.authoredModel;
+  if (model && (props.broad !== 1 || props.height !== 1)) {
+    const k = model.scale.x || 1;
+    model.scale.set(k * props.broad, k * props.height, k * props.broad);
+    const post = new THREE.Box3().setFromObject(model);
+    model.position.y -= post.min.y;
+  }
+  applyIdentityOverlay(rig, heroId, palette);
 }
 
 type PaletteRole = 'primary' | 'secondary' | 'accent';

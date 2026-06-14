@@ -143,6 +143,7 @@ export function itemSaveOf(it: ItemState | null, now: number): ItemSave | null {
     grade: it.grade,
     gradeRoll: it.gradeRoll,
     affixes: it.affixes?.map((affix) => ({ ...affix, resolved: { ...affix.resolved } })),
+    imprintedAffixId: it.imprintedAffixId,
     sockets: it.sockets ? [...it.sockets] : undefined,
     resolvedMods: it.resolvedMods ? { ...it.resolvedMods } : undefined,
     locked: it.locked || undefined
@@ -161,6 +162,7 @@ export function itemStateFromSave(s: ItemSave, now: number): ItemState {
     grade: s.grade,
     gradeRoll: s.gradeRoll,
     affixes: s.affixes?.map((affix) => ({ ...affix, resolved: { ...affix.resolved } })),
+    imprintedAffixId: s.imprintedAffixId,
     sockets: s.sockets ? [...s.sockets] : undefined,
     resolvedMods: s.resolvedMods ? { ...s.resolvedMods } : undefined,
     locked: s.locked || undefined
