@@ -1,29 +1,47 @@
 # Ancients
 
-Ancients is a browser-based 3D open-world action RPG that crosses three games into one. It takes the heroes, spells, items, and lore of **Dota 2**, the overworld structure of **Pokémon** (explore, capture, gyms, badges, an Elite ladder), and the loot loop of **Diablo 2** (boss runs, drops, builds), then adds **WoW**-style raids and a **Genshin**-style elemental party layer on top. You walk one continent, recruit a roster, farm gear, and fight on two layers: real-time action combat in the world and 5v5 auto-resolved battles at the gyms.
+> *The Mad Moon broke. Its shards remember every war.*
 
-It runs from `npm run dev` with no game engine. Vite, Three.js, and vanilla TypeScript do all the work. Every hero, item, creep, and region is a plain data file read by generic systems, so most new content is data rather than code. Visuals render from procedural models and generated icons by default, with a glTF asset pipeline ready to drop in higher-fidelity hero models when assets are present.
+Ancients drops the whole cast of **Dota 2** into an open world and lets you walk it. It is a browser-based 3D action RPG that fuses three games into one: the heroes, spells, items, and lore of Dota 2, the overworld of **Pokémon** (explore, capture, earn gym badges, climb an Elite ladder), and the loot loop of **Diablo 2** (boss runs, drops, builds). On top of that sit **WoW**-style raids and a **Genshin**-style elemental party layer. You cross one continent, bind a roster of over a hundred heroes, farm the gear that makes them sing, and fight on two layers at once: real-time action combat out in the world, and 5v5 auto-resolved battles at the gyms.
+
+And it all runs in a browser tab from `npm run dev`, with no game engine. Vite, Three.js, and vanilla TypeScript do every bit of the work. Each hero, item, creep, and region is a plain data file read by generic systems, so most new content is data, not code. Visuals render from procedural models and generated icons by default, with a glTF pipeline ready to drop in higher-fidelity hero models when assets are present.
+
+## The story
+
+That line on the title screen is not flavor we made up. It is the real Dota 2 creation myth, played straight, and the whole game grows out of it.
+
+Before the world began there was one mind, and its birth shattered it. Three great fragments woke with names: the Radiant, the Dire, and Zet, who saw the other two as its own lost selves. The Radiant and the Dire could not stop warring, so Zet spent its own power to seal them together inside a crystal sphere, the Mad Moon. The two raged until they cracked it open from the inside. Its shards rained across the world, and where they fell, magic bloomed and the war soaked into the ground.
+
+Here is the part that turns the myth into a game. In Dota's canon, every match is real, and each time an Ancient dies the timeline resets and the war starts over. This is the Loop, and the shards remember every turn of it. They hold the imprint of every champion who ever fought: every Juggernaut who danced his blade, every Pudge who threw his hook. Touch a shard and that champion projects out to fight you the way they always have.
+
+You are a binder, one of the few who can hold a shard without it taking you over, so you can draw a champion out instead of being possessed by one. That is what recruiting really is. You do not collect heroes, you gather the broken Moon back together one war at a time, and every hero you bind is a memory you carry forward.
+
+The eight badges are your descent. Crossing the map walks you deeper into the Loop, region by region, until you reach the Mad Moon Crater where the Tower of the Ancients rises and Roshan sleeps below. Waiting there is Avaryn the Twice-Crowned, the binder who came before you and stopped. She took a crown of the Radiant and a crown of the Dire, sworn opposites, and froze the war into a rule she alone keeps. Beat her and the game poses Zet's own question: reunite the Ancients and end the war, keep the eternal game turning, or break the Loop and let the world out for good.
+
+Other things hear the Moon ring. The seal that held the Ancients thinned when it broke, and claimants cross over from neighboring worlds for the only prize worth the trip. A Dota player will know them. A Blizzard veteran will know them too, by silhouette before name: the Renegade Marshal, the Void Prelate, the Forsaken Queen, the Lords of Hatred and Destruction.
+
+The big beats earn the screen instead of a toast sliding past the HUD. A bind, a boss breaking, a raid opening, the crown at the Tower all play out in directed cut-scenes that stage the world's own lines, and every one of them is skippable, fast-forwardable, and replayable from the codex. The full plan lives in `STORY.md`.
 
 ## What's in the game
 
-The current build is large and playable end-to-end. A new game can run all the way through eight badges, four raid clears, the Elite Five draft, and the Champion fight with no blockers.
+This is a full game, playable start to finish right now. A fresh save runs all the way through eight gym badges, four raid clears, the Elite Five draft, and the Champion fight at the Tower, with nothing stubbed out and nothing blocking the path.
 
 **Roster and content**
 
-- **122 heroes**, each with four abilities, a talent tree, a facet, original in-character barks, and a recruitment quest. 19 have Aghanim's upgrades wired in.
-- **145 items** with real Dota recipes, passives, and actives, plus **15 neutral items** with a dedicated slot and a Tinker's Bench for rerolls and enchants.
-- **36 catchable creeps** across small, medium, large, and ancient tiers, with their real Dota abilities.
-- **10 regions** on one continent, gated by badges, each with a town, shop, wild spawns, hero echoes, bosses, and a gym.
-- **8 gyms**, an **Elite Five** draft ladder, and a **Champion** fight at the Tower of the Ancients.
-- **41 bosses and mini-bosses** with Normal / Nightmare / Hell difficulty tiers and themed loot tables.
-- **10 raid bosses**, including Roshan's Pit and cross-universe cameo wings that nod to the genres this game descends from.
-- **4 dungeons** with multi-room descents, affixes, and an endless escalating mode with daily and weekly seeds.
+- **122 heroes**, each a faithful Dota kit: four abilities, a talent tree, a facet, original in-character barks, and a recruitment quest of its own. 19 already carry their Aghanim's upgrade.
+- **145 items** built on real Dota recipes, with the passives and actives you remember, plus **15 neutral items** in a dedicated slot and a Tinker's Bench for rerolls and enchants.
+- **36 catchable creeps**, from kobolds to ancients, each fighting with its real Dota abilities. Weaken one, bind it, and it joins your collection.
+- **10 regions** across one continent, every one gated behind a badge and packed with a town, a shop, wild spawns, hero echoes, bosses, and a gym.
+- **8 gyms**, an **Elite Five** draft gauntlet, and a final **Champion** fight at the Tower of the Ancients.
+- **41 bosses and mini-bosses** across Normal, Nightmare, and Hell tiers, each with its own themed loot table to chase.
+- **10 raid bosses**, from Roshan's Pit to the Outworld Claimants, guests who crossed worlds for the prize at the planet's heart.
+- **4 dungeons** with multi-room descents and affixes, plus an endless escalating mode on daily and weekly seeds.
 
 **Systems**
 
-- A deterministic, renderer-independent combat core that runs at a fixed 30 Hz. The same core drives both combat layers, so a full 5v5 battle can run to completion inside a unit test in milliseconds.
-- **Micro combat**: real-time action in the overworld. One active hero, a party of five, hero swap on `1-5`, and the Diablo loop of farming, boss runs, and drops.
-- **Macro combat**: 5v5 gym and Elite battles that auto-resolve on the core. You author a per-hero **gambit** rule list before the fight and spend **Captain Calls** to take direct control for a few seconds at the key moment.
+- A deterministic combat core running at a fixed 30 Hz, fully walled off from the renderer. The same core drives both combat layers, so a complete 5v5 battle resolves inside a unit test in milliseconds.
+- **Micro combat**: real-time action out in the world. One hero in your hands, a party of five behind you, instant swaps on `1-5`, and the Diablo rhythm of farm, boss run, drop, repeat.
+- **Macro combat**: 5v5 gym and Elite battles that resolve on the core. You write each hero a **gambit** rule list before the fight, then spend **Captain Calls** to seize direct control for a few seconds when it counts.
 - **Capture and merge**: weaken a creep, channel a Binding Totem, and add it to your collection. Three copies merge into a star upgrade, and you can field up to three caught creeps as an AI entourage. Summoner heroes like Chen and Nature's Prophet turn the overworld into a walk-the-map-with-an-army playstyle.
 - **Recruitment**: every hero follows a three-beat chain of Find, Trial, and Bind, with 15 trial kinds (honor duels, stealth hunts, combo exams, faction choices, reputation gates, and more). Losing a Bind relocates the hero rather than failing the quest.
 - **Hero echoes**: farmable boss-fragments of every hero. Beating echoes advances recruitment, unlocks talent branches and facet swaps, and pays gold and XP bounties, so duplicates always matter.
