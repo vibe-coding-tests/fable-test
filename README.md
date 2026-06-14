@@ -66,6 +66,8 @@ Design targets live in `SPEC.md`, current acceptance status in `PROGRESS.md`, an
 - npm
 - A WebGL2-capable desktop browser, targeted at current Chrome
 
+On Windows, follow `WINDOWS.md` for install steps and a few platform-specific fixes.
+
 ## Setup
 
 ```sh
