@@ -257,8 +257,10 @@ export function buildTerrain(region: RegionDef, isLive: SceneLiveCheck = () => t
     const t = Math.min(1, h / 4.2);
     const c = t < 0.45 ? cLow.clone().lerp(cMid, t / 0.45) : cMid.clone().lerp(cHigh, (t - 0.45) / 0.55);
     // Ease the painted band toward neutral so the photographic albedo map (when
-    // present) reads through the vertex tint instead of double-saturating it.
-    c.lerp(WHITE_TINT, 0.2);
+    // present) reads through the vertex tint instead of double-saturating it. The
+    // CC0 grass/ground albedos are fairly dark, so bias a bit further toward white
+    // to keep the lit ground from reading near-black at gameplay zoom.
+    c.lerp(WHITE_TINT, 0.32);
     // subtle patchiness
     const shade = 0.92 + jitter.next() * 0.16;
     colorArr.push(c.r * shade, c.g * shade, c.b * shade);
@@ -272,7 +274,7 @@ export function buildTerrain(region: RegionDef, isLive: SceneLiveCheck = () => t
     flatShading: true,
     roughness: 0.96,
     metalness: 0.02,
-    envMapIntensity: 0.3,
+    envMapIntensity: 0.5,
     map: detail ?? null
   });
   const ground = new THREE.Mesh(geo, mat);

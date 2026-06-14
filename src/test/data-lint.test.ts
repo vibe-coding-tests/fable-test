@@ -361,6 +361,48 @@ describe('data lint: items', () => {
     expect(elementForItemHit(REG.item('maelstrom'))).toBe('electro');
     expect(elementForItemHit(REG.item('eye-of-skadi'))).toBe('cryo');
   });
+
+  // VFX_ASSETS §7 / §11: "488/488 authored" must mean genuinely distinct reads,
+  // not 488 abilities sharing one generic archetype+color. lintAbility already
+  // proves every ability carries a *valid* archetype; this gate proves the roster
+  // is actually *diverse* — distinct archetype+color combos, real scale/color2
+  // authoring, and no single look collapsing across many spells. Thresholds sit
+  // safely below the current measured values so they guard regressions without
+  // being brittle (measured 2026-06: 464 combos, 284 colors, 455 scale, 145 color2,
+  // 15 archetypes, max combo reuse 3).
+  it('authors genuinely distinct ability VFX, not just legal archetypes', () => {
+    const abilities = ALL_HEROES.flatMap((h) => h.abilities);
+    expect(abilities.length).toBeGreaterThanOrEqual(400);
+
+    const archetypes = new Set<string>();
+    const colors = new Set<string>();
+    const comboCount = new Map<string, number>();
+    let withScale = 0;
+    let withColor2 = 0;
+    for (const a of abilities) {
+      const arch = a.vfx.archetype;
+      const color = a.vfx.color.toLowerCase();
+      archetypes.add(arch);
+      colors.add(color);
+      const combo = `${arch}|${color}`;
+      comboCount.set(combo, (comboCount.get(combo) ?? 0) + 1);
+      if (a.vfx.scale !== undefined) withScale++;
+      if (a.vfx.color2) withColor2++;
+    }
+
+    // Most abilities read uniquely by archetype + identity color.
+    expect(comboCount.size, 'distinct archetype+color combos').toBeGreaterThanOrEqual(440);
+    expect(colors.size, 'distinct vfx colors').toBeGreaterThanOrEqual(250);
+    // The closed vocabulary is actually exercised, not parked on one or two shapes.
+    expect(archetypes.size, 'distinct archetypes used').toBeGreaterThanOrEqual(13);
+    // Per-spell scaling/secondary color are authored across the roster, so spells
+    // of the same archetype still differ in size and accent.
+    expect(withScale, 'abilities with explicit vfx.scale').toBeGreaterThanOrEqual(400);
+    expect(withColor2, 'abilities with a secondary vfx color').toBeGreaterThanOrEqual(110);
+    // No single archetype+color look is allowed to dominate the roster.
+    const maxReuse = Math.max(...comboCount.values());
+    expect(maxReuse, 'most-reused archetype+color combo').toBeLessThanOrEqual(6);
+  });
 });
 
 describe('data lint: Phase 4/5 polish infrastructure', () => {

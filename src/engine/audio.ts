@@ -49,11 +49,19 @@ export class ProceduralAudio {
   private samples: SampledAudioBank | null = null;
   private samplesEnabled = false;
   private sampleMusic: { biome: string; src: AudioBufferSourceNode; gain: GainNode } | null = null;
+  // Background music bed is disabled by request: the sustained synth drone +
+  // filtered-noise ambience read as a constant "hum" with no way to turn it down
+  // (music shares the stinger channel, there is no music slider). Gameplay SFX,
+  // cast voices, impacts, and stingers are unaffected — only the continuous bed
+  // is gone. Flip to true to restore the procedural/sampled score.
+  private musicEnabled = false;
   private combatHotUntil = 0;
   private cinematicMix: CinematicMixMode = 'normal';
   // Damage-impact throttle (§2.4): cap how many hit sounds fire in a short window
   // so a big AoE reads as one crunch instead of a machine-gun wall of mush.
   private damageSoundTimes: number[] = [];
+  // Same idea for projectile arrival ticks (piercing / multi-hit shots).
+  private projHitTimes: number[] = [];
 
   // Voice pool (§3.12, §3.16): per-entity cast/bark voices, hard-capped.
   private voiceCap: number;
@@ -126,6 +134,7 @@ export class ProceduralAudio {
     this.unlocked = false;
     this.voiceEnds.length = 0;
     this.damageSoundTimes.length = 0;
+    this.projHitTimes.length = 0;
   }
 
   setSettings(settings: AudioSettings): void {
@@ -165,8 +174,21 @@ export class ProceduralAudio {
         break;
       case 'attack-impact':
         // Weapon-contact tick. The body of the hit comes from the `damage` event
-        // that fires alongside it, so a basic attack reads as clink + thud.
+        // that fires alongside it, so a melee basic attack reads as clink + thud.
         this.attackTick();
+        break;
+      case 'attack-launch':
+        // Ranged basic attack release (bow twang / gun crack / thrown whoosh).
+        // Without this every ranged hero was silent at the moment of attacking —
+        // you only heard the delayed impact at the target. Fired for ALL ranged
+        // attackers; the projectile's landing still plays its own impact/damage.
+        this.attackLaunch(ev.speed);
+        break;
+      case 'projectile-hit':
+        // Light arrival tick for the projectile itself. Damaging projectiles also
+        // fire a `damage` impact (throttled), so keep this subtle and pooled so a
+        // hit reads as one event, not a double-thwack.
+        this.projectileHit();
         break;
       case 'miss':
         this.missWhoosh();
@@ -208,7 +230,9 @@ export class ProceduralAudio {
    *  Continuous, file-free, and cheap: a biome drone, a combat layer, filtered
    *  noise ambience, and a generated reverb bus. */
   update(env: AudioEnvironment): void {
-    if (!this.unlocked || this.settings.audio.muted) {
+    // No background music bed: keep any previously-started drone/bed torn down so
+    // the only thing the player hears is gameplay SFX, voices, and stingers.
+    if (!this.unlocked || this.settings.audio.muted || !this.musicEnabled) {
       this.stopMusic();
       this.stopSampleMusic();
       return;
@@ -780,6 +804,31 @@ export class ProceduralAudio {
     const j = 0.9 + Math.random() * 0.2;
     this.tone(540 * j, 0.03, 'square', 0.06);
     this.noise(0.02, 0.04);
+  }
+
+  /** Ranged release: a quick down-pluck + airy whoosh so every ranged attack is
+   *  audible the instant it fires. Faster projectiles read brighter/snappier. */
+  private attackLaunch(speed: number): void {
+    const j = 0.9 + Math.random() * 0.2;
+    // Map projectile speed (~600..1800) to a 0..1 "snap" so a fast bolt cracks
+    // brighter than a lobbed throw, without needing per-hero data.
+    const snap = Math.min(1, Math.max(0, (speed - 500) / 1300));
+    const top = (820 + snap * 520) * j;
+    this.sweep(top, top * 0.5, 0.07, 'square', 0.07);
+    this.noise(0.03, 0.035 + snap * 0.02);
+  }
+
+  /** Subtle projectile arrival tick, throttled so a piercing/multi-hit shot reads
+   *  as one arrival rather than a burst. The damage impact carries the body. */
+  private projectileHit(): void {
+    const t = this.now();
+    if (this.projHitTimes.length) {
+      this.projHitTimes = this.projHitTimes.filter((at) => t - at < 0.07);
+    }
+    if (this.projHitTimes.length >= 3) return;
+    this.projHitTimes.push(t);
+    const j = 0.9 + Math.random() * 0.2;
+    this.tone(360 * j, 0.025, 'triangle', 0.04);
   }
 
   /** Soft airy whiff so a missed swing still reads. */

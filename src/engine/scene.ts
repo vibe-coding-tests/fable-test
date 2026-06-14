@@ -41,7 +41,10 @@ interface UnitView {
   lastTeamColor: string;
   stars: THREE.Group;
   immuneShell: THREE.Mesh;
-  lastItemVisualKey: string;
+  lastItemVisualIds: (string | null)[];
+  materialMode: 'shared' | 'unique';
+  materialOriginals: Map<THREE.Mesh, THREE.Material | THREE.Material[]>;
+  materialClones: Set<THREE.Material>;
   removeAt: number; // time to despawn after death
 }
 
@@ -71,15 +74,15 @@ const DAY = {
   sky: new THREE.Color('#8fc3e8'),
   fog: new THREE.Color('#a8d0e8'),
   sun: new THREE.Color('#fff2d8'),
-  hemi: 0.42,
-  sunI: 1.1
+  hemi: 0.6,
+  sunI: 1.15
 };
 const DUSK = {
   sky: new THREE.Color('#d98a5e'),
   fog: new THREE.Color('#caa07a'),
   sun: new THREE.Color('#ffb36a'),
-  hemi: 0.3,
-  sunI: 0.66
+  hemi: 0.46,
+  sunI: 0.78
 };
 const NIGHT = {
   sky: new THREE.Color('#16213b'),
@@ -87,8 +90,8 @@ const NIGHT = {
   sun: new THREE.Color('#9db8e8'),
   // Moonlit, not pitch-black: enough hemi + moon key to read terrain and units
   // (GRAPHICS_SPEC §3.2). The cool sun color + dark sky + grade keep it night.
-  hemi: 0.46,
-  sunI: 0.4
+  hemi: 0.56,
+  sunI: 0.5
 };
 
 // Color-grade + vignette post pass (GRAPHICS_SPEC §3.1). Tint/saturation/
@@ -101,7 +104,7 @@ const GRADE_SHADER = {
     uSaturation: { value: 1.1 },
     uContrast: { value: 1.06 },
     uBrightness: { value: 1.0 },
-    uVignette: { value: 0.8 },
+    uVignette: { value: 0.9 },
     uStrength: { value: 1.0 }
   },
   vertexShader: /* glsl */ `
@@ -123,8 +126,8 @@ const GRADE_SHADER = {
       float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
       c = mix(vec3(l), c, uSaturation);
       float d = distance(vUv, vec2(0.5));
-      float vig = smoothstep(0.85, uVignette * 0.5, d);
-      c *= mix(1.0, vig, 0.42);
+      float vig = smoothstep(0.9, uVignette * 0.5, d);
+      c *= mix(1.0, vig, 0.3);
       // uStrength scales the whole grade (incl. vignette) toward the raw image,
       // so the settings slider can dial it down to off or up past the default.
       c = mix(src.rgb, c, uStrength);
@@ -305,6 +308,9 @@ export class GameScene {
   cameraMode: CameraMode = 'follow';
   private gameplayCameraMode: 'follow' | 'map' = 'follow';
   private camTarget = new THREE.Vector3();
+  private viewFrustum = new THREE.Frustum();
+  private viewFrustumMatrix = new THREE.Matrix4();
+  private unitCullSphere = new THREE.Sphere();
   private cinematicTarget = new THREE.Vector3();
   private cinematicLookAt = new THREE.Vector3();
   private cinematicBeatKey = '';
@@ -317,6 +323,8 @@ export class GameScene {
   private time = 0;
   private frameParity = 0; // flips 0/1 each frame to drive reduced-LOD animation cadence
   private frameMsSamples: number[] = [];
+  private lastRenderCalls = 0;
+  private lastRenderTriangles = 0;
   private adaptiveScale = 1;
   private adaptiveOverBudgetSec = 0;
   private adaptiveCooldownSec = 0;
@@ -332,6 +340,9 @@ export class GameScene {
     this.quality = qualityCfg;
     this.biome = region.biome;
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: !qualityCfg.smaa });
+    // EffectComposer performs multiple renders per frame. Keep renderer.info
+    // accumulating until update() captures the full frame, then reset next frame.
+    this.renderer.info.autoReset = false;
     this.applyPixelRatio();
     this.renderer.shadowMap.enabled = qualityCfg.shadows;
     this.renderer.shadowMap.type = qualityCfg.shadowType === 'pcf' ? THREE.PCFShadowMap : THREE.BasicShadowMap;
@@ -350,7 +361,7 @@ export class GameScene {
       // Keep IBL as a subtle fill: RoomEnvironment's bright panels would
       // otherwise throw hot specular highlights that the bloom pass blows out.
       // updateDayNight() drives the live value with the cycle.
-      (this.scene as unknown as { environmentIntensity: number }).environmentIntensity = 0.3;
+      (this.scene as unknown as { environmentIntensity: number }).environmentIntensity = 0.45;
       pmrem.dispose();
       this.installHdrEnvironment();
     }
@@ -695,6 +706,7 @@ export class GameScene {
     // Decay the WS-H micro-feedback envelopes (shake fades fast, accent slower).
     if (this.shakeTrauma > 0) this.shakeTrauma = Math.max(0, this.shakeTrauma - renderDt * 1.9);
     if (this.accentStrength > 0) this.accentStrength = Math.max(0, this.accentStrength - renderDt * 0.85);
+    this.refreshViewFrustum();
     this.syncUnits(sim, renderDt);
     this.applyCinematicStage(cinematicView, sim, followUnit);
     this.vfx.syncProjectiles(sim.projectiles);
@@ -709,8 +721,11 @@ export class GameScene {
     if (!this.reducedMotion) this.terrain.update?.(this.time);
     this.skyDome.position.copy(this.camera.position);
     this.updateWeather(renderDt);
+    this.renderer.info.reset();
     if (this.composer) this.composer.render();
     else this.renderer.render(this.scene, this.camera);
+    this.lastRenderCalls = this.renderer.info.render.calls;
+    this.lastRenderTriangles = this.renderer.info.render.triangles;
   }
 
   private recordFrameMs(frameMs: number, dt: number): void {
@@ -750,8 +765,8 @@ export class GameScene {
     return {
       frameMsAvg: frames.avg,
       frameMsP95: frames.p95,
-      drawCalls: info.render.calls,
-      triangles: info.render.triangles,
+      drawCalls: this.lastRenderCalls,
+      triangles: this.lastRenderTriangles,
       geometries: info.memory.geometries,
       textures: info.memory.textures,
       programs: programs ? programs.length : null,
@@ -761,12 +776,27 @@ export class GameScene {
     };
   }
 
+  resetGraphicsStats(): void {
+    this.frameMsSamples = [];
+    this.adaptiveOverBudgetSec = 0;
+    this.adaptiveCooldownSec = 0;
+  }
+
+  private refreshViewFrustum(): void {
+    this.camera.updateMatrixWorld();
+    this.viewFrustumMatrix.multiplyMatrices(this.camera.projectionMatrix, this.camera.matrixWorldInverse);
+    this.viewFrustum.setFromProjectionMatrix(this.viewFrustumMatrix);
+  }
+
   /** Drop every cached unit view + transient VFX. Used when the rendered sim
    *  is swapped (e.g. entering/leaving a live gym fight) so unit ids from the
    *  new sim never alias views built for the old one. */
   resetUnitViews(): void {
     this.sceneToken++;
-    for (const [, view] of this.views) this.scene.remove(view.rig.root);
+    for (const [, view] of this.views) {
+      this.restoreSharedMaterials(view);
+      this.scene.remove(view.rig.root);
+    }
     this.views.clear();
     this.selectedUid = -1;
     this.vfx.reset();
@@ -932,6 +962,7 @@ export class GameScene {
       const gone = !u || !seen.has(uid);
       const deadLong = u && !u.alive && view.removeAt > 0 && this.time > view.removeAt;
       if (gone || deadLong) {
+        this.restoreSharedMaterials(view);
         this.scene.remove(view.rig.root);
         this.views.delete(uid);
       }
@@ -1107,19 +1138,34 @@ export class GameScene {
     return {
       rig, anim: newAnimState(), ring, hpBar, hpFill, manaFill, hpMaterial,
       lastHpPct: -1, lastManaPct: -1, lastTeamColor: '',
-      stars, immuneShell, lastItemVisualKey: this.itemVisualKey(u), removeAt: 0
+      stars, immuneShell, lastItemVisualIds: this.itemVisualIds(u),
+      materialMode: 'shared', materialOriginals: new Map(), materialClones: new Set(),
+      removeAt: 0
     };
   }
 
   private updateView(u: Unit, view: UnitView, dt: number, simTime: number): void {
     const { rig } = view;
-    const visualKey = this.itemVisualKey(u);
-    if (visualKey !== view.lastItemVisualKey) {
-      applyItemAppearances(rig, this.itemAppearancesFor(u));
-      view.lastItemVisualKey = visualKey;
-    }
     const wx = u.pos.x / WORLD_SCALE;
     const wz = u.pos.y / WORLD_SCALE;
+    const distLod = Math.hypot(wx - this.camTarget.x, wz - this.camTarget.z);
+    const tier = lodForDistance(distLod);
+
+    // death cleanup timer
+    if (!u.alive && view.removeAt === 0) view.removeAt = this.time + 2.2;
+    if (u.alive) view.removeAt = 0;
+
+    if (this.shouldSkipOffscreenUnit(u, view, wx, wz, tier)) {
+      rig.root.visible = false;
+      this.restoreSharedMaterials(view);
+      return;
+    }
+
+    if (this.itemVisualChanged(u, view)) {
+      applyItemAppearances(rig, this.itemAppearancesFor(u));
+      if (view.materialMode === 'unique') this.ensureUniqueMaterials(view);
+    }
+
     const wy = this.terrain.heightAt(u.pos.x, u.pos.y);
 
     // smooth visual position (sim ticks at 30 Hz; render is faster)
@@ -1136,40 +1182,20 @@ export class GameScene {
     while (dr < -Math.PI) dr += Math.PI * 2;
     rig.root.rotation.y += dr * Math.min(1, dt * 12);
 
+    const needsUniqueMaterials = this.needsUniqueMaterials(u, view, simTime);
+    if (needsUniqueMaterials) this.ensureUniqueMaterials(view);
+    else this.restoreSharedMaterials(view);
+
     // Overworld LOD (§3.16): far units freeze their pose, mid units animate at
-    // a reduced cadence. The active hero and nearby combat always animate full.
-    const distLod = Math.hypot(wx - this.camTarget.x, wz - this.camTarget.z);
-    const tier = lodForDistance(distLod);
+    // a reduced cadence. The gate also covers authored AnimationMixer updates.
     if (shouldAnimateAtLod(tier, this.frameParity)) {
       animateRig(rig, u, view.anim, dt, this.time, simTime);
     }
 
-    // death cleanup timer
-    if (!u.alive && view.removeAt === 0) view.removeAt = this.time + 2.2;
-    if (u.alive) view.removeAt = 0;
-
     // visibility (fog of war is not in P1; invis only)
     const visible = u.alive ? u.isVisibleTo(this.playerTeam, simTime) : true;
     rig.root.visible = visible || u.team === this.playerTeam;
-    if (u.summary.invisible && u.team === this.playerTeam) {
-      for (const m of rig.materials) {
-        m.transparent = true;
-        m.opacity = 0.4;
-      }
-    } else if (u.isEcho && u.alive) {
-      // echo flag (§3.3): translucent, desaturated read
-      for (const m of rig.materials) {
-        m.transparent = true;
-        m.opacity = 0.5;
-      }
-    } else if (u.alive) {
-      for (const m of rig.materials) {
-        if (m.transparent && view.anim.deathT === 0) {
-          m.transparent = false;
-          m.opacity = 1;
-        }
-      }
-    }
+    this.applyOpacityState(u, view, simTime);
 
     // selection ring + team color
     view.ring.visible = u.uid === this.selectedUid && u.alive;
@@ -1198,8 +1224,118 @@ export class GameScene {
     if (tier === 'full') rig.itemLayer.rotation.y = Math.sin(this.time * 1.6 + u.uid) * 0.035;
   }
 
-  private itemVisualKey(u: Unit): string {
-    return u.items.map((it) => it?.defId ?? '-').join('|');
+  private shouldSkipOffscreenUnit(u: Unit, view: UnitView, wx: number, wz: number, tier: ReturnType<typeof lodForDistance>): boolean {
+    if (tier === 'full' || u.uid === this.selectedUid || !u.alive) return false;
+    const centerY = view.rig.root.position.lengthSq() > 0
+      ? view.rig.root.position.y + view.rig.height * 0.55
+      : this.camTarget.y + view.rig.height * 0.55;
+    const radius = Math.max(1.2, u.radius / WORLD_SCALE + view.rig.height * 0.6);
+    this.unitCullSphere.center.set(wx, centerY, wz);
+    this.unitCullSphere.radius = radius;
+    return !this.viewFrustum.intersectsSphere(this.unitCullSphere);
+  }
+
+  private needsUniqueMaterials(u: Unit, view: UnitView, simTime: number): boolean {
+    const visibleToPlayer = u.alive ? u.isVisibleTo(this.playerTeam, simTime) : true;
+    return (
+      !u.alive ||
+      (u.summary.invisible && u.team === this.playerTeam) ||
+      (u.alive && u.isEcho) ||
+      view.anim.hitFlash > 0 ||
+      u.summary.frozen ||
+      u.summary.rooted ||
+      !visibleToPlayer
+    );
+  }
+
+  private ensureUniqueMaterials(view: UnitView): void {
+    let changed = false;
+    view.rig.root.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh || !mesh.material) return;
+      const cloneOne = (mat: THREE.Material): THREE.Material => {
+        if (!(mat instanceof THREE.MeshStandardMaterial)) return mat;
+        if (view.materialClones.has(mat)) return mat;
+        const clone = mat.clone();
+        view.materialClones.add(clone);
+        changed = true;
+        return clone;
+      };
+      if (Array.isArray(mesh.material)) {
+        const original = mesh.material;
+        const next = original.map(cloneOne);
+        if (next.some((mat, i) => mat !== original[i])) {
+          if (!view.materialOriginals.has(mesh)) view.materialOriginals.set(mesh, original);
+          mesh.material = next;
+        }
+      } else {
+        const next = cloneOne(mesh.material);
+        if (next !== mesh.material) {
+          if (!view.materialOriginals.has(mesh)) view.materialOriginals.set(mesh, mesh.material);
+          mesh.material = next;
+        }
+      }
+    });
+    if (changed || view.materialMode !== 'unique') {
+      view.materialMode = 'unique';
+      this.refreshRigMaterials(view);
+    }
+  }
+
+  private restoreSharedMaterials(view: UnitView): void {
+    if (view.materialMode === 'shared' && view.materialOriginals.size === 0) return;
+    for (const [mesh, material] of view.materialOriginals) mesh.material = material;
+    for (const material of view.materialClones) material.dispose();
+    view.materialOriginals.clear();
+    view.materialClones.clear();
+    view.materialMode = 'shared';
+    this.refreshRigMaterials(view);
+  }
+
+  private refreshRigMaterials(view: UnitView): void {
+    view.rig.materials.length = 0;
+    view.rig.root.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh || !mesh.material) return;
+      const add = (mat: THREE.Material): void => {
+        if (mat instanceof THREE.MeshStandardMaterial && !view.rig.materials.includes(mat)) view.rig.materials.push(mat);
+      };
+      if (Array.isArray(mesh.material)) mesh.material.forEach(add);
+      else add(mesh.material);
+    });
+  }
+
+  private applyOpacityState(u: Unit, view: UnitView, simTime: number): void {
+    const visibleToPlayer = u.alive ? u.isVisibleTo(this.playerTeam, simTime) : true;
+    let opacity = 1;
+    if (u.summary.invisible && u.team === this.playerTeam) opacity = 0.4;
+    else if (u.isEcho && u.alive) opacity = 0.5;
+    else if (!visibleToPlayer) opacity = 0;
+    for (const m of view.rig.materials) {
+      if (opacity < 1) {
+        m.transparent = true;
+        m.opacity = opacity;
+      } else if (u.alive && view.anim.deathT === 0 && m.transparent) {
+        m.transparent = false;
+        m.opacity = 1;
+      }
+    }
+  }
+
+  private itemVisualIds(u: Unit): (string | null)[] {
+    return u.items.map((it) => it?.defId ?? null);
+  }
+
+  private itemVisualChanged(u: Unit, view: UnitView): boolean {
+    let changed = false;
+    for (let i = 0; i < u.items.length; i++) {
+      const id = u.items[i]?.defId ?? null;
+      if (view.lastItemVisualIds[i] !== id) {
+        view.lastItemVisualIds[i] = id;
+        changed = true;
+      }
+    }
+    return changed;
   }
 
   private itemAppearancesFor(u: Unit): ItemAppearanceSpec[] {
@@ -1279,7 +1415,9 @@ export class GameScene {
     const fog = a.fog.clone().lerp(b.fog, mix);
     const sunC = a.sun.clone().lerp(b.sun, mix);
     const hemiI = a.hemi + (b.hemi - a.hemi) * mix;
-    const sunI = (a.sunI + (b.sunI - a.sunI) * mix) * (isDay ? 0.35 + elev * 0.65 : 1);
+    // Keep noon at full key but lift low-sun mornings/evenings so dawn/dusk never
+    // dim out to a near-black ground (the old 0.35 floor read too dark).
+    const sunI = (a.sunI + (b.sunI - a.sunI) * mix) * (isDay ? 0.6 + elev * 0.4 : 1);
 
     this.scene.background = sky;
     (this.scene.fog as THREE.Fog).color.copy(fog);
@@ -1287,10 +1425,11 @@ export class GameScene {
     this.sun.color.copy(sunC);
     this.sun.intensity = sunI;
 
-    // IBL is a constant fill, so modulate it with the cycle. The night floor was
-    // near-zero (~0.02) which read as black; lift it so PBR materials keep an
-    // ambient read at night while staying clearly dimmer than noon (§3.2).
-    const envI = (isDay ? 0.4 + 0.6 * elev : 0.34 + 0.16 * elev) * 0.32;
+    // IBL is a constant fill, so modulate it with the cycle. The floor was too low
+    // (day ~0.27, night ~0.13) and the photographic terrain albedo is darker than
+    // the procedural floor, so the ground read near-black; lift the ambient read
+    // day and night while keeping night clearly dimmer than noon (§3.2).
+    const envI = (isDay ? 0.55 + 0.45 * elev : 0.42 + 0.18 * elev) * 0.46;
     (this.scene as unknown as { environmentIntensity: number }).environmentIntensity = envI;
 
     // Sky dome gradient: deepened zenith over a hazy horizon that matches fog.
@@ -1327,8 +1466,8 @@ export class GameScene {
       let tintB = lerp(bg.tint[2], NIGHT_GRADE.tint[2]);
       let sat = lerp(bg.sat, NIGHT_GRADE.sat);
       let contrast = lerp(bg.contrast, NIGHT_GRADE.contrast);
-      let brightness = lerp(bg.brightness ?? 1.0, NIGHT_GRADE.brightness ?? 0.92);
-      let vignette = lerp(bg.vignette ?? 0.82, NIGHT_GRADE.vignette ?? 0.6);
+      let brightness = lerp(bg.brightness ?? 1.06, NIGHT_GRADE.brightness ?? 1.0);
+      let vignette = lerp(bg.vignette ?? 0.92, NIGHT_GRADE.vignette ?? 0.72);
 
       // STORY §4.1 / Appendix A: cut-scene palettes are not just captions.
       // Blend the authored shot grade over the biome grade while a cinematic beat owns the frame.

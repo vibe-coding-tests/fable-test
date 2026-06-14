@@ -3,7 +3,9 @@
 This is the **graphics and theme completion plan**. Its sibling
 `VFX_OVERHAUL.md` raised the procedural floor and is essentially done: every hero
 has a hand-authored primitive likeness (122/122 profiles), every ability has
-authored VFX (0/488 ride pure archetype defaults), attacks are weapon-driven,
+authored VFX that reads distinctly (488/488 carry an archetype + identity color,
+0/488 ride pure archetype defaults, 464/488 archetype+color combos are unique —
+see §7), attacks are weapon-driven,
 icons and portraits are derived, and the scene runs the full post stack. This
 plan covers the part that now matters most: making the whole game look like one
 world.
@@ -24,7 +26,7 @@ never imports `three` or reads renderer-only fields.
 | Hero likeness profiles | **122 / 122** unique, no duplicates (`engine/models.ts`) |
 | Hero models enabled | **122 / 122 visually enhanced** — 80 per-hero KayKit humanoid GLBs (`ENABLED_HERO_MODELS`), **all A4 tri-tone retextured** (texture-space palette gradient map, not a flat factor wash) **+ A5 per-hero proportions and innate identity overlays** so cohort siblings no longer share a body (`applyAuthoredSilhouette`), plus 31 creature-base heroes through shared Quaternius GLBs (`ENABLED_HERO_BASES` → `/assets/creeps/<base>.glb`), plus **11 A7 generated animated holdout replacement GLBs** (`/assets/holdouts/replacements/<id>.glb`) mounted through the authored hero model path with **A6 additive signature GLBs** (`/assets/holdouts/<id>.glb`) kept as the fallback if replacement load fails. **No-budget policy** (DECISIONS 2026-06-13): one file per humanoid cohort hero, ~120MB total; creature heroes reuse the already-vendored creature GLBs |
 | Hero weapons enabled | **80 / 80** authored humanoid heroes ship original generated held weapon GLBs (`/assets/weapons/heroes/<id>.glb`) attached through the resolved hand socket; item weapon visuals still override them |
-| Ability VFX coverage | **488 / 488** authored; archetypes incl. `vortex`/`dome`/`mine`/`cyclone` |
+| Ability VFX coverage | **488 / 488** authored — and genuinely distinct, not just legal archetypes: **464 unique archetype+color combos**, 284 colors, 15 archetypes exercised, `vfx.scale` on 455 and `color2` on 145 (max reuse of any one archetype+color is 3). Enforced by the §7 diversity gate (`data-lint`), not only the per-ability enum check. Archetypes incl. `vortex`/`dome`/`mine`/`cyclone` |
 | Attack animation | weapon-driven (`attackStyleFor`): 8 styles incl. `bird-dive`, `creature-lunge` |
 | Cast/anim gestures | `AnimGesture` ×10, including `toggle-stance`; auto-resolved + hand-set on signatures |
 | Item visuals | D1+D2 shipped, plus `cyclone` for Eul's/Wind Waker; `appearance` on **76+** items, `attackVisual` on **28+**; the remaining basics are intentionally invisible consumables/components (§6.1) |
@@ -391,6 +393,17 @@ tests keep using procedural `DataTexture`s. The final `cyclone` archetype is
 landed, `channel` has a distinct vertical cast read, projectile objects and burst
 rings/sparks are pooled, and coverage is complete. All additive, tier-gated, off
 on low. Gate: perf harness, no-asset boot, theme fit.
+
+**Ability-VFX diversity gate.** The per-ability lint only proves each spell's
+`vfx.archetype` is a legal enum value, which on its own would pass even if every
+ability shared one generic look. A separate `data-lint` gate now measures real
+diversity across the roster and fails if the authored set collapses: it requires
+≥440 distinct archetype+color combos, ≥250 distinct colors, ≥13 archetypes
+actually used, `vfx.scale` on ≥400 abilities, `color2` on ≥110, and no single
+archetype+color look reused by more than 6 abilities. Current measured values
+(464 / 284 / 15 / 455 / 145 / max-reuse 3) sit comfortably above the floors, so
+"488/488 authored" is now backed by an enforced distinctiveness check rather than
+a bare enum membership test.
 
 **Attack-VFX polish pass (latest).** `lightning-bounce` now renders as a soft
 additive **ribbon** (`lightningRibbon`, alpha-ramped) instead of the old flat
