@@ -531,6 +531,7 @@ export class GameScene {
     this.sceneToken++;
     window.removeEventListener('resize', this.onResize);
     this.resetUnitViews();
+    this.clearDungeonRoomVisuals();
     this.scene.remove(this.vfx.group);
     this.vfx.reset();
     if (this.weather) {
@@ -545,8 +546,26 @@ export class GameScene {
     this.disposeHdrEnvs();
     this.scene.environment?.dispose();
     this.scene.environment = null;
+    this.disposeOwnedObjectTree(this.scene);
     this.sun.shadow.map?.dispose();
     this.renderer.dispose();
+  }
+
+  private disposeOwnedObjectTree(root: THREE.Object3D): void {
+    root.traverse((obj) => {
+      if (obj.userData.sharedAsset) return;
+      const mesh = obj as THREE.Mesh;
+      const line = obj as THREE.Line;
+      const points = obj as THREE.Points;
+      const geometry = mesh.geometry ?? line.geometry ?? points.geometry;
+      if (geometry) geometry.dispose();
+      const material = mesh.material ?? line.material ?? points.material;
+      const disposeMaterial = (m: unknown): void => {
+        if (m instanceof THREE.Material) m.dispose();
+      };
+      if (Array.isArray(material)) material.forEach(disposeMaterial);
+      else disposeMaterial(material);
+    });
   }
 
   /** Live-apply user graphics settings: exposure, grade strength, reduced motion. */

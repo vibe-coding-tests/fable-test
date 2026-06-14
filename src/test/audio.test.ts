@@ -163,12 +163,12 @@ describe('test 21 — no-asset guard', () => {
     expect(offenders, `unexpected asset imports:\n${offenders.join('\n')}`).toEqual([]);
   });
 
-  it('the glTF asset loader keeps a procedural fallback and imports nothing but three', () => {
+  it('the glTF asset manifest keeps a procedural fallback and only imports render loaders', () => {
     const text = readFileSync(`${SRC}/engine/assets.ts`, 'utf8');
     expect(text).toContain("fallback: 'procedural'");
     const importLines = text.split('\n').filter((l) => /^\s*import\b/.test(l));
     for (const line of importLines) {
-      expect(line, line).toMatch(/from\s+['"]three/);
+      expect(line, line).toMatch(/from\s+['"](three|\.\/asset-loaders)/);
     }
   });
 });

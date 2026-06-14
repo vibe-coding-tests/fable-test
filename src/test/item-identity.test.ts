@@ -109,6 +109,38 @@ describe('Black King Bar', () => {
   });
 });
 
+describe('nearby death charge triggers', () => {
+  it('grants Urn charges through the spatial broadphase after a fresh spawn', () => {
+    const { sim, me } = lab();
+    const slot = give(sim, me, 'urn-of-shadows');
+    const victim = sim.spawnHero(REG.hero('lich'), {
+      team: 1,
+      pos: { x: me.pos.x + 900, y: me.pos.y },
+      level: 10,
+      ctrl: { kind: 'none' }
+    });
+
+    sim.killUnit(victim, me);
+
+    expect(me.items[slot]?.charges).toBe(1);
+  });
+
+  it('does not grant Urn charges outside the trigger radius', () => {
+    const { sim, me } = lab();
+    const slot = give(sim, me, 'urn-of-shadows');
+    const victim = sim.spawnHero(REG.hero('lich'), {
+      team: 1,
+      pos: { x: me.pos.x + 1800, y: me.pos.y },
+      level: 10,
+      ctrl: { kind: 'none' }
+    });
+
+    sim.killUnit(victim, me);
+
+    expect(me.items[slot]?.charges).toBe(0);
+  });
+});
+
 describe("Eul's Scepter", () => {
   it('cyclones make the target untargetable and disjoint projectiles', () => {
     const { sim, me } = lab();

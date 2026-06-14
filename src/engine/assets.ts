@@ -1,6 +1,5 @@
 import { AnimationClip, Group } from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
+import { loadModelAsset } from './asset-loaders';
 
 export interface HeroModelAsset {
   scene: Group;
@@ -243,8 +242,6 @@ export function creepCreatureUrl(creepId: string | undefined, build: string | un
 }
 
 export class HeroAssetLoader {
-  // Vendored GLBs are meshopt-compressed, so the decoder must be wired or loads fail.
-  private loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder);
   private cache = new Map<string, Promise<HeroModelAsset | null>>();
   private weaponCache = new Map<string, Promise<HeroModelAsset | null>>();
   private baseCache = new Map<HeroBaseId, Promise<HeroModelAsset | null>>();
@@ -253,9 +250,7 @@ export class HeroAssetLoader {
   loadHero(entry: HeroAssetManifestEntry): Promise<HeroModelAsset | null> {
     const cached = this.cache.get(entry.heroId);
     if (cached) return cached;
-    const promise = this.loader.loadAsync(entry.modelUrl)
-      .then((gltf) => ({ scene: gltf.scene, animations: gltf.animations ?? [] }))
-      .catch(() => null);
+    const promise = loadModelAsset(entry.modelUrl);
     this.cache.set(entry.heroId, promise);
     return promise;
   }
@@ -265,9 +260,7 @@ export class HeroAssetLoader {
     if (!entry.weaponUrl) return Promise.resolve(null);
     const cached = this.weaponCache.get(entry.heroId);
     if (cached) return cached;
-    const promise = this.loader.loadAsync(entry.weaponUrl)
-      .then((gltf) => ({ scene: gltf.scene, animations: gltf.animations ?? [] }))
-      .catch(() => null);
+    const promise = loadModelAsset(entry.weaponUrl);
     this.weaponCache.set(entry.heroId, promise);
     return promise;
   }
@@ -282,7 +275,7 @@ export class HeroAssetLoader {
     if (cached) return cached;
     const url = heroBaseUrl(base);
     const promise: Promise<HeroModelAsset | null> = url
-      ? this.loader.loadAsync(url).then((gltf) => ({ scene: gltf.scene, animations: gltf.animations ?? [] })).catch(() => null)
+      ? loadModelAsset(url)
       : Promise.resolve(null);
     this.baseCache.set(base, promise);
     return promise;

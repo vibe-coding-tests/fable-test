@@ -8,6 +8,7 @@ export interface BootOpts {
   hero?: string;
   region?: string;
   seed?: number;
+  debug?: boolean;
   /** Use the real WebGL renderer instead of the headless scene. */
   webgl?: boolean;
 }
@@ -56,6 +57,7 @@ export interface GameState {
 export async function boot(page: Page, opts: BootOpts = {}): Promise<void> {
   const q = new URLSearchParams({ test: '1' });
   if (!opts.webgl) q.set('render', 'headless');
+  if (opts.debug) q.set('debug', '1');
   if (opts.hero) q.set('hero', opts.hero);
   if (opts.region) q.set('region', opts.region);
   if (opts.seed !== undefined) q.set('seed', String(opts.seed));

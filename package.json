@@ -12,6 +12,7 @@
     "test:perf": "vitest run src/test/perf-budget.test.ts",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:perf": "PERF_SMOKE=1 playwright test e2e/perf-smoke.spec.ts",
     "test:e2e:visual": "playwright test e2e/visual-smoke.spec.ts",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",

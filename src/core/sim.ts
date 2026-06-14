@@ -347,8 +347,8 @@ export class Sim {
 
   /** Magic Wand style charge gain on nearby item, telegraphed enemy casts. */
   notifyEnemyCast(caster: Unit): void {
-    for (const u of this.unitsArr) {
-      if (!u.alive || u.team === caster.team) continue;
+    this.forEachNearbyUnit(caster.pos, 1280, (u) => {
+      if (!u.alive || u.team === caster.team) return;
       for (const it of u.items) {
         if (!it) continue;
         const def = REG.items.get(it.defId);
@@ -362,7 +362,7 @@ export class Sim {
           }
         }
       }
-    }
+    });
   }
 
   /** Generic trigger dispatch for ability-level triggers. */
@@ -372,7 +372,8 @@ export class Sim {
       trig: TriggerSpec,
       key: string,
       ctx: EffectCtx,
-      stackKey: string
+      stackKey: string,
+      chargeTarget?: { item: ItemState; maxCharges?: number }
     ): void => {
       if (trig.on !== event) return;
       if (trig.radius && ctx2.other) {
@@ -398,6 +399,12 @@ export class Sim {
           u.markStatsDirty();
         }
       }
+      if (trig.chargeGain && chargeTarget?.maxCharges) {
+        chargeTarget.item.charges = Math.min(
+          chargeTarget.maxCharges,
+          Math.max(0, chargeTarget.item.charges) + trig.chargeGain
+        );
+      }
       if (trig.effects) {
         execEffects(this, u, ctx, trig.effects, { target: ctx2.other, point: ctx2.other?.pos ?? u.pos });
       }
@@ -416,7 +423,13 @@ export class Sim {
       const def = REG.items.get(it.defId);
       if (!def) continue;
       for (const trig of this.itemTriggers(it, def.triggers)) {
-        fireTrigger(trig, `item:${it.defId}:${trig.on}`, { defId: `item:${it.defId}`, level: 1, vfx: { archetype: 'stun-stars', color: '#ffd86a', scale: 0.45 } }, `item:${it.defId}:${trig.on}`);
+        fireTrigger(
+          trig,
+          `item:${it.defId}:${trig.on}`,
+          { defId: `item:${it.defId}`, level: 1, vfx: { archetype: 'stun-stars', color: '#ffd86a', scale: 0.45 } },
+          `item:${it.defId}:${trig.on}`,
+          { item: it, maxCharges: def.maxCharges }
+        );
       }
     }
     if (!u.summary.broken) {
@@ -603,17 +616,9 @@ export class Sim {
 
     // bounces (Chain Frost)
     if (p.bouncesLeft > 0) {
-      let next: Unit | null = null;
-      let bestD2 = p.bounceRadius * p.bounceRadius;
-      for (const u of this.unitsArr) {
-        if (!u.alive || u.team === p.team || u.kind === 'npc') continue;
-        if (u.uid === target.uid || u.summary.untargetable) continue;
-        const d2 = dist2(u.pos, target.pos);
-        if (d2 < bestD2) {
-          bestD2 = d2;
-          next = u;
-        }
-      }
+      const next = this.nearestUnit(target.pos, p.bounceRadius, (u) => {
+        return u.alive && u.team !== p.team && u.kind !== 'npc' && u.uid !== target.uid && !u.summary.untargetable;
+      });
       if (next) {
         p.bouncesLeft--;
         p.targetUid = next.uid;
@@ -977,6 +982,7 @@ export class Sim {
     victim.channel = null;
     victim.cast = null;
     victim.forced = [];
+    this.spatialDirty = true;
     if (victim.captureCh) this.interruptCapture(victim, 'death');
     // anyone capturing this unit gets interrupted
     for (const u of this.unitsArr) {
@@ -995,11 +1001,12 @@ export class Sim {
       this.runTriggers(killer, 'on-kill', { other: victim });
       if (killer.heroId) emitBark(this, killer); // a hero crows over a kill (§3.13), rate-limited
     }
-    // on-nearby-death triggers (Flesh Heap, item/affix triggers)
-    for (const u of this.unitsArr) {
-      if (!u.alive || u === victim) continue;
+    // on-nearby-death triggers (Flesh Heap, Urn/Vessel): broadphase first,
+    // runTriggers still checks each trigger's exact radius.
+    this.forEachNearbyUnit(victim.pos, 1500, (u) => {
+      if (!u.alive || u === victim) return;
       this.runTriggers(u, 'on-nearby-death', { other: victim });
-    }
+    });
   }
 
   /**
@@ -1039,7 +1046,7 @@ export class Sim {
       u.prevPos.x = u.pos.x;
       u.prevPos.y = u.pos.y;
     }
-    this.rebuildSpatial();
+    this.ensureSpatial();
 
     this.updateStatuses();
     for (const u of this.unitsArr) {

@@ -1,7 +1,9 @@
 import { REG } from '../core/registry';
+import { getAssetCacheStats, type AssetCacheStats } from '../engine/asset-loaders';
 import { newGameSave } from './game';
 import type { Game } from './game';
 import type { DifficultyTier, GameSave } from '../core/types';
+import type { GraphicsRenderStats } from '../engine/scene';
 
 // ------------------------------------------------------------------
 // E2E / QA test harness. Enabled via ?test in the URL (see main.ts).
@@ -93,6 +95,18 @@ export interface TestState {
   };
 }
 
+export interface TestPerfFightResult {
+  requestedUnits: number;
+  totalUnits: number;
+  hostiles: number;
+  creepId: string;
+}
+
+export interface TestPerfStats {
+  graphics: GraphicsRenderStats | null;
+  assets: AssetCacheStats;
+}
+
 export interface TestApi {
   /** True once a Game instance is live. */
   ready(): boolean;
@@ -118,6 +132,14 @@ export interface TestApi {
   /** Kill every hostile in the sim currently receiving input. Returns the count. */
   clearHostiles(): number;
   teleportActive(x: number, y: number): void;
+  /** Build a deterministic same-creep crowd around the active hero for browser perf baselines. */
+  spawnPerfFight(opts?: { units?: number; creepId?: string; radius?: number }): TestPerfFightResult | null;
+  /** Current real-renderer graphics stats, or null in headless mode. */
+  graphicsStats(): GraphicsRenderStats | null;
+  /** Graphics + asset cache counters used by the browser perf smoke route. */
+  perfStats(): TestPerfStats;
+  /** Clear the rolling frame window before a sampled perf interval. */
+  resetGraphicsStats(): void;
   /** JSON snapshot for Playwright assertions. */
   state(): TestState;
 }
@@ -217,9 +239,75 @@ export function makeTestApi(deps: HarnessDeps): TestApi {
         u.prevPos = { x, y };
       }
     },
+    spawnPerfFight: (opts = {}) => spawnPerfFight(deps.getGame(), opts),
+    graphicsStats: () => {
+      const scene = deps.getGame()?.scene as unknown as { graphicsStats?: () => GraphicsRenderStats } | undefined;
+      return scene?.graphicsStats?.() ?? null;
+    },
+    perfStats: () => {
+      const scene = deps.getGame()?.scene as unknown as { graphicsStats?: () => GraphicsRenderStats } | undefined;
+      return {
+        graphics: scene?.graphicsStats?.() ?? null,
+        assets: getAssetCacheStats()
+      };
+    },
+    resetGraphicsStats: () => {
+      const scene = deps.getGame()?.scene as unknown as { resetGraphicsStats?: () => void } | undefined;
+      scene?.resetGraphicsStats?.();
+    },
     state: () => snapshot(deps.getGame(), deps.headless ? 'headless' : 'webgl')
   };
   return api;
+}
+
+function spawnPerfFight(game: Game | null, opts: { units?: number; creepId?: string; radius?: number }): TestPerfFightResult | null {
+  if (!game) return null;
+  const sim = game.sim;
+  const hero = game.activeUnit();
+  if (!hero) return null;
+  const requestedUnits = Math.max(2, Math.floor(opts.units ?? 30));
+  const hostiles = requestedUnits - 1;
+  const fallbackCreepId = game.region.camps[0]?.creepId ?? [...REG.creeps.keys()][0];
+  if (!fallbackCreepId) return null;
+  const creepId = opts.creepId && REG.creeps.has(opts.creepId) ? opts.creepId : fallbackCreepId;
+  const def = REG.creep(creepId);
+  const center = {
+    x: game.region.town.pos.x,
+    y: game.region.town.pos.y + 900
+  };
+  hero.pos = { ...center };
+  hero.prevPos = { ...center };
+  hero.hp = hero.stats.maxHp;
+  hero.mana = hero.stats.maxMana;
+
+  for (const u of [...sim.unitsArr]) {
+    if (u.uid !== hero.uid) sim.removeUnit(u.uid);
+  }
+
+  const radius = Math.max(220, opts.radius ?? Math.max(520, def.aggroRadius ?? 520));
+  for (let i = 0; i < hostiles; i++) {
+    const ring = Math.floor(i / 12);
+    const inRing = Math.min(12, hostiles - ring * 12);
+    const angle = ((i % 12) / inRing) * Math.PI * 2;
+    const r = radius + ring * 180;
+    const pos = {
+      x: center.x + Math.cos(angle) * r,
+      y: center.y + Math.sin(angle) * r
+    };
+    sim.spawnCreep(def, {
+      team: 1,
+      pos,
+      wild: true,
+      homePos: { ...center },
+      regionId: game.region.id
+    });
+  }
+  return {
+    requestedUnits,
+    totalUnits: sim.unitsArr.filter((u) => u.alive).length,
+    hostiles,
+    creepId
+  };
 }
 
 function snapshot(game: Game | null, mode: 'headless' | 'webgl'): TestState {

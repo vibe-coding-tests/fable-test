@@ -134,6 +134,16 @@ describe('simulation performance budget', () => {
     expect(result.elapsedMs).toBeLessThan(650);
     expect(result.ticks).toBe(30);
   });
+
+  it('keeps a 100-unit stress case within the 2.0 scale envelope', () => {
+    const result = runMeasured(buildStressSim({ units: 100, projectiles: 80 }), 1);
+
+    // OPTIMIZATION 2.0 raises the probe beyond the original 30-unit target.
+    // Keep this as a coarse crawl guard; precise GPU/frame baselines live in
+    // the manual browser perf route.
+    expect(result.elapsedMs).toBeLessThan(900);
+    expect(result.ticks).toBe(30);
+  });
 });
 
 describe('large mixed simulation determinism', () => {

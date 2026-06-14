@@ -310,6 +310,7 @@ export function evictTextureAssets(predicate: (url: string) => boolean = () => t
     tex.dispose();
     loadedTex.delete(key);
     texCache.delete(key);
+    loadedUrls.delete(normalizeUrl(url));
     count++;
   }
   for (const [url, tex] of loadedHdr) {
@@ -318,6 +319,7 @@ export function evictTextureAssets(predicate: (url: string) => boolean = () => t
     tex.dispose();
     loadedHdr.delete(url);
     hdrCache.delete(url);
+    loadedUrls.delete(normalizeUrl(url));
     count++;
   }
   if (count) evictions += count;
@@ -340,6 +342,7 @@ export function instancedFromModel(scene: THREE.Object3D, transforms: THREE.Matr
     const geo = m.geometry as THREE.BufferGeometry;
     const mat = m.material as THREE.Material | THREE.Material[];
     const inst = new THREE.InstancedMesh(geo, mat, transforms.length);
+    inst.userData.sharedAsset = true;
     local.copy(m.matrixWorld); // relative to the (un-positioned) scene root
     for (let i = 0; i < transforms.length; i++) {
       composed.multiplyMatrices(transforms[i], local);

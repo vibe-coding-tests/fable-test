@@ -14,8 +14,8 @@ import {
 import { Hud } from './ui/hud';
 import { showTitle } from './ui/title';
 import { withLoading } from './ui/loading';
-import { preloadAssetGroups } from './engine/asset-loaders';
-import { ENABLED_HOLDOUT_SIGNATURES, holdoutReplacementUrl } from './engine/assets';
+import { evictTextureAssets, preloadAssetGroups } from './engine/asset-loaders';
+import { ENABLED_HOLDOUT_SIGNATURES, heroAssetEntry, holdoutReplacementUrl } from './engine/assets';
 import type { GameSave } from './core/types';
 
 registerAllContent();
@@ -49,6 +49,21 @@ function preloadPathsForRegion(regionId: string, includeEnv: boolean, includeVfx
   if (includeEnv) paths.push('env/vale_day_1k.hdr');
   if (includeVfx) paths.push('vfx/vfx_atlas.webp', 'vfx/beam_ramp.webp');
   return paths;
+}
+
+function retainedAssetUrlsForRegion(regionId: string, includeEnv: boolean, includeVfx: boolean): Set<string> {
+  return new Set(preloadPathsForRegion(regionId, includeEnv, includeVfx).map((path) => `/assets/${path}`));
+}
+
+function prewarmModelPathsForSave(save: GameSave): string[] {
+  const paths = new Set<string>();
+  for (const heroId of save.party) {
+    const entry = heroAssetEntry(heroId);
+    if (!entry) continue;
+    paths.add(entry.modelUrl);
+    if (entry.weaponUrl) paths.add(entry.weaponUrl);
+  }
+  return [...paths];
 }
 
 function teardown(): void {
@@ -86,11 +101,13 @@ function startGame(save: GameSave, opts: { headless?: boolean } = {}): void {
   } catch {
     /* unknown region id — keep the generic label */
   }
+  const tier = resolveQuality(save.settings.graphics?.quality);
+  const enhancedAssets = tier !== 'low';
+  const retainedAssetUrls = retainedAssetUrlsForRegion(save.regionId, enhancedAssets, enhancedAssets);
+  evictTextureAssets((url) => !retainedAssetUrls.has(url));
   // Build + warm the scene behind a loading screen so the one-time shader/env
   // compile hitch lands off-screen instead of on the first playable frame.
   withLoading(`Entering ${regionName}…`, async (progress) => {
-    const tier = resolveQuality(save.settings.graphics?.quality);
-    const enhancedAssets = tier !== 'low';
     await preloadAssetGroups(enhancedAssets ? ['terrain', 'env', 'vfx'] : ['terrain'], {
       label: `${regionName} assets`,
       skipModels: true,
@@ -106,6 +123,14 @@ function startGame(save: GameSave, opts: { headless?: boolean } = {}): void {
         }),
         onProgress: progress
       });
+      const modelPaths = prewarmModelPathsForSave(save);
+      if (modelPaths.length > 0) {
+        await preloadAssetGroups(['hero', 'weapon'], {
+          label: `${regionName} party models`,
+          paths: modelPaths,
+          onProgress: progress
+        });
+      }
     }
     game = new Game(canvas, save);
     game.prewarm();
