@@ -139,11 +139,54 @@ describe('vfx cache', () => {
     expect(material.blending).toBe(THREE.AdditiveBlending);
   });
 
+  it('renders lightning attacks as soft ribbons with an impact decal', () => {
+    const vfx = new VfxManager(() => 0);
+
+    vfx.attackVisual(
+      { kind: 'lightning-bounce', color: '#88ccff', color2: '#ffffff', scale: 1 },
+      { x: 0, y: 0 },
+      { x: 500, y: 0 }
+    );
+
+    const ribbon = vfx.group.children.find((child) => {
+      const mesh = child as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
+      return mesh.isMesh && mesh.geometry.index && mesh.material instanceof THREE.MeshBasicMaterial && !!mesh.material.alphaMap;
+    }) as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial> | undefined;
+    const line = vfx.group.children.find((child) => (child as THREE.Line).isLine);
+    const decal = vfx.group.children.find((child) => {
+      const mesh = child as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
+      return mesh.isMesh && mesh.material instanceof THREE.MeshBasicMaterial && !!mesh.material.map;
+    }) as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial> | undefined;
+
+    expect(ribbon).toBeDefined();
+    expect(line).toBeUndefined();
+    expect(decal).toBeDefined();
+    expect(decal!.material.blending).toBe(THREE.AdditiveBlending);
+  });
+
   it('adds a ground impact decal for tinted item hits', () => {
     const vfx = new VfxManager(() => 0);
 
     vfx.attackVisual(
       { kind: 'tinted-impact', color: '#ffcc88', scale: 1 },
+      { x: 0, y: 0 },
+      { x: 500, y: 0 }
+    );
+
+    const decal = vfx.group.children.find((child) => {
+      const mesh = child as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial>;
+      return mesh.isMesh && mesh.material instanceof THREE.MeshBasicMaterial && !!mesh.material.map;
+    }) as THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial> | undefined;
+
+    expect(decal).toBeDefined();
+    expect(decal!.material.blending).toBe(THREE.AdditiveBlending);
+  });
+
+  it('adds a ground impact decal for cleave attacks', () => {
+    const vfx = new VfxManager(() => 0);
+
+    vfx.attackVisual(
+      { kind: 'cleave-sweep', color: '#ff8844', color2: '#ffd08a', scale: 1 },
       { x: 0, y: 0 },
       { x: 500, y: 0 }
     );

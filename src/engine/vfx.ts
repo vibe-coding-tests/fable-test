@@ -1063,6 +1063,7 @@ export class VfxManager {
       arc.scale.setScalar(0.75 + lifeT * 0.65);
       mat.opacity = 0.62 * (1 - lifeT);
     });
+    this.impactDecal(to.x, to.y, visual.color2 ?? visual.color, 0.46 * scale, 0.22);
   }
 
   private beamMesh(from: THREE.Vector3, to: THREE.Vector3, color: string, radius: number, opacity: number, taper = 0.55): THREE.Mesh {
@@ -1097,6 +1098,60 @@ export class VfxManager {
       beam.scale.x = baseRadius * (1 + lifeT * 0.8);
       beam.scale.z = baseRadius * (1 + lifeT * 0.8);
     });
+    this.impactDecal(to.x, to.y, visual.color2 ?? visual.color, 0.42 * (visual.scale ?? 1), 0.22);
+  }
+
+  private lightningRibbon(points: THREE.Vector3[], color: string, width: number): THREE.Mesh<THREE.BufferGeometry, THREE.MeshBasicMaterial> {
+    const positions = new Float32Array(points.length * 2 * 3);
+    const uvs = new Float32Array(points.length * 2 * 2);
+    const indices: number[] = [];
+    for (let i = 0; i < points.length; i++) {
+      const prev = points[Math.max(0, i - 1)];
+      const next = points[Math.min(points.length - 1, i + 1)];
+      const dx = next.x - prev.x;
+      const dz = next.z - prev.z;
+      const len = Math.hypot(dx, dz) || 1;
+      const nx = -dz / len;
+      const nz = dx / len;
+      const p = points[i];
+      const base = i * 2 * 3;
+      positions[base] = p.x + nx * width;
+      positions[base + 1] = p.y;
+      positions[base + 2] = p.z + nz * width;
+      positions[base + 3] = p.x - nx * width;
+      positions[base + 4] = p.y;
+      positions[base + 5] = p.z - nz * width;
+
+      const u = i / (points.length - 1);
+      const uv = i * 2 * 2;
+      uvs[uv] = u;
+      uvs[uv + 1] = 0;
+      uvs[uv + 2] = u;
+      uvs[uv + 3] = 1;
+      if (i < points.length - 1) {
+        const a = i * 2;
+        indices.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+      }
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
+    geometry.setIndex(indices);
+    const ribbon = new THREE.Mesh(
+      geometry,
+      new THREE.MeshBasicMaterial({
+        color,
+        alphaMap: beamRampTexture(),
+        transparent: true,
+        opacity: 0.9,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending
+      })
+    );
+    ribbon.frustumCulled = false;
+    return ribbon;
   }
 
   private lightning(from: Vec2, to: Vec2, visual: AttackVisualSpec): void {
@@ -1112,16 +1167,14 @@ export class VfxManager {
       p.y += Math.sin(t * Math.PI) * 0.25;
       points.push(p);
     }
-    const geom = new THREE.BufferGeometry().setFromPoints(points);
-    const line = new THREE.Line(
-      geom,
-      new THREE.LineBasicMaterial({ color: visual.color, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending })
-    );
-    const mat = line.material as THREE.LineBasicMaterial;
-    this.push(line, 0.24, (_t, lifeT) => {
+    const scale = visual.scale ?? 1;
+    const ribbon = this.lightningRibbon(points, visual.color, 0.055 * scale);
+    const mat = ribbon.material as THREE.MeshBasicMaterial;
+    this.push(ribbon, 0.24, (_t, lifeT) => {
       mat.opacity = 0.9 * (1 - lifeT);
     });
-    this.burst(to.x, to.y, visual.color2 ?? visual.color, 0.55 * (visual.scale ?? 1), 0.22, visual.color);
+    this.burst(to.x, to.y, visual.color2 ?? visual.color, 0.55 * scale, 0.22, visual.color);
+    this.impactDecal(to.x, to.y, visual.color2 ?? visual.color, 0.48 * scale, 0.24);
   }
 
   private critSlash(from: Vec2, to: Vec2, visual: AttackVisualSpec): void {
