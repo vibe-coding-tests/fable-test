@@ -230,19 +230,22 @@ export const ASSEMBLED: ItemDef[] = [
     id: 'bracer', name: 'Bracer', tier: 'basic', cost: 505,
     components: ['gauntlets-of-strength', 'circlet'], recipeCost: 210,
     passiveMods: { str: 5, agi: 2, int: 2, maxHp: 75 },
-    lore: 'Strength, buckled on.', glyph: 'band'
+    lore: 'Strength, buckled on.', glyph: 'band',
+    appearance: { tint: '#d05a42' }
   },
   {
     id: 'wraith-band', name: 'Wraith Band', tier: 'basic', cost: 505,
     components: ['slippers-of-agility', 'circlet'], recipeCost: 210,
     passiveMods: { agi: 5, str: 2, int: 2, attackSpeed: 5 },
-    lore: 'A ghost\u2019s grip steadies your wrist.', glyph: 'band'
+    lore: 'A ghost\u2019s grip steadies your wrist.', glyph: 'band',
+    appearance: { tint: '#9ed8ff' }
   },
   {
     id: 'null-talisman', name: 'Null Talisman', tier: 'basic', cost: 505,
     components: ['mantle-of-intelligence', 'circlet'], recipeCost: 210,
     passiveMods: { int: 5, str: 2, agi: 2, maxMana: 60 },
-    lore: 'A small argument against existence.', glyph: 'gem'
+    lore: 'A small argument against existence.', glyph: 'gem',
+    appearance: { parts: ['mana-orb'], tint: '#c8a0ff' }
   },
   {
     id: 'magic-wand', name: 'Magic Wand', tier: 'basic', cost: 450,
@@ -264,7 +267,8 @@ export const ASSEMBLED: ItemDef[] = [
         { kind: 'mana', op: 'restore', amount: 15, target: 'self', perCharge: true }
       ],
       vfx: { archetype: 'shield', color: '#c8a0ff', scale: 0.5 }
-    }
+    },
+    appearance: { parts: ['mana-orb'], aura: { archetype: 'shield', color: '#c8a0ff', color2: '#ffffff' } }
   },
   {
     id: 'arcane-boots', name: 'Arcane Boots', tier: 'basic', cost: 1300,
@@ -279,7 +283,8 @@ export const ASSEMBLED: ItemDef[] = [
       cooldown: [55],
       effects: [{ kind: 'mana', op: 'restore', amount: 175, target: 'allies-in-radius', radius: 1200 }],
       vfx: { archetype: 'ground-aoe', color: '#86c8ff', scale: 0.8 }
-    }
+    },
+    appearance: { parts: ['boot-trail'], tint: '#86c8ff' }
   },
   {
     id: 'yasha', name: 'Yasha', tier: 'basic', cost: 2100,
@@ -334,13 +339,15 @@ export const ASSEMBLED: ItemDef[] = [
         { kind: 'statmod', mods: { attackSpeed: 'attackSpeed', moveSpeedPct: 'move', armor: 'armorLoss' }, duration: 'duration', target: 'self' }
       ],
       vfx: { archetype: 'shield', color: '#ff3c38', color2: '#ffd27f', scale: 0.8 }
-    }
+    },
+    appearance: { tint: '#ff3c38', aura: { archetype: 'shield', color: '#ff3c38', color2: '#ffd27f' } }
   },
   {
     id: 'blink-dagger', name: 'Blink Dagger', tier: 'core', cost: 2250,
     lore: 'A dagger that cuts distance instead of flesh. It sulks when you bleed.',
     glyph: 'dagger',
     damageLockoutSec: 3,
+    appearance: { weapon: { kind: 'sword', color: '#7adfff', emissive: '#183a4f' } },
     active: {
       id: 'blink-active',
       name: 'Blink',
@@ -359,6 +366,7 @@ export const ASSEMBLED: ItemDef[] = [
     passiveMods: { str: 10, damage: 24 },
     lore: 'A bar of dead king\u2019s gold. Spells slide off royalty.',
     glyph: 'bar',
+    appearance: { tint: '#ffd27f', aura: { archetype: 'shield', color: '#ffd27f', color2: '#ffffff' } },
     active: {
       id: 'bkb-active',
       name: 'Avatar',
@@ -378,6 +386,7 @@ export const ASSEMBLED: ItemDef[] = [
     passiveMods: { int: 10, manaRegen: 2.5, moveSpeed: 20 },
     lore: 'The wind obeys whoever holds the scepter, and mocks everyone else.',
     glyph: 'cyclone',
+    appearance: { weapon: { kind: 'staff', color: '#9fe8e8', emissive: '#2a5a5a' }, aura: { archetype: 'storm', color: '#9fe8e8', color2: '#e8fbff' } },
     active: {
       id: 'euls-active',
       name: 'Cyclone',
@@ -417,6 +426,7 @@ export const ASSEMBLED: ItemDef[] = [
     passiveMods: { magicResistPct: 20 },
     lore: 'Woven from dusk. Wrap a friend in it and watch them stop existing.',
     glyph: 'cloak',
+    appearance: { tint: '#b89fff', aura: { archetype: 'shield', color: '#b89fff', color2: '#4a3a78' } },
     active: {
       id: 'glimmer-active',
       name: 'Glimmer',
@@ -440,6 +450,7 @@ export const ASSEMBLED: ItemDef[] = [
     aura: { radius: 1200, affects: 'allies', mods: { hpRegen: 2 } },
     lore: 'A whirring heart of brass that believes in the whole party.',
     glyph: 'gear',
+    appearance: { parts: ['heart-core'], tint: '#7dffb5', aura: { archetype: 'ground-aoe', color: '#7dffb5', color2: '#e7d9a8' } },
     active: {
       id: 'mekansm-active',
       name: 'Restore',
@@ -478,6 +489,9 @@ export const ASSEMBLED: ItemDef[] = [
     attackMod: { manaBurnPerHit: 40, manaBurnAsDamagePct: 100 },
     lore: 'It drinks spells out of the blood.',
     glyph: 'blade',
+    appearance: { weapon: { kind: 'glowing-blade', color: '#c8a0ff', emissive: '#38225f' }, tint: '#a8e8ff' },
+    attackVisual: [{ kind: 'tinted-impact', color: '#a8e8ff', color2: '#c8a0ff', scale: 0.95 }],
+    elementOnHit: 'cryo',
     active: {
       id: 'diffusal-active',
       name: 'Inhibit',
@@ -606,6 +620,7 @@ export const ASSEMBLED: ItemDef[] = [
     passiveMods: { int: 25, manaRegen: 6 },
     lore: 'A second chance for every cooldown.',
     glyph: 'orb',
+    appearance: { parts: ['mana-orb'], tint: '#8ee8ff', aura: { archetype: 'shield', color: '#8ee8ff', color2: '#ffffff' } },
     active: {
       id: 'refresher-active',
       name: 'Refresh',
@@ -780,6 +795,7 @@ export const EXTENDED_ASSEMBLED: ItemDef[] = [
     components: ['ring-of-regen', 'cloak', 'helm-of-iron-will'], recipeCost: 50,
     passiveMods: { hpRegen: 6.75, armor: 5, magicResistPct: 20 },
     lore: 'A hood for walking into spellfire first.', glyph: 'cloak',
+    appearance: { parts: ['pauldrons'], tint: '#8ee8ff', aura: { archetype: 'shield', color: '#8ee8ff', color2: '#ffffff' } },
     active: {
       id: 'hood-active', name: 'Barrier', targeting: 'no-target', castPoint: 0, cooldown: [60],
       effects: [{ kind: 'statmod', mods: { magicResistPct: 35 }, duration: 8, target: 'self' }],
@@ -861,6 +877,7 @@ export const EXTENDED_ASSEMBLED: ItemDef[] = [
     components: ['vitality-booster', 'platemail'], recipeCost: 600,
     passiveMods: { maxHp: 250, armor: 10, statusResistPct: 20 },
     lore: 'A panic button with a philosopher inside.', glyph: 'disc',
+    appearance: { parts: ['mana-orb'], tint: '#ffd27f', aura: { archetype: 'shield', color: '#ffd27f', color2: '#ffffff' } },
     active: {
       id: 'aeon-active', name: 'Combo Breaker', targeting: 'no-target', castPoint: 0, cooldown: [105],
       effects: [
@@ -875,6 +892,7 @@ export const EXTENDED_ASSEMBLED: ItemDef[] = [
     components: ['hood-of-defiance', 'vitality-booster'], recipeCost: 500,
     passiveMods: { maxHp: 250, hpRegen: 6.75, armor: 5, magicResistPct: 30, manaRegen: 1.5 },
     lore: 'Spellfire goes in. Stamina comes out.', glyph: 'cloak',
+    appearance: { parts: ['heart-core'], tint: '#5fe0c0', aura: { archetype: 'shield', color: '#5fe0c0', color2: '#ffffff' } },
     active: {
       id: 'eternal-shroud-active', name: 'Shroud', targeting: 'no-target', castPoint: 0, cooldown: [45],
       effects: [{ kind: 'statmod', mods: { magicResistPct: 45, manaRegen: 8 }, duration: 8, target: 'self' }],
@@ -886,6 +904,7 @@ export const EXTENDED_ASSEMBLED: ItemDef[] = [
     components: ['yasha', 'ultimate-orb'], recipeCost: 850,
     passiveMods: { agi: 26, str: 10, int: 10, attackSpeed: 12, moveSpeedPct: 8 },
     lore: 'Step sideways out of yourself and make the enemy count wrong.', glyph: 'mirror',
+    appearance: { weapon: { kind: 'glowing-blade', color: '#87d8ff', emissive: '#244a7a' }, tint: '#87d8ff' },
     active: {
       id: 'manta-active', name: 'Mirror Image', targeting: 'no-target', castPoint: 0, cooldown: [34], manaCost: [125],
       effects: [
@@ -895,9 +914,9 @@ export const EXTENDED_ASSEMBLED: ItemDef[] = [
       vfx: { archetype: 'summon-pop', color: '#87d8ff', color2: '#ffffff', scale: 0.9 }
     }
   },
-  { id: 'sange-and-yasha', name: 'Sange and Yasha', tier: 'core', cost: 4800, components: ['sange', 'yasha'], recipeCost: 600, passiveMods: { str: 16, agi: 16, attackSpeed: 18, moveSpeedPct: 10, statusResistPct: 15, lifestealPct: 12 }, lore: 'Red edge, quick edge, one rhythm.', glyph: 'blade', attackVisual: [{ kind: 'crit-lunge', color: '#ff6b4a', color2: '#8fd8ff', scale: 0.9 }] },
-  { id: 'kaya-and-sange', name: 'Kaya and Sange', tier: 'core', cost: 4800, components: ['kaya', 'sange'], recipeCost: 600, passiveMods: { int: 16, str: 16, spellAmpPct: 16, manaRegen: 1.5, statusResistPct: 15, lifestealPct: 12 }, lore: 'One blade for the spell, one for surviving the reply.', glyph: 'blade' },
-  { id: 'yasha-and-kaya', name: 'Yasha and Kaya', tier: 'core', cost: 4800, components: ['yasha', 'kaya'], recipeCost: 600, passiveMods: { agi: 16, int: 16, attackSpeed: 18, moveSpeedPct: 10, spellAmpPct: 16, manaRegen: 1.5 }, lore: 'A caster-carry compromise that refuses to be slow.', glyph: 'blade' },
+  { id: 'sange-and-yasha', name: 'Sange and Yasha', tier: 'core', cost: 4800, components: ['sange', 'yasha'], recipeCost: 600, passiveMods: { str: 16, agi: 16, attackSpeed: 18, moveSpeedPct: 10, statusResistPct: 15, lifestealPct: 12 }, lore: 'Red edge, quick edge, one rhythm.', glyph: 'blade', appearance: { weapon: { kind: 'glowing-blade', color: '#ff6b4a', emissive: '#5a1f18' }, tint: '#8fd8ff' }, attackVisual: [{ kind: 'crit-lunge', color: '#ff6b4a', color2: '#8fd8ff', scale: 0.9 }] },
+  { id: 'kaya-and-sange', name: 'Kaya and Sange', tier: 'core', cost: 4800, components: ['kaya', 'sange'], recipeCost: 600, passiveMods: { int: 16, str: 16, spellAmpPct: 16, manaRegen: 1.5, statusResistPct: 15, lifestealPct: 12 }, lore: 'One blade for the spell, one for surviving the reply.', glyph: 'blade', appearance: { weapon: { kind: 'glowing-blade', color: '#b08cff', emissive: '#32185a' }, tint: '#ff6b4a' }, attackVisual: [{ kind: 'tinted-impact', color: '#b08cff', color2: '#ff6b4a', scale: 0.9 }] },
+  { id: 'yasha-and-kaya', name: 'Yasha and Kaya', tier: 'core', cost: 4800, components: ['yasha', 'kaya'], recipeCost: 600, passiveMods: { agi: 16, int: 16, attackSpeed: 18, moveSpeedPct: 10, spellAmpPct: 16, manaRegen: 1.5 }, lore: 'A caster-carry compromise that refuses to be slow.', glyph: 'blade', appearance: { weapon: { kind: 'glowing-blade', color: '#8fd8ff', emissive: '#18445a' }, tint: '#b08cff' }, attackVisual: [{ kind: 'tinted-impact', color: '#8fd8ff', color2: '#b08cff', scale: 0.9 }] },
   {
     id: 'desolator', name: 'Desolator', tier: 'core', cost: 4500,
     components: ['demon-edge', 'blitz-knuckles'], recipeCost: 1300,
@@ -939,6 +958,7 @@ export const EXTENDED_ASSEMBLED: ItemDef[] = [
     passiveMods: { damage: 35, str: 35, maxHp: 250 },
     attackMod: { procChance: 25, procDamage: 90, procStatus: { status: 'stun', duration: 1.2 } },
     lore: 'A bash upgraded into a decision.', glyph: 'blade',
+    appearance: { weapon: { kind: 'broad-cleaver', color: '#8a3cff', emissive: '#261044' }, parts: ['pauldrons'] },
     active: {
       id: 'abyssal-active', name: 'Overwhelm', targeting: 'unit-target', affects: 'enemy', castRange: 150, castPoint: 0, cooldown: [35],
       effects: [{ kind: 'status', status: 'stun', duration: 2, target: 'target' }, { kind: 'damage', dtype: 'physical', amount: 120, target: 'target' }],
@@ -981,6 +1001,7 @@ export const EXTENDED_ASSEMBLED: ItemDef[] = [
     passiveMods: { damage: 32, attackSpeed: 35 },
     attackMod: { critChance: 20, critMult: 160, procStatus: { status: 'break', duration: 4 } },
     lore: 'Disappear, then make their passive disappear too.', glyph: 'blade',
+    appearance: { weapon: { kind: 'glowing-blade', color: '#cfd8ff', emissive: '#34406a' }, tint: '#b9c8ff' },
     active: {
       id: 'silver-edge-active', name: 'Shadow Walk', targeting: 'no-target', castPoint: 0, cooldown: [20],
       effects: [{ kind: 'status', status: 'invis', duration: 14, target: 'self', params: { fadeTime: 0.3, threatDropPct: 60 } }, { kind: 'statmod', mods: { moveSpeedPct: 20 }, duration: 14, target: 'self' }],
@@ -994,6 +1015,7 @@ export const EXTENDED_ASSEMBLED: ItemDef[] = [
     passiveMods: { str: 10, int: 6, damage: 15, attackSpeed: 10, manaRegen: 1 },
     attackMod: { procChance: 100, bonusDamage: 35, procStatus: { status: 'slow', duration: 0.8, params: { moveSlowPct: 80 } } },
     lore: 'The second hit arrives before the first one has finished explaining.', glyph: 'blade',
+    appearance: { weapon: { kind: 'long-pole', color: '#86c8ff', emissive: '#24405f' }, tint: '#86c8ff' },
     attackVisual: [{ kind: 'tinted-impact', color: '#86c8ff', color2: '#ffffff', scale: 0.9 }]
   },
   {
@@ -1001,10 +1023,11 @@ export const EXTENDED_ASSEMBLED: ItemDef[] = [
     components: ['oblivion-staff', 'oblivion-staff'], recipeCost: 250,
     passiveMods: { int: 12, damage: 20, attackSpeed: 20, manaRegen: 2 },
     lore: 'A quiet flower for loud casters.', glyph: 'flower',
+    appearance: { parts: ['mana-orb'], tint: '#d88cff', aura: { archetype: 'global-mark', color: '#d88cff', color2: '#ffffff' } },
     active: {
       id: 'orchid-active', name: 'Soul Burn', targeting: 'unit-target', affects: 'enemy', castRange: 900, castPoint: 0, cooldown: [18], manaCost: [100],
       effects: [{ kind: 'status', status: 'silence', duration: 5, target: 'target' }, { kind: 'statmod', mods: { damageTakenReductionPct: -15 }, duration: 5, target: 'target' }],
-      vfx: { archetype: 'beam', color: '#d88cff', color2: '#ffffff', scale: 0.75 }
+      vfx: { archetype: 'global-mark', color: '#d88cff', color2: '#ffffff', scale: 0.75 }
     }
   },
   {
@@ -1013,10 +1036,11 @@ export const EXTENDED_ASSEMBLED: ItemDef[] = [
     passiveMods: { int: 12, damage: 52, attackSpeed: 20, manaRegen: 2 },
     attackMod: { critChance: 20, critMult: 160 },
     lore: 'Silence first. Then the knives agree.', glyph: 'flower',
+    appearance: { parts: ['crystal-edge'], tint: '#ff4f86', aura: { archetype: 'beam', color: '#ff4f86', color2: '#ffffff' } },
     active: {
       id: 'bloodthorn-active', name: 'Bloodthorn', targeting: 'unit-target', affects: 'enemy', castRange: 900, castPoint: 0, cooldown: [15], manaCost: [100],
       effects: [{ kind: 'status', status: 'silence', duration: 5, target: 'target' }, { kind: 'statmod', mods: { damageTakenReductionPct: -25 }, duration: 5, target: 'target' }],
-      vfx: { archetype: 'beam', color: '#ff4f86', color2: '#ffffff', scale: 0.85 }
+      vfx: { archetype: 'global-mark', color: '#ff4f86', color2: '#ffffff', scale: 0.85 }
     },
     attackVisual: [{ kind: 'crit-lunge', color: '#ff4f86', color2: '#ffffff', scale: 1.15 }]
   },

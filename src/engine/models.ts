@@ -1660,6 +1660,24 @@ export function applyHeroLikeness(rig: UnitRig, heroId: string): void {
       add(topknot, spearOnBack, ...eyes(0.3, 1.84, 0.08, 0.04, '#ffd06a'));
       break;
     }
+    case 'mars': {
+      const plume = cone(0.09, 0.46, '#d83a2e');
+      plume.position.set(-0.04 * s, 2.22 * s, 0);
+      plume.rotation.z = -0.18;
+      const shield = cyl(0.32, 0.32, 0.07, '#d8b05a', 0x3a2408);
+      shield.position.set(0.35 * s, 1.16 * s, 0.44 * s);
+      shield.rotation.z = Math.PI / 2;
+      const spear = cyl(0.035, 0.04, 1.1, '#d8b05a', 0x2a1a08);
+      spear.position.set(0.48 * s, 1.28 * s, -0.34 * s);
+      spear.rotation.z = Math.PI / 2;
+      const spearTip = cone(0.08, 0.24, '#f1d38a', 0x2a1a08);
+      spearTip.position.set(1.08 * s, 1.28 * s, -0.34 * s);
+      spearTip.rotation.z = -Math.PI / 2;
+      cape('#3a1010', 0.76);
+      crownSpikes(3, '#d8b05a', 0x3a2408, 2.02);
+      add(plume, shield, spear, spearTip, ...eyes(0.3, 1.86, 0.09, 0.04, '#ffd66b'));
+      break;
+    }
     case 'ogre-magi': {
       const head2 = sphere(0.22, '#3d8cff');
       head2.position.set(0.16 * s, 1.82 * s, 0.22 * s);

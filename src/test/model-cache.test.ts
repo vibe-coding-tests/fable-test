@@ -20,9 +20,10 @@ describe('procedural model cache', () => {
   it('builds a procedural likeness for every shipped hero without throwing (WS-A render smoke)', () => {
     for (const hero of ALL_HEROES) {
       const rig = buildUnitRig(hero.silhouette, hero.palette);
+      const basePartCount = rig.body.children.length;
       expect(() => applyHeroLikeness(rig, hero.id)).not.toThrow();
       // The likeness overlay should add at least one detail mesh to the body.
-      expect(rig.body.children.length, `${hero.id} body parts`).toBeGreaterThan(0);
+      expect(rig.body.children.length, `${hero.id} likeness parts`).toBeGreaterThan(basePartCount);
     }
   });
 });

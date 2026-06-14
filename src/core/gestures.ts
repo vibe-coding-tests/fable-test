@@ -80,6 +80,27 @@ function inferSound(def: AbilityDef): SoundArchetype {
   }
 }
 
+function inferGlyph(def: AbilityDef): string {
+  const arch = def.vfx.archetype;
+  const effects = effectsOf(def);
+
+  if (def.ult) {
+    if (arch === 'vortex' || arch === 'dome' || arch === 'mine') return arch;
+    if (arch === 'summon-pop' || hasKind(effects, 'summon')) return 'summon-pop';
+    if (def.channel || hasKind(effects, 'capture-channel')) return 'channel';
+    if (arch === 'global-mark') return 'crown';
+    return arch === 'storm' ? 'burst' : arch;
+  }
+
+  if (def.attackMod) return 'blade';
+  if (hasKind(effects, 'heal')) return 'leaf';
+  if (hasKind(effects, 'summon')) return 'summon-pop';
+  if (effects.some((e) => e.kind === 'displace')) return arch === 'hook' ? 'hook' : 'boot';
+  if (arch === 'beam') return 'wand';
+  if (arch === 'shield') return 'shield';
+  return arch;
+}
+
 /** Resolve the closed-vocabulary gesture for an ability or item active. Total. */
 export function gestureForAbility(def: AbilityDef): AnimGesture {
   return def.anim ?? inferGesture(def);
@@ -88,4 +109,9 @@ export function gestureForAbility(def: AbilityDef): AnimGesture {
 /** Resolve the closed-vocabulary sound archetype for an ability or item active. Total. */
 export function soundForAbility(def: AbilityDef): SoundArchetype {
   return def.sound ?? inferSound(def);
+}
+
+/** Resolve the HUD glyph hint for an ability. Explicit data wins; otherwise infer from effects/vfx. */
+export function glyphForAbility(def: AbilityDef): string {
+  return def.glyph ?? inferGlyph(def);
 }
