@@ -206,15 +206,17 @@ bespoke generated GLB is a later, optional upgrade per hero.
 - **A4 — multi-tone retextures. SHIPPED for the full cohort (all 80).** A build
   mode `recolorMode: "tritone"` (`build_assets.mjs`) gradient-maps each base atlas
   in **texture space** — the source atlas's own per-pixel luminance drives a
-  three-stop ramp (shadow→secondary, midtone→primary, highlight→accent) and the
-  material factor is neutralized to white. This replaces the flat single-tone wash
-  (the old §12 risk) with genuine multi-tone heroes **without hand-painting**,
-  fully deterministic. Every Knight/Mage/Barbarian/Rogue cohort hero in
-  `heroes.json` now carries `recolorMode: "tritone"`, so each ships its three-color
-  identity as shadow/body/trim tones (verified across icy casters, red brutes,
-  gold/green/orange leads). The legacy uniform-factor path stays in the script as a
-  fallback. A truly hand-painted atlas per marquee hero remains an optional further
-  upgrade on top of this generated path.
+  **five-stop ramp** (deepened shadow → secondary → primary body → accent → hot
+  specular) and the material factor is neutralized to white. On top of that, source
+  chroma is read per pixel so bright, saturated zones (trim, gems, metal) bias toward
+  the accent and pop as their own zone instead of collapsing into the body. This
+  replaces the flat single-tone wash (the old §12 risk) with genuine multi-zone
+  shaded heroes, fully generated and deterministic. Every Knight/Mage/Barbarian/Rogue
+  cohort hero in `heroes.json` carries `recolorMode: "tritone"`, so each ships its
+  three-color identity across shadow/body/trim/spec tones (verified across icy
+  casters, red brutes, gold/green/orange leads), rebuilt from the raw CC0 bases.
+  Richer generated atlases (more palette stops, generated detail/normal passes) can
+  layer on later through the same script path.
 - **A5 — within-cohort silhouette variation + marquee identity. SHIPPED.** Tri-tone
   retexture differentiates cohort siblings by color, but a Knight-base Juggernaut and
   Sven still shared one mesh, one animation set, and one body. `applyAuthoredSilhouette`
@@ -230,16 +232,17 @@ bespoke generated GLB is a later, optional upgrade per hero.
   carry the richest feature lists, so they get the richest overlays for free. No new art,
   no new files, palette-driven primitives only. Gate: `model-cache` proportions + overlay +
   idempotency + no-model-safe + full-cohort render smoke — green.
-- **A6 — procedural holdout signature GLBs. SHIPPED.** io, enigma, morphling,
-  phoenix, etc. already ship hand-tuned **animated** procedural rigs; replacing them
+- **A6 — generated holdout signature GLBs. SHIPPED.** io, enigma, morphling,
+  phoenix, etc. already ship **animated** procedural rigs; replacing them
   with primitive static GLBs would regress motion. Instead,
   `generate_holdout_signatures.mjs` writes 11 original low-poly signature kits under
-  `/assets/holdouts/<id>.glb` (148KB total), `main.ts` preloads that tiny `holdout`
+  `/assets/holdouts/<id>.glb` (~287KB total — each now carries richer identity
+  geometry plus a shared ring of accent flair), `main.ts` preloads that tiny `holdout`
   group on enhanced tiers, and `scene.ts` loads them through the existing
   fallback-safe `loadModelAsset` path, mounting them with
   `attachHoldoutSignatureModel` **additively** over the animated rig. The result is
-  bespoke silhouette/identity art for all holdouts without losing animation or
-  blocking no-asset boot. A future commissioned/DCC-authored **rigged + animated**
+  distinct generated silhouette/identity art for all holdouts without losing animation
+  or blocking no-asset boot. A future generated/downloaded **rigged + animated**
   replacement model can still supersede any individual holdout later.
 
 ---
@@ -366,7 +369,11 @@ sprite atlases raise fidelity on medium+ tiers:
   atlas; procedural stays the fallback when absent.
 - **Telegraph decals** (generated): spiked ring (stun), hatched line (wall),
   dotted (mine), plain ring — swap into `telegraphTexture(...)` by archetype.
-- **Trail/beam gradients** for projectiles and beams (1-D ramps).
+- **Trail/beam gradients** for projectiles and beams (1-D ramps). **Shipped:**
+  `scripts/assets/generate_vfx_ramp.mjs` writes an original `/assets/vfx/beam_ramp.webp`
+  ramp; `engine/vfx.ts` loads it on medium+ (`loadVfxBeamRamp`) and prefers it as the
+  `alphaMap` for beams, projectile trails, and lightning ribbons, with the identical
+  procedural `beamRampTexture()` DataTexture kept as the headless/no-asset fallback.
 
 Shipped: medium+ preloads `/assets/vfx/vfx_atlas.webp` during the loading screen
 and slices it into four sprite cells plus four telegraph cells. The atlas is
@@ -489,9 +496,9 @@ are fine when they improve the theme and load safely.
     (all generated/vendored + wired; procedural floor intact).
 12. **A4** — multi-tone hero retextures. **SHIPPED (all 80 cohort heroes).** The
     `recolorMode: "tritone"` build mode gradient-maps each base atlas in texture
-    space for a real multi-tone read (no hand-painting); every Knight/Mage/
-    Barbarian/Rogue hero in `heroes.json` is on it and rebuilt. A hand-painted
-    per-hero atlas remains an optional upgrade on top.
+    space through a generated five-stop, saturation-aware ramp for a multi-zone read;
+    every Knight/Mage/Barbarian/Rogue hero in `heroes.json` is on it and rebuilt from
+    the raw CC0 bases. Richer generated atlases can layer on through the same path.
 13. **Final vocabulary pass** — `cyclone` VFX, `lightning` sound, and
     `toggle-stance` gesture. **Shipped.** Eul's/Wind Waker, electric chain
     signatures, and held stance casts now use distinct closed-vocabulary entries.
@@ -516,13 +523,14 @@ are fine when they improve the theme and load safely.
 > procedural rigs **plus A6 generated additive signature GLBs** — 122/122 visually
 > enhanced.
 > The VFX atlas is preloaded on medium+, burst transients are pooled, and
-> `channel`/`cyclone` have distinct reads. The only further upgrades are
-> commissioned / DCC-authored custom art: hand-painted bespoke atlases for marquee
-> heroes, animated boot motion trails, trail/beam ramp textures if profiling asks
-> for them, or **rigged + animated** bespoke replacement models for the 11 holdouts.
-> Rebuild any
-> hero from the raw CC0 pack (`tmp/asset_src/kaykit`, gitignored); the procedural
-> floor stays the live fallback throughout.
+> `channel`/`cyclone` have distinct reads. Every remaining upgrade is generated or
+> downloaded — never hand-authored art: richer generated hero atlases (more palette
+> stops, generated detail/normal passes), generated boot motion trails, or
+> generated/downloaded **rigged + animated** replacement models for the 11 holdouts.
+> (The trail/beam ramp texture is shipped as `vfx/beam_ramp.webp` with the procedural
+> ramp as fallback.)
+> Rebuild any hero from the raw CC0 pack (`tmp/asset_src/kaykit`, gitignored); the
+> procedural floor stays the live fallback throughout.
 
 Procedural batches and asset batches run in parallel: the floor never depends on
 an asset landing.
@@ -537,13 +545,13 @@ an asset landing.
 - **Socket mismatch.** KayKit hand/back bone names must be resolved defensively;
   missing socket → attach to rig root (today's behavior), never throw.
 - **Single-atlas recolor reads flat.** Resolved: all 80 cohort heroes ship the A4
-  `tritone` build mode (texture-space gradient map, shadow/midtone/highlight →
-  palette) instead of a uniform factor tint — multi-tone, generated, no
-  hand-painting. The flat-factor path is kept only as a script fallback.
-- **Cohort siblings share one body.** Resolved (A5): tri-tone fixed color, and
+  `tritone` build mode (texture-space five-stop, saturation-aware gradient map)
+  instead of a uniform factor tint — multi-zone and fully generated. The flat-factor
+  path is kept only as a script fallback.
+- **Cohort siblings share one body.** Resolved (A5): the retexture fixes color, and
   `applyAuthoredSilhouette` now fixes shape — per-hero proportions + innate identity
   overlays so same-base heroes read distinct at gameplay zoom without new art. A
-  hand-painted/rigged bespoke per marquee hero is still an optional upgrade on top.
+  richer generated/downloaded per-hero model is still an optional upgrade on top.
 - **Static holdout GLBs could regress animation.** Resolved (A6): generated holdout
   GLBs are additive signature kits mounted over the procedural rig, never replacement
   rigs. The animated primitive body stays live and missing files simply keep the old

@@ -7,7 +7,7 @@ import { buildTerrain, type TerrainInfo } from './terrain';
 import { applyAuthoredSilhouette, applyHeroLikeness, applyItemAppearances, attachHeroWeaponModel, attachHoldoutSignatureModel, buildUnitRig, buildSelectionRing, mountHeroModel, recolorToPalette, type UnitRig } from './models';
 import { HeroAssetLoader, heroAssetEntry, creepCreatureUrl, heroBaseId, holdoutSignatureUrl } from './assets';
 import { animateRig, applyCinematicGesture, newAnimState, type AnimState } from './animator';
-import { loadVfxTextureAtlas, VfxManager } from './vfx';
+import { loadVfxBeamRamp, loadVfxTextureAtlas, VfxManager } from './vfx';
 import type { CinematicView } from './cinematic';
 import { lodForDistance, shouldAnimateAtLod } from './lod';
 import { WORLD_SCALE } from './scale';
@@ -395,7 +395,10 @@ export class GameScene {
 
     this.vfx = new VfxManager((x, y) => this.terrain.heightAt(x, y), qualityCfg.transientVfxCap);
     this.scene.add(this.vfx.group);
-    if (qualityCfg.tier !== 'low') void loadVfxTextureAtlas();
+    if (qualityCfg.tier !== 'low') {
+      void loadVfxTextureAtlas();
+      void loadVfxBeamRamp();
+    }
 
     this.createMapMarkers(region);
 
@@ -1042,6 +1045,15 @@ export class GameScene {
     const ring = buildSelectionRing(u.radius / WORLD_SCALE + 0.15, ringColor);
     ring.visible = false;
     rig.root.add(ring);
+
+    // Elite camp variant (ITEM_REHAUL §10.3): a standing gold ring plus a larger
+    // silhouette so the player reads "this one is a fight" from across the screen.
+    if (u.elite) {
+      const eliteRing = buildSelectionRing(u.radius / WORLD_SCALE + 0.34, 0xffd86a);
+      eliteRing.visible = true;
+      rig.root.add(eliteRing);
+      rig.root.scale.multiplyScalar(1.2);
+    }
 
     // mesh HP bars avoid per-unit canvases/textures and share one plane geometry.
     const hpBar = new THREE.Group();

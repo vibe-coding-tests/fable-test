@@ -47,7 +47,7 @@ function preloadPathsForRegion(regionId: string, includeEnv: boolean, includeVfx
     `textures/terrain/${set}_Roughness.jpg`
   ];
   if (includeEnv) paths.push('env/vale_day_1k.hdr');
-  if (includeVfx) paths.push('vfx/vfx_atlas.webp');
+  if (includeVfx) paths.push('vfx/vfx_atlas.webp', 'vfx/beam_ramp.webp');
   return paths;
 }
 

@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "hash": "a399d647190c",
-  "generatedAt": "2026-06-14T05:14:06.216Z",
+  "hash": "3ffb2caf92af",
+  "generatedAt": "2026-06-14T05:44:59.201Z",
   "assetRoot": "/assets/",
-  "totalBytes": 126786188,
+  "totalBytes": 126937704,
   "groups": {
     "audio": {
       "count": 10,
@@ -19,11 +19,11 @@
     },
     "hero": {
       "count": 80,
-      "bytes": 113003068
+      "bytes": 113019372
     },
     "holdout": {
       "count": 11,
-      "bytes": 151764
+      "bytes": 286892
     },
     "terrain": {
       "count": 27,
@@ -38,8 +38,8 @@
       "bytes": 29312
     },
     "vfx": {
-      "count": 1,
-      "bytes": 79834
+      "count": 2,
+      "bytes": 79918
     },
     "weapon": {
       "count": 80,
@@ -370,7 +370,7 @@
     {
       "path": "heroes/abaddon.glb",
       "url": "/assets/heroes/abaddon.glb",
-      "bytes": 1426800,
+      "bytes": 1426944,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -380,7 +380,7 @@
     {
       "path": "heroes/alchemist.glb",
       "url": "/assets/heroes/alchemist.glb",
-      "bytes": 1417036,
+      "bytes": 1417376,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -390,7 +390,7 @@
     {
       "path": "heroes/anti-mage.glb",
       "url": "/assets/heroes/anti-mage.glb",
-      "bytes": 1405988,
+      "bytes": 1406196,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -400,7 +400,7 @@
     {
       "path": "heroes/arc-warden.glb",
       "url": "/assets/heroes/arc-warden.glb",
-      "bytes": 1407036,
+      "bytes": 1407260,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -410,7 +410,7 @@
     {
       "path": "heroes/axe.glb",
       "url": "/assets/heroes/axe.glb",
-      "bytes": 1417052,
+      "bytes": 1417248,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -420,7 +420,7 @@
     {
       "path": "heroes/beastmaster.glb",
       "url": "/assets/heroes/beastmaster.glb",
-      "bytes": 1417060,
+      "bytes": 1417264,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -430,7 +430,7 @@
     {
       "path": "heroes/bloodseeker.glb",
       "url": "/assets/heroes/bloodseeker.glb",
-      "bytes": 1405900,
+      "bytes": 1406148,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -440,7 +440,7 @@
     {
       "path": "heroes/bounty-hunter.glb",
       "url": "/assets/heroes/bounty-hunter.glb",
-      "bytes": 1405940,
+      "bytes": 1406244,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -450,7 +450,7 @@
     {
       "path": "heroes/brewmaster.glb",
       "url": "/assets/heroes/brewmaster.glb",
-      "bytes": 1417216,
+      "bytes": 1417424,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -460,7 +460,7 @@
     {
       "path": "heroes/bristleback.glb",
       "url": "/assets/heroes/bristleback.glb",
-      "bytes": 1417052,
+      "bytes": 1417280,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -470,7 +470,7 @@
     {
       "path": "heroes/chaos-knight.glb",
       "url": "/assets/heroes/chaos-knight.glb",
-      "bytes": 1426856,
+      "bytes": 1427040,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -480,7 +480,7 @@
     {
       "path": "heroes/chen.glb",
       "url": "/assets/heroes/chen.glb",
-      "bytes": 1425664,
+      "bytes": 1425824,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -490,7 +490,7 @@
     {
       "path": "heroes/clinkz.glb",
       "url": "/assets/heroes/clinkz.glb",
-      "bytes": 1405224,
+      "bytes": 1405544,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -500,7 +500,7 @@
     {
       "path": "heroes/clockwerk.glb",
       "url": "/assets/heroes/clockwerk.glb",
-      "bytes": 1426832,
+      "bytes": 1427040,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -510,7 +510,7 @@
     {
       "path": "heroes/crystal-maiden.glb",
       "url": "/assets/heroes/crystal-maiden.glb",
-      "bytes": 1406596,
+      "bytes": 1406828,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -520,7 +520,7 @@
     {
       "path": "heroes/dark-seer.glb",
       "url": "/assets/heroes/dark-seer.glb",
-      "bytes": 1406940,
+      "bytes": 1407124,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -530,7 +530,7 @@
     {
       "path": "heroes/dark-willow.glb",
       "url": "/assets/heroes/dark-willow.glb",
-      "bytes": 1406948,
+      "bytes": 1407164,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -540,7 +540,7 @@
     {
       "path": "heroes/dawnbreaker.glb",
       "url": "/assets/heroes/dawnbreaker.glb",
-      "bytes": 1426680,
+      "bytes": 1426848,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -550,7 +550,7 @@
     {
       "path": "heroes/dazzle.glb",
       "url": "/assets/heroes/dazzle.glb",
-      "bytes": 1407004,
+      "bytes": 1407204,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -560,7 +560,7 @@
     {
       "path": "heroes/death-prophet.glb",
       "url": "/assets/heroes/death-prophet.glb",
-      "bytes": 1406820,
+      "bytes": 1407036,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -570,7 +570,7 @@
     {
       "path": "heroes/disruptor.glb",
       "url": "/assets/heroes/disruptor.glb",
-      "bytes": 1406940,
+      "bytes": 1407140,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -580,7 +580,7 @@
     {
       "path": "heroes/dragon-knight.glb",
       "url": "/assets/heroes/dragon-knight.glb",
-      "bytes": 1426744,
+      "bytes": 1426960,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -590,7 +590,7 @@
     {
       "path": "heroes/drow-ranger.glb",
       "url": "/assets/heroes/drow-ranger.glb",
-      "bytes": 1404920,
+      "bytes": 1405144,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -600,7 +600,7 @@
     {
       "path": "heroes/earthshaker.glb",
       "url": "/assets/heroes/earthshaker.glb",
-      "bytes": 1417004,
+      "bytes": 1417256,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -610,7 +610,7 @@
     {
       "path": "heroes/ember-spirit.glb",
       "url": "/assets/heroes/ember-spirit.glb",
-      "bytes": 1405972,
+      "bytes": 1406172,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -620,7 +620,7 @@
     {
       "path": "heroes/enchantress.glb",
       "url": "/assets/heroes/enchantress.glb",
-      "bytes": 1406788,
+      "bytes": 1406988,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -630,7 +630,7 @@
     {
       "path": "heroes/faceless-void.glb",
       "url": "/assets/heroes/faceless-void.glb",
-      "bytes": 1426672,
+      "bytes": 1426848,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -640,7 +640,7 @@
     {
       "path": "heroes/grimstroke.glb",
       "url": "/assets/heroes/grimstroke.glb",
-      "bytes": 1406948,
+      "bytes": 1407076,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -650,7 +650,7 @@
     {
       "path": "heroes/huskar.glb",
       "url": "/assets/heroes/huskar.glb",
-      "bytes": 1410216,
+      "bytes": 1410400,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -660,7 +660,7 @@
     {
       "path": "heroes/invoker.glb",
       "url": "/assets/heroes/invoker.glb",
-      "bytes": 1406820,
+      "bytes": 1407012,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -670,7 +670,7 @@
     {
       "path": "heroes/juggernaut.glb",
       "url": "/assets/heroes/juggernaut.glb",
-      "bytes": 1426848,
+      "bytes": 1426936,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -680,7 +680,7 @@
     {
       "path": "heroes/keeper-of-the-light.glb",
       "url": "/assets/heroes/keeper-of-the-light.glb",
-      "bytes": 1406668,
+      "bytes": 1406868,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -690,7 +690,7 @@
     {
       "path": "heroes/kunkka.glb",
       "url": "/assets/heroes/kunkka.glb",
-      "bytes": 1426848,
+      "bytes": 1427008,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -700,7 +700,7 @@
     {
       "path": "heroes/legion-commander.glb",
       "url": "/assets/heroes/legion-commander.glb",
-      "bytes": 1426704,
+      "bytes": 1426928,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -710,7 +710,7 @@
     {
       "path": "heroes/lich.glb",
       "url": "/assets/heroes/lich.glb",
-      "bytes": 1406764,
+      "bytes": 1406980,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -720,7 +720,7 @@
     {
       "path": "heroes/lifestealer.glb",
       "url": "/assets/heroes/lifestealer.glb",
-      "bytes": 1417128,
+      "bytes": 1417304,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -730,7 +730,7 @@
     {
       "path": "heroes/lina.glb",
       "url": "/assets/heroes/lina.glb",
-      "bytes": 1406812,
+      "bytes": 1407020,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -740,7 +740,7 @@
     {
       "path": "heroes/lion.glb",
       "url": "/assets/heroes/lion.glb",
-      "bytes": 1407012,
+      "bytes": 1407236,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -750,7 +750,7 @@
     {
       "path": "heroes/luna.glb",
       "url": "/assets/heroes/luna.glb",
-      "bytes": 1405016,
+      "bytes": 1405192,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -760,7 +760,7 @@
     {
       "path": "heroes/magnus.glb",
       "url": "/assets/heroes/magnus.glb",
-      "bytes": 1416964,
+      "bytes": 1417160,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -770,7 +770,7 @@
     {
       "path": "heroes/marci.glb",
       "url": "/assets/heroes/marci.glb",
-      "bytes": 1405972,
+      "bytes": 1406236,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -780,7 +780,7 @@
     {
       "path": "heroes/mars.glb",
       "url": "/assets/heroes/mars.glb",
-      "bytes": 1426816,
+      "bytes": 1426904,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -790,7 +790,7 @@
     {
       "path": "heroes/meepo.glb",
       "url": "/assets/heroes/meepo.glb",
-      "bytes": 1405908,
+      "bytes": 1406148,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -800,7 +800,7 @@
     {
       "path": "heroes/mirana.glb",
       "url": "/assets/heroes/mirana.glb",
-      "bytes": 1404828,
+      "bytes": 1405056,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -810,7 +810,7 @@
     {
       "path": "heroes/monkey-king.glb",
       "url": "/assets/heroes/monkey-king.glb",
-      "bytes": 1405932,
+      "bytes": 1406188,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -820,7 +820,7 @@
     {
       "path": "heroes/natures-prophet.glb",
       "url": "/assets/heroes/natures-prophet.glb",
-      "bytes": 1406788,
+      "bytes": 1407012,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -830,7 +830,7 @@
     {
       "path": "heroes/necrophos.glb",
       "url": "/assets/heroes/necrophos.glb",
-      "bytes": 1406836,
+      "bytes": 1407084,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -840,7 +840,7 @@
     {
       "path": "heroes/ogre-magi.glb",
       "url": "/assets/heroes/ogre-magi.glb",
-      "bytes": 1417272,
+      "bytes": 1417520,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -850,7 +850,7 @@
     {
       "path": "heroes/omniknight.glb",
       "url": "/assets/heroes/omniknight.glb",
-      "bytes": 1426736,
+      "bytes": 1426800,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -860,7 +860,7 @@
     {
       "path": "heroes/outworld-destroyer.glb",
       "url": "/assets/heroes/outworld-destroyer.glb",
-      "bytes": 1406956,
+      "bytes": 1407188,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -870,7 +870,7 @@
     {
       "path": "heroes/pangolier.glb",
       "url": "/assets/heroes/pangolier.glb",
-      "bytes": 1426896,
+      "bytes": 1427056,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -880,7 +880,7 @@
     {
       "path": "heroes/phantom-assassin.glb",
       "url": "/assets/heroes/phantom-assassin.glb",
-      "bytes": 1405804,
+      "bytes": 1405980,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -890,7 +890,7 @@
     {
       "path": "heroes/phantom-lancer.glb",
       "url": "/assets/heroes/phantom-lancer.glb",
-      "bytes": 1406044,
+      "bytes": 1406284,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -900,7 +900,7 @@
     {
       "path": "heroes/pudge.glb",
       "url": "/assets/heroes/pudge.glb",
-      "bytes": 1416932,
+      "bytes": 1417144,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -910,7 +910,7 @@
     {
       "path": "heroes/pugna.glb",
       "url": "/assets/heroes/pugna.glb",
-      "bytes": 1406940,
+      "bytes": 1407156,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -920,7 +920,7 @@
     {
       "path": "heroes/queen-of-pain.glb",
       "url": "/assets/heroes/queen-of-pain.glb",
-      "bytes": 1406964,
+      "bytes": 1407196,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -930,7 +930,7 @@
     {
       "path": "heroes/razor.glb",
       "url": "/assets/heroes/razor.glb",
-      "bytes": 1406956,
+      "bytes": 1407148,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -940,7 +940,7 @@
     {
       "path": "heroes/riki.glb",
       "url": "/assets/heroes/riki.glb",
-      "bytes": 1405916,
+      "bytes": 1406124,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -950,7 +950,7 @@
     {
       "path": "heroes/rubick.glb",
       "url": "/assets/heroes/rubick.glb",
-      "bytes": 1406876,
+      "bytes": 1407052,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -960,7 +960,7 @@
     {
       "path": "heroes/shadow-shaman.glb",
       "url": "/assets/heroes/shadow-shaman.glb",
-      "bytes": 1406932,
+      "bytes": 1407156,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -970,7 +970,7 @@
     {
       "path": "heroes/silencer.glb",
       "url": "/assets/heroes/silencer.glb",
-      "bytes": 1406772,
+      "bytes": 1406908,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -980,7 +980,7 @@
     {
       "path": "heroes/skywrath-mage.glb",
       "url": "/assets/heroes/skywrath-mage.glb",
-      "bytes": 1406852,
+      "bytes": 1407084,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -990,7 +990,7 @@
     {
       "path": "heroes/slardar.glb",
       "url": "/assets/heroes/slardar.glb",
-      "bytes": 1426704,
+      "bytes": 1426856,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -1000,7 +1000,7 @@
     {
       "path": "heroes/slark.glb",
       "url": "/assets/heroes/slark.glb",
-      "bytes": 1417028,
+      "bytes": 1417288,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -1010,7 +1010,7 @@
     {
       "path": "heroes/sniper.glb",
       "url": "/assets/heroes/sniper.glb",
-      "bytes": 1404844,
+      "bytes": 1405072,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -1020,7 +1020,7 @@
     {
       "path": "heroes/storm-spirit.glb",
       "url": "/assets/heroes/storm-spirit.glb",
-      "bytes": 1406940,
+      "bytes": 1407140,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -1030,7 +1030,7 @@
     {
       "path": "heroes/sven.glb",
       "url": "/assets/heroes/sven.glb",
-      "bytes": 1426936,
+      "bytes": 1427008,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -1040,7 +1040,7 @@
     {
       "path": "heroes/templar-assassin.glb",
       "url": "/assets/heroes/templar-assassin.glb",
-      "bytes": 1405032,
+      "bytes": 1405232,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -1050,7 +1050,7 @@
     {
       "path": "heroes/timbersaw.glb",
       "url": "/assets/heroes/timbersaw.glb",
-      "bytes": 1426880,
+      "bytes": 1427056,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -1060,7 +1060,7 @@
     {
       "path": "heroes/troll-warlord.glb",
       "url": "/assets/heroes/troll-warlord.glb",
-      "bytes": 1410208,
+      "bytes": 1410480,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -1070,7 +1070,7 @@
     {
       "path": "heroes/underlord.glb",
       "url": "/assets/heroes/underlord.glb",
-      "bytes": 1417144,
+      "bytes": 1417536,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -1080,7 +1080,7 @@
     {
       "path": "heroes/undying.glb",
       "url": "/assets/heroes/undying.glb",
-      "bytes": 1417128,
+      "bytes": 1417232,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -1090,7 +1090,7 @@
     {
       "path": "heroes/vengeful-spirit.glb",
       "url": "/assets/heroes/vengeful-spirit.glb",
-      "bytes": 1406828,
+      "bytes": 1406980,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -1100,7 +1100,7 @@
     {
       "path": "heroes/void-spirit.glb",
       "url": "/assets/heroes/void-spirit.glb",
-      "bytes": 1406004,
+      "bytes": 1406276,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -1110,7 +1110,7 @@
     {
       "path": "heroes/warlock.glb",
       "url": "/assets/heroes/warlock.glb",
-      "bytes": 1406772,
+      "bytes": 1406932,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -1120,7 +1120,7 @@
     {
       "path": "heroes/windranger.glb",
       "url": "/assets/heroes/windranger.glb",
-      "bytes": 1404904,
+      "bytes": 1405144,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -1130,7 +1130,7 @@
     {
       "path": "heroes/winter-wyvern.glb",
       "url": "/assets/heroes/winter-wyvern.glb",
-      "bytes": 1406692,
+      "bytes": 1406876,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -1140,7 +1140,7 @@
     {
       "path": "heroes/witch-doctor.glb",
       "url": "/assets/heroes/witch-doctor.glb",
-      "bytes": 1406948,
+      "bytes": 1407180,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -1150,7 +1150,7 @@
     {
       "path": "heroes/wraith-king.glb",
       "url": "/assets/heroes/wraith-king.glb",
-      "bytes": 1426848,
+      "bytes": 1426984,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -1160,7 +1160,7 @@
     {
       "path": "heroes/zeus.glb",
       "url": "/assets/heroes/zeus.glb",
-      "bytes": 1406868,
+      "bytes": 1407012,
       "type": "model",
       "group": "hero",
       "preloadGroup": "hero",
@@ -1170,7 +1170,7 @@
     {
       "path": "holdouts/ancient-apparition.glb",
       "url": "/assets/holdouts/ancient-apparition.glb",
-      "bytes": 14972,
+      "bytes": 27968,
       "type": "model",
       "group": "holdout",
       "preloadGroup": "holdout",
@@ -1180,7 +1180,7 @@
     {
       "path": "holdouts/bane.glb",
       "url": "/assets/holdouts/bane.glb",
-      "bytes": 16132,
+      "bytes": 26672,
       "type": "model",
       "group": "holdout",
       "preloadGroup": "holdout",
@@ -1190,7 +1190,7 @@
     {
       "path": "holdouts/batrider.glb",
       "url": "/assets/holdouts/batrider.glb",
-      "bytes": 9476,
+      "bytes": 18532,
       "type": "model",
       "group": "holdout",
       "preloadGroup": "holdout",
@@ -1200,7 +1200,7 @@
     {
       "path": "holdouts/enigma.glb",
       "url": "/assets/holdouts/enigma.glb",
-      "bytes": 21064,
+      "bytes": 36876,
       "type": "model",
       "group": "holdout",
       "preloadGroup": "holdout",
@@ -1210,7 +1210,7 @@
     {
       "path": "holdouts/io.glb",
       "url": "/assets/holdouts/io.glb",
-      "bytes": 19700,
+      "bytes": 31040,
       "type": "model",
       "group": "holdout",
       "preloadGroup": "holdout",
@@ -1220,7 +1220,7 @@
     {
       "path": "holdouts/leshrac.glb",
       "url": "/assets/holdouts/leshrac.glb",
-      "bytes": 11932,
+      "bytes": 24608,
       "type": "model",
       "group": "holdout",
       "preloadGroup": "holdout",
@@ -1230,7 +1230,7 @@
     {
       "path": "holdouts/lone-druid.glb",
       "url": "/assets/holdouts/lone-druid.glb",
-      "bytes": 8524,
+      "bytes": 20084,
       "type": "model",
       "group": "holdout",
       "preloadGroup": "holdout",
@@ -1240,7 +1240,7 @@
     {
       "path": "holdouts/medusa.glb",
       "url": "/assets/holdouts/medusa.glb",
-      "bytes": 20204,
+      "bytes": 34952,
       "type": "model",
       "group": "holdout",
       "preloadGroup": "holdout",
@@ -1250,7 +1250,7 @@
     {
       "path": "holdouts/morphling.glb",
       "url": "/assets/holdouts/morphling.glb",
-      "bytes": 8728,
+      "bytes": 19596,
       "type": "model",
       "group": "holdout",
       "preloadGroup": "holdout",
@@ -1260,7 +1260,7 @@
     {
       "path": "holdouts/naga-siren.glb",
       "url": "/assets/holdouts/naga-siren.glb",
-      "bytes": 12360,
+      "bytes": 24344,
       "type": "model",
       "group": "holdout",
       "preloadGroup": "holdout",
@@ -1270,7 +1270,7 @@
     {
       "path": "holdouts/phoenix.glb",
       "url": "/assets/holdouts/phoenix.glb",
-      "bytes": 8672,
+      "bytes": 22220,
       "type": "model",
       "group": "holdout",
       "preloadGroup": "holdout",
@@ -1656,6 +1656,16 @@
       "preloadGroup": "ui",
       "sourceSpec": null,
       "source": null
+    },
+    {
+      "path": "vfx/beam_ramp.webp",
+      "url": "/assets/vfx/beam_ramp.webp",
+      "bytes": 84,
+      "type": "texture",
+      "group": "vfx",
+      "preloadGroup": "vfx",
+      "sourceSpec": "scripts/assets/generate_vfx_ramp.mjs",
+      "source": "Original generated beam/trail gradient ramp"
     },
     {
       "path": "vfx/vfx_atlas.webp",

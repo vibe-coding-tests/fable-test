@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { installVfxTextureAtlas, VfxManager, vfxGeometryCacheSize, vfxTextureAssetState } from '../engine/vfx';
+import { installVfxBeamRamp, installVfxTextureAtlas, VfxManager, vfxGeometryCacheSize, vfxTextureAssetState } from '../engine/vfx';
 
 describe('vfx cache', () => {
   it('reuses canonical geometry for repeated VFX archetypes', () => {
@@ -181,6 +181,22 @@ describe('vfx cache', () => {
 
     expect(decal).toBeDefined();
     expect(decal!.material.blending).toBe(THREE.AdditiveBlending);
+  });
+
+  it('installs an optional beam/trail ramp asset while keeping the procedural fallback', () => {
+    expect(vfxTextureAssetState().beamRamp).toBe(0);
+
+    const data = new Uint8Array(8 * 2 * 4).fill(255);
+    installVfxBeamRamp(new THREE.DataTexture(data, 8, 2));
+
+    const state = vfxTextureAssetState();
+    expect(state.beamRamp).toBe(1);
+
+    // New beams pick up the installed ramp; the alphaMap stays defined either way.
+    const vfx = new VfxManager(() => 0);
+    vfx.attackVisual({ kind: 'ranged-conversion', color: '#88ccff', scale: 1 }, { x: 0, y: 0 }, { x: 500, y: 0 });
+    const beam = vfx.group.children[0] as THREE.Mesh;
+    expect((beam.material as THREE.MeshBasicMaterial).alphaMap).toBeDefined();
   });
 
   it('adds a ground impact decal for cleave attacks', () => {

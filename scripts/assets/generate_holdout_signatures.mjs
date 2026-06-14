@@ -157,6 +157,17 @@ function wings(add, mat, y = 1.2, span = 0.9) {
   add(box('wing-r', mat, 0.08, span, 0.34, { x: -0.28, y, z: -0.42, rz: 0.38 }));
 }
 
+// Shared accent flair on every holdout: a small ring of floating accent motes so
+// each abstract kit reads as charged/animated regardless of its style.
+function commonFlair() {
+  const p = [];
+  for (let i = 0; i < 4; i++) {
+    const a = (i / 4) * Math.PI * 2;
+    p.push(box(`flair-mote-${i}`, 'accent', 0.07, 0.07, 0.07, { x: Math.cos(a) * 0.48, y: 1.42 + (i % 2) * 0.22, z: Math.sin(a) * 0.48, rz: a }));
+  }
+  return p;
+}
+
 function partsFor(style) {
   const p = [];
   const add = (...parts) => p.push(...parts);
@@ -164,67 +175,87 @@ function partsFor(style) {
     case 'wisp':
       add(cylinder('core-halo-x', 'accent', 0.04, 0.95, 'x', { y: 1.2 }, 16));
       add(cylinder('core-halo-z', 'accent', 0.04, 0.95, 'z', { y: 1.2 }, 16));
+      add(cylinder('core-halo-y', 'accent', 0.035, 0.78, 'y', { y: 1.2 }, 16));
       add(box('wisp-core', 'primary', 0.34, 0.34, 0.34, { y: 1.2, rz: Math.PI / 4 }));
+      add(box('wisp-core-inner', 'accent', 0.16, 0.16, 0.16, { y: 1.2, rz: Math.PI / 4 }));
       for (let i = 0; i < 6; i++) add(box(`tether-${i}`, 'secondary', 0.08, 0.62, 0.05, { x: Math.cos(i) * 0.36, y: 0.7 + (i % 2) * 0.16, z: Math.sin(i) * 0.36, rz: i * 0.4 }));
       break;
     case 'void':
       add(box('void-core', 'dark', 0.5, 0.62, 0.5, { y: 1.1, rz: 0.45 }));
       add(cylinder('event-ring', 'accent', 0.035, 1.2, 'z', { y: 1.1 }, 18));
-      for (let i = 0; i < 7; i++) add(shard(`star-${i}`, i % 2 ? 'accent' : 'primary', Math.cos(i) * 0.36, 1.15 + Math.sin(i * 1.7) * 0.25, Math.sin(i) * 0.36, i * 0.2, 0.22));
+      add(cylinder('event-ring-x', 'accent', 0.03, 1.0, 'x', { y: 1.1, rz: 0.5 }, 18));
+      add(box('singularity', 'accent', 0.18, 0.18, 0.18, { y: 1.1, rz: 0.45 }));
+      for (let i = 0; i < 9; i++) add(shard(`star-${i}`, i % 2 ? 'accent' : 'primary', Math.cos(i) * 0.38, 1.15 + Math.sin(i * 1.7) * 0.28, Math.sin(i) * 0.38, i * 0.2, 0.22));
       break;
     case 'water':
       add(cylinder('wave-body', 'primary', 0.18, 1.0, 'y', { y: 0.72, rz: -0.35 }, 12));
       add(box('crest-wave', 'accent', 0.12, 0.66, 0.5, { x: 0.24, y: 1.32, rz: -0.45 }));
       add(box('ripple-l', 'secondary', 0.08, 0.78, 0.16, { x: -0.14, y: 0.56, z: 0.32, rz: 0.45 }));
       add(box('ripple-r', 'secondary', 0.08, 0.78, 0.16, { x: -0.14, y: 0.56, z: -0.32, rz: 0.45 }));
+      for (let i = 0; i < 3; i++) add(cone(`droplet-${i}`, 'accent', 0.07, 0.2, 'y', { x: 0.3 + Math.cos(i) * 0.1, y: 1.6 + i * 0.16, z: (i - 1) * 0.18 }, 8));
       break;
     case 'nightmare':
       add(box('nightmare-eye', 'accent', 0.42, 0.22, 0.26, { x: 0.2, y: 1.35, rz: 0.1 }));
-      for (let i = 0; i < 5; i++) add(cylinder(`tentacle-${i}`, i % 2 ? 'primary' : 'secondary', 0.045, 0.95, 'y', { x: -0.18 + i * 0.09, y: 0.56, z: (i - 2) * 0.12, rz: (i - 2) * 0.2 }, 8));
+      add(box('nightmare-brow', 'dark', 0.46, 0.08, 0.3, { x: 0.18, y: 1.52, rz: 0.16 }));
+      add(box('nightmare-pupil', 'dark', 0.12, 0.12, 0.12, { x: 0.34, y: 1.35 }));
+      for (let i = 0; i < 6; i++) add(cylinder(`tentacle-${i}`, i % 2 ? 'primary' : 'secondary', 0.045, 0.95, 'y', { x: -0.18 + i * 0.08, y: 0.56, z: (i - 2.5) * 0.12, rz: (i - 2.5) * 0.2 }, 8));
       break;
     case 'ice-wraith':
       add(cylinder('wraith-spine', 'secondary', 0.08, 1.25, 'y', { y: 0.95 }, 10));
       for (let i = 0; i < 5; i++) add(shard(`ice-crown-${i}`, 'accent', 0.02, 1.72 + (i % 2) * 0.08, (i - 2) * 0.13, 0, 0.38));
+      for (let i = 0; i < 4; i++) add(shard(`ice-rib-${i}`, 'primary', 0.18, 1.0 + i * 0.16, (i % 2 ? 0.2 : -0.2), (i % 2 ? 1.4 : -1.4), 0.3));
       add(box('ragged-tail', 'primary', 0.08, 0.72, 0.44, { x: -0.18, y: 0.45, rz: 0.2 }));
       break;
     case 'tormented':
       add(box('bone-torso', 'secondary', 0.32, 0.72, 0.32, { y: 1.0 }));
       add(cone('horn-l', 'accent', 0.07, 0.42, 'y', { y: 1.66, z: 0.18, rz: 0.4 }));
       add(cone('horn-r', 'accent', 0.07, 0.42, 'y', { y: 1.66, z: -0.18, rz: -0.4 }));
-      for (let i = 0; i < 4; i++) add(box(`arc-${i}`, 'accent', 0.08, 0.5, 0.05, { x: 0.32, y: 0.8 + i * 0.22, z: (i % 2 ? 0.28 : -0.28), rz: 0.6 }));
+      add(cylinder('torment-halo', 'accent', 0.03, 0.95, 'y', { y: 1.78 }, 16));
+      for (let i = 0; i < 6; i++) add(box(`arc-${i}`, 'accent', 0.08, 0.5, 0.05, { x: 0.32, y: 0.7 + i * 0.2, z: (i % 2 ? 0.28 : -0.28), rz: 0.6 }));
       break;
     case 'firebird':
       add(cone('beak-flame', 'accent', 0.08, 0.34, 'x', { x: 0.48, y: 1.45 }, 8));
       add(box('ember-body', 'primary', 0.5, 0.42, 0.38, { y: 1.08, rz: 0.2 }));
       wings(add, 'accent', 1.13, 1.05);
-      add(shard('tail-flame', 'accent', -0.3, 0.54, 0, -0.2, 0.58));
+      wings(add, 'primary', 1.05, 0.7);
+      for (let i = 0; i < 3; i++) add(shard(`tail-flame-${i}`, 'accent', -0.3, 0.44 + i * 0.12, (i - 1) * 0.16, -0.2, 0.5));
+      add(cone('crest-flame', 'accent', 0.06, 0.3, 'y', { x: 0.18, y: 1.5, rz: -0.3 }, 8));
       break;
     case 'siren':
       add(cylinder('serpent-tail', 'primary', 0.18, 1.15, 'y', { y: 0.48, rz: 0.25 }, 12));
+      add(cone('tail-fin', 'accent', 0.22, 0.4, 'y', { x: -0.2, y: 0.0, rz: 2.4 }, 8));
       add(box('head-fin-l', 'accent', 0.06, 0.42, 0.16, { y: 1.58, z: 0.24, rz: -0.3 }));
       add(box('head-fin-r', 'accent', 0.06, 0.42, 0.16, { y: 1.58, z: -0.24, rz: -0.3 }));
       add(cylinder('song-ring', 'secondary', 0.035, 0.85, 'z', { x: 0.28, y: 1.22 }, 16));
+      add(cylinder('song-ring-2', 'accent', 0.03, 0.6, 'z', { x: 0.4, y: 1.22 }, 16));
       break;
     case 'gorgon':
       add(box('gorgon-bow', 'secondary', 0.1, 0.92, 0.08, { x: 0.36, y: 1.0, rz: 0.2 }));
-      for (let i = 0; i < 6; i++) add(cylinder(`snake-${i}`, i % 2 ? 'primary' : 'accent', 0.035, 0.5, 'y', { x: 0.02, y: 1.68, z: (i - 2.5) * 0.09, rz: (i - 2.5) * 0.18 }, 8));
+      add(box('bow-string', 'accent', 0.02, 0.88, 0.02, { x: 0.3, y: 1.0, rz: 0.2 }));
+      for (let i = 0; i < 9; i++) add(cylinder(`snake-${i}`, i % 2 ? 'primary' : 'accent', 0.035, 0.5, 'y', { x: 0.02, y: 1.66, z: (i - 4) * 0.08, rz: (i - 4) * 0.16 }, 8));
       add(box('stone-gaze', 'accent', 0.28, 0.08, 0.24, { x: 0.25, y: 1.5 }));
       break;
     case 'bat-rider':
       wings(add, 'secondary', 1.0, 0.86);
+      add(box('wing-strut-l', 'dark', 0.04, 0.7, 0.04, { x: -0.28, y: 1.0, z: 0.5, rz: 0.5 }));
+      add(box('wing-strut-r', 'dark', 0.04, 0.7, 0.04, { x: -0.28, y: 1.0, z: -0.5, rz: 0.5 }));
       add(cylinder('torch', 'dark', 0.035, 0.65, 'y', { x: 0.42, y: 0.92 }, 8));
       add(cone('torch-flame', 'accent', 0.1, 0.3, 'y', { x: 0.42, y: 1.34 }, 8));
       add(box('saddle', 'primary', 0.42, 0.16, 0.42, { y: 0.9 }));
+      add(box('reins', 'accent', 0.02, 0.02, 0.5, { x: 0.32, y: 1.0 }));
       break;
     case 'bear-druid':
       add(box('fur-hood', 'primary', 0.44, 0.34, 0.38, { y: 1.48 }));
+      add(box('snout', 'secondary', 0.22, 0.16, 0.18, { x: 0.22, y: 1.42 }));
       add(cone('ear-l', 'secondary', 0.07, 0.18, 'y', { y: 1.78, z: 0.17 }, 8));
       add(cone('ear-r', 'secondary', 0.07, 0.18, 'y', { y: 1.78, z: -0.17 }, 8));
+      add(box('shoulder-fur', 'primary', 0.5, 0.22, 0.5, { y: 1.18 }));
       add(box('bear-paw-l', 'accent', 0.24, 0.12, 0.16, { x: 0.24, y: 1.03, z: 0.28 }));
       add(box('bear-paw-r', 'accent', 0.24, 0.12, 0.16, { x: 0.24, y: 1.03, z: -0.28 }));
+      for (const dz of [0.34, 0.22]) add(shard('claw', 'accent', 0.36, 0.98, dz, 1.6, 0.12));
       break;
   }
-  return p;
+  return [...p, ...commonFlair()];
 }
 
 function bounds(values) {

@@ -203,33 +203,53 @@ function hexToRgb255(hex) {
   return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
 }
 
-/**
- * Bespoke A4 retexture (VFX_ASSETS §11 batch A4): gradient-map a base atlas through
- * a hero's three-color palette in TEXTURE space, instead of multiplying the whole
- * atlas by one flat baseColorFactor (which reads mono-tone — the §12 "single-atlas
- * recolor reads flat" risk). The source atlas's own per-pixel luminance drives a
- * three-stop ramp (shadow → secondary, midtone → primary, highlight → accent), so
- * KayKit's baked shading/AO and its distinct zones (armour vs cloth vs skin/trim)
- * survive as separate palette tones. The base-color texture is rewritten and the
- * material factor is neutralized to white so nothing double-tints at runtime.
- * Fully deterministic and automatable — no hand-painting needed. `mid` shifts how
- * much of the luminance range reads as the dominant identity color (default 0.5).
- */
-async function retextureAtlas(doc, sharp, palette, mid = 0.5) {
-  const [primary, secondary, accent] = palette.map(hexToRgb255);
-  const lerp = (a, b, t) => [
+function lerp255(a, b, t) {
+  return [
     Math.round(a[0] + (b[0] - a[0]) * t),
     Math.round(a[1] + (b[1] - a[1]) * t),
     Math.round(a[2] + (b[2] - a[2]) * t)
   ];
+}
+
+/**
+ * Generated multi-zone retexture (VFX_ASSETS A4): gradient-map a base atlas through
+ * a hero's three-color palette in TEXTURE space, instead of multiplying the whole
+ * atlas by one flat baseColorFactor (which reads mono-tone — the "single-atlas
+ * recolor reads flat" risk). The source atlas's own per-pixel luminance drives a
+ * FIVE-stop ramp — deepened shadow → secondary → primary body → accent →
+ * hot specular — so KayKit's baked shading/AO and its distinct zones (armour vs
+ * cloth vs skin/trim) survive as separate, richly shaded palette tones rather than
+ * a single midtone wash. On top of that, source chroma is read per pixel: bright,
+ * saturated source zones (trim, gems, metal highlights) bias toward the accent so
+ * they pop as their own painted-looking zone instead of collapsing into the body.
+ * The base-color texture is rewritten and the material factor is neutralized to
+ * white so nothing double-tints at runtime. Fully deterministic and generated end
+ * to end. `mid` biases where the dominant body tone sits in the luminance range.
+ */
+async function retextureAtlas(doc, sharp, palette, mid = 0.5) {
+  const [primary, secondary, accent] = palette.map(hexToRgb255);
+  const black = [0, 0, 0];
+  const white = [255, 255, 255];
+  // Five identity-derived tones: a deepened shadow under the secondary, the primary
+  // body, a brightened body that leans into the accent, and a hot specular tip.
+  const deep = lerp255(secondary, black, 0.45);
+  const light = lerp255(primary, accent, 0.5);
+  const spec = lerp255(accent, white, 0.4);
+  const stops = [deep, secondary, primary, light, spec];
+  // Position the body tone by `mid`, then space the remaining stops around it so the
+  // dominant identity color owns the most luminance while shadows/highlights frame it.
+  const body = Math.min(Math.max(mid, 0.15), 0.85);
+  const stopPos = [0, body * 0.5, body, body + (1 - body) * 0.5, 1];
+  const sample = (t) => {
+    let i = 0;
+    while (i < stopPos.length - 2 && t > stopPos[i + 1]) i++;
+    const span = stopPos[i + 1] - stopPos[i] || 1;
+    return lerp255(stops[i], stops[i + 1], Math.min(1, Math.max(0, (t - stopPos[i]) / span)));
+  };
   // 256-entry lookup keyed by source luminance (sRGB byte space) for a fast remap.
   const ramp = new Array(256);
-  for (let l = 0; l < 256; l++) {
-    const t = l / 255;
-    ramp[l] = t <= mid
-      ? lerp(secondary, primary, mid > 0 ? t / mid : 1)
-      : lerp(primary, accent, mid < 1 ? (t - mid) / (1 - mid) : 1);
-  }
+  for (let l = 0; l < 256; l++) ramp[l] = sample(l / 255);
+
   let touched = 0;
   for (const mat of doc.getRoot().listMaterials()) {
     const tex = mat.getBaseColorTexture();
@@ -239,11 +259,19 @@ async function retextureAtlas(doc, sharp, palette, mid = 0.5) {
       .raw()
       .toBuffer({ resolveWithObject: true });
     for (let i = 0; i < data.length; i += 4) {
-      const lum = Math.round(0.2126 * data[i] + 0.7152 * data[i + 1] + 0.0722 * data[i + 2]);
-      const [r, g, b] = ramp[lum];
-      data[i] = r;
-      data[i + 1] = g;
-      data[i + 2] = b;
+      const r = data[i], g = data[i + 1], b = data[i + 2];
+      const lum = Math.round(0.2126 * r + 0.7152 * g + 0.0722 * b);
+      const mx = Math.max(r, g, b);
+      const mn = Math.min(r, g, b);
+      const sat = mx > 0 ? (mx - mn) / mx : 0; // source chroma → a distinct material zone
+      const base = ramp[lum];
+      // Bright, saturated source zones (trim/gems/metal) lean toward the accent so
+      // they read as their own zone; flat/dark cloth stays on the body ramp.
+      const pop = sat * (lum / 255) * 0.5;
+      const [or, og, ob] = lerp255(base, accent, pop);
+      data[i] = or;
+      data[i + 1] = og;
+      data[i + 2] = ob;
       // data[i + 3] (alpha) is preserved so cutout/transparent regions stay intact.
     }
     const png = await sharp(data, { raw: { width: info.width, height: info.height, channels: 4 } }).png().toBuffer();

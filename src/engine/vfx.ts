@@ -47,6 +47,8 @@ const BURST_SPARKS = 14;
 
 const geometryCache = new Map<string, THREE.BufferGeometry>();
 let beamRampTex: THREE.DataTexture | null = null;
+let beamRampAssetTex: THREE.Texture | null = null;
+export const VFX_BEAM_RAMP_URL = '/assets/vfx/beam_ramp.webp';
 
 function sharedGeometry<T extends THREE.BufferGeometry>(geo: T): T {
   const key = `${geo.type}:${JSON.stringify((geo as T & { parameters?: unknown }).parameters ?? {})}`;
@@ -63,7 +65,10 @@ export function vfxGeometryCacheSize(): number {
   return geometryCache.size;
 }
 
-function beamRampTexture(): THREE.DataTexture {
+function beamRampTexture(): THREE.Texture {
+  // A shipped ramp asset (WS-E) wins on medium+ tiers; the procedural DataTexture
+  // below stays the guaranteed fallback (boot floor / headless / missing file).
+  if (beamRampAssetTex) return beamRampAssetTex;
   if (beamRampTex) return beamRampTex;
   const w = 32;
   const h = 2;
@@ -86,6 +91,24 @@ function beamRampTexture(): THREE.DataTexture {
   tex.needsUpdate = true;
   beamRampTex = tex;
   return tex;
+}
+
+/** Install a loaded beam/trail ramp (WS-E). The procedural ramp stays the fallback if absent. */
+export function installVfxBeamRamp(texture: THREE.Texture): void {
+  texture.colorSpace = THREE.NoColorSpace;
+  texture.wrapS = texture.wrapT = THREE.ClampToEdgeWrapping;
+  texture.magFilter = texture.minFilter = THREE.LinearFilter;
+  texture.generateMipmaps = false;
+  texture.needsUpdate = true;
+  beamRampAssetTex = texture;
+}
+
+/** Best-effort medium+ enhancement. Resolves false when the asset is absent/headless. */
+export async function loadVfxBeamRamp(url = VFX_BEAM_RAMP_URL): Promise<boolean> {
+  const texture = await loadTex(url, { srgb: false });
+  if (!texture) return false;
+  installVfxBeamRamp(texture);
+  return true;
 }
 
 // Numerically-built sprite textures (GRAPHICS_SPEC §7). DataTexture needs no DOM
@@ -149,12 +172,14 @@ export async function loadVfxTextureAtlas(url = VFX_ATLAS_URL): Promise<boolean>
   return true;
 }
 
-export function vfxTextureAssetState(): { sprites: number; telegraphs: number; proceduralSprites: number; proceduralTelegraphs: number } {
+export function vfxTextureAssetState(): { sprites: number; telegraphs: number; beamRamp: number; proceduralSprites: number; proceduralTelegraphs: number; proceduralBeamRamp: number } {
   return {
     sprites: Object.keys(SPRITE_ASSET_TEX).length,
     telegraphs: Object.keys(TELEGRAPH_ASSET_TEX).length,
+    beamRamp: beamRampAssetTex ? 1 : 0,
     proceduralSprites: Object.keys(SPRITE_TEX).length,
-    proceduralTelegraphs: Object.keys(TELEGRAPH_TEX).length
+    proceduralTelegraphs: Object.keys(TELEGRAPH_TEX).length,
+    proceduralBeamRamp: beamRampTex ? 1 : 0
   };
 }
 
