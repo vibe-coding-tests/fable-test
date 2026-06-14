@@ -11,7 +11,7 @@ import { buybackCost } from '../core/phase3';
 import { abilityMaxLevel, abilityRankRequiredHeroLevel, levelArr } from '../core/values';
 import { buildDefaultGambit } from '../core/controllers';
 import { statLabel, fmtStatValue, statLines, buildAbilityCard, buildItemCard, buildNeutralItemCard, buildHeroCard, type TooltipCard } from '../core/describe';
-import { abilityIcon, itemIcon, heroPortrait } from '../engine/icons';
+import { abilityIcon, itemIcon, neutralItemIcon, heroPortrait } from '../engine/icons';
 import { WORLD_SCALE } from '../engine/scale';
 import { Game } from '../systems/game';
 import type { InputController } from '../systems/input';
@@ -1835,6 +1835,7 @@ export class Hud {
       const gradeGamble = g.neutralGradeUpQuote(s.id, false);
       const neutralTip = this.registerTip(`neutral-${s.id}`, buildNeutralItemCard(def));
       stashHtml += `<div class="svc-row"${neutralTip}>
+        <img class="svc-ico" src="${neutralItemIcon(def)}" alt="">
         <div class="svc-main"><b>${def.name}</b> <em>T${def.tier} ·×${s.count}</em><div class="rr-sub">${def.lore}</div></div>
         <div class="svc-actions">
           <button class="btn small" data-neq="${s.id}">Equip → ${activeName}</button>
@@ -1847,8 +1848,10 @@ export class Hud {
       </div>`;
     }
     const slotHtml = g.party.map((rec, i) => {
-      const n = rec.neutralSlot ? REG.neutralItem(rec.neutralSlot.id).name : '—';
+      const ndef = rec.neutralSlot ? REG.neutralItem(rec.neutralSlot.id) : null;
+      const n = ndef ? ndef.name : '—';
       return `<div class="svc-row">
+        ${ndef ? `<img class="svc-ico" src="${neutralItemIcon(ndef)}" alt="">` : ''}
         <div class="svc-main"><b>${REG.hero(rec.heroId).name}</b> <div class="rr-sub">neutral: ${n}</div></div>
         <div class="svc-actions">${rec.neutralSlot ? `<button class="btn small" data-nrec="${i}">Reclaim ${TUNING.tinkersBench.reclaimCost}g</button>` : ''}</div>
       </div>`;

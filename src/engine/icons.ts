@@ -3,8 +3,8 @@
 // vocabulary, colored per ability/item. Data URLs cached by key.
 // ------------------------------------------------------------------
 
-import type { AbilityDef, ItemDef, SilhouetteSpec } from '../core/types';
-import { ITEM_GLYPH_PATHS, ITEM_GLYPH_VIEWBOX } from './item-glyphs.generated';
+import type { AbilityDef, ItemDef, NeutralItemDef, SilhouetteSpec } from '../core/types';
+import { ITEM_ICON_PATHS, ITEM_GLYPH_PATHS, ITEM_GLYPH_VIEWBOX } from './item-glyphs.generated';
 
 const cache = new Map<string, string>();
 
@@ -15,11 +15,14 @@ const cache = new Map<string, string>();
 // for environments without Path2D), so the empty-assets floor is preserved.
 const silhouetteCache = new Map<string, Path2D | null>();
 
-function itemSilhouette(token: string): Path2D | null {
-  if (silhouetteCache.has(token)) return silhouetteCache.get(token)!;
-  const d = ITEM_GLYPH_PATHS[token];
-  const p = d && typeof Path2D !== 'undefined' ? new Path2D(d) : null;
-  silhouetteCache.set(token, p);
+// Lookup order: per-item id (every item gets its own shape) → glyph token default
+// → procedural. Cached per resolved key so each Path2D is parsed at most once.
+function itemSilhouette(id: string | undefined, token: string | undefined): Path2D | null {
+  const d = (id && ITEM_ICON_PATHS[id]) || (token && ITEM_GLYPH_PATHS[token]) || null;
+  if (!d) return null;
+  if (silhouetteCache.has(d)) return silhouetteCache.get(d)!;
+  const p = typeof Path2D !== 'undefined' ? new Path2D(d) : null;
+  silhouetteCache.set(d, p);
   return p;
 }
 
@@ -627,23 +630,41 @@ const TIER_COLORS: Record<string, string> = {
   core: '#ffd86a'
 };
 
-export function itemIcon(def: ItemDef, size = 64): string {
-  const key = `it:${def.id}:${size}`;
+// Neutral items live outside the six-slot tier ladder, so they get their own
+// rarity-style ramp (T1 common → T5 gold) instead of a TIER_COLORS lookup.
+const NEUTRAL_TIER_COLORS: Record<number, string> = {
+  1: '#b8c4d8',
+  2: '#9fdc5c',
+  3: '#7ec8f2',
+  4: '#c98bff',
+  5: '#ffd86a'
+};
+
+function renderItemIcon(key: string, id: string | undefined, glyph: string | undefined, color: string, size: number): string {
   const hit = cache.get(key);
   if (hit) return hit;
-  const color = TIER_COLORS[def.tier] ?? '#ffffff';
   const url = draw(size, (ctx, s) => {
     bg(ctx, s, color, '#141a26');
-    const sil = def.glyph ? itemSilhouette(def.glyph) : null;
+    const sil = itemSilhouette(id, glyph);
     if (sil) {
       drawSilhouette(ctx, s, sil, color);
     } else {
-      const glyph = (def.glyph && ITEM_GLYPHS[def.glyph]) || ITEM_GLYPHS.gem;
-      glyph(ctx, s, color);
+      const g = (glyph && ITEM_GLYPHS[glyph]) || ITEM_GLYPHS.gem;
+      g(ctx, s, color);
     }
   });
   cache.set(key, url);
   return url;
+}
+
+export function itemIcon(def: ItemDef, size = 64): string {
+  const color = def.iconColor ?? TIER_COLORS[def.tier] ?? '#ffffff';
+  return renderItemIcon(`it:${def.id}:${size}`, def.id, def.glyph, color, size);
+}
+
+export function neutralItemIcon(def: NeutralItemDef, size = 64): string {
+  const color = NEUTRAL_TIER_COLORS[def.tier] ?? '#c9b98a';
+  return renderItemIcon(`nt:${def.id}:${size}`, def.id, def.glyph, color, size);
 }
 
 // WS-F: a silhouette-derived bust. The head shape, weapon hint, and a 3-color

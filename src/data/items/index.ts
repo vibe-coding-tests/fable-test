@@ -247,6 +247,14 @@ function gemRarity(grade: GemGrade): ItemRarity {
   }
 }
 
+const GEM_COLORS: Record<string, string> = {
+  ruby: '#e0556b',
+  topaz: '#f2c14e',
+  sapphire: '#5b8cff',
+  emerald: '#4fcf6b',
+  diamond: '#dfe9ff'
+};
+
 export const GEM_ITEMS: ItemDef[] = GEM_DEFS.map((gem) => ({
   id: gem.id,
   name: gem.name,
@@ -256,7 +264,8 @@ export const GEM_ITEMS: ItemDef[] = GEM_DEFS.map((gem) => ({
   cost: GEM_ITEM_COST[gem.grade],
   passiveMods: {},
   lore: `Socket gem: ${Object.entries(gem.mods).map(([k, v]) => `+${v} ${k}`).join(', ')}.`,
-  glyph: 'gem'
+  glyph: 'gem',
+  iconColor: GEM_COLORS[gem.kind]
 }));
 
 export const ASSEMBLED: ItemDef[] = [

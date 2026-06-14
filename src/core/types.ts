@@ -665,6 +665,7 @@ export interface ItemDef {
   /** Authored "what it does" summary. Overrides the auto-generated description (src/core/describe.ts). */
   description?: string;
   glyph?: string;              // icon generator hint
+  iconColor?: string;          // overrides the tier color for the 2D icon tint (e.g. per gem kind)
   appearance?: ItemAppearanceSpec;
   attackVisual?: AttackVisualSpec[];
   elementOnHit?: Exclude<ElementId, 'neutral'>;

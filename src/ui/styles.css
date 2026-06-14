@@ -778,6 +778,7 @@ button:disabled { opacity: 0.45; cursor: default; }
   padding: 7px 10px; border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px; background: rgba(255, 255, 255, 0.03); margin-bottom: 6px;
 }
+.svc-row .svc-ico { width: 40px; height: 40px; flex: 0 0 auto; border-radius: 8px; }
 .svc-row .svc-main { flex: 1; min-width: 0; }
 .svc-row .svc-main .rr-sub { color: #8aa0c0; font-size: 11px; }
 .svc-actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
