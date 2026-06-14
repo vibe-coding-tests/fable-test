@@ -631,10 +631,15 @@ export type CutsceneTrigger =
   | { kind: 'boss-clear' }
   | { kind: 'raid-intro'; raidId: string }
   | { kind: 'raid-clear'; raidId?: string }
+  | { kind: 'item-first-hold'; itemId: string }
   | { kind: 'echo-milestone' }
   | { kind: 'elite-start' }
   | { kind: 'elite-persona'; index: number }
-  | { kind: 'champion-clear' };
+  | { kind: 'champion-clear' }
+  | { kind: 'outworld-first-contact' }
+  | { kind: 'outworld-all-clear' }
+  | { kind: 'seasonal-event'; eventId: string }
+  | { kind: 'legend-callout'; legendId: string };
 
 export type ShotAngle = 'wide' | 'close' | 'low' | 'high' | 'over-shoulder' | 'title-card';
 export type ShotMove = 'hold' | 'push-in' | 'pull-back' | 'crane' | 'snap';
@@ -676,7 +681,39 @@ export interface CutsceneDef {
   music?: SoundArchetype | StingerId | 'duck' | 'silence';
   beats: CutsceneBeat[];
   replayable?: boolean;
-  category?: 'Prologue' | 'Binds' | 'Regions' | 'Bosses' | 'Raids' | 'Items' | 'Endgame';
+  category?: 'Prologue' | 'Binds' | 'Regions' | 'Bosses' | 'Raids' | 'Items' | 'Endgame' | 'Claimants' | 'Festivals' | 'Legends';
+}
+
+// ---------- Event tie-ins ----------
+export type SeasonalModeKind =
+  | 'roshan-candy'
+  | 'wave-defense'
+  | 'endless-descent'
+  | 'hazard-survival'
+  | 'linear-crawl'
+  | 'act-trials';
+
+export interface SeasonalEventDef {
+  id: string;
+  name: string;
+  realEvent: string;
+  summary: string;
+  mode: SeasonalModeKind;
+  regionId: string;
+  cutsceneId: string;
+  codexTitle: string;
+  codexBody: string;
+  reward: { kind: 'gold' | 'loot-mark' | 'title'; amount?: number; label: string };
+}
+
+export interface LegendDef {
+  id: string;
+  name: string;
+  realMoment: string;
+  triggerSummary: string;
+  cutsceneId: string;
+  codexTitle: string;
+  codexBody: string;
 }
 
 // ---------- Dungeons ----------

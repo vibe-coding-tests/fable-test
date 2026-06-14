@@ -55,6 +55,15 @@ import { DungeonSession } from './dungeon-session';
 
 /** The Roshan raid — the only one that yields the Aegis, respawns on a timer, and re-drops cheese (§3.9). */
 const ROSHAN_RAID_ID = 'roshan-pit';
+const OUTWORLD_CLAIMANT_RAIDS = new Set([
+  'renegade-marshal',
+  'void-prelate',
+  'queen-of-blades',
+  'lord-of-terror',
+  'lord-of-destruction',
+  'lord-of-hatred',
+  'forsaken-queen'
+]);
 
 /** Top-tier power that only drops from bosses/raids — never vended by any shop or gold sink (§6). */
 export const GATED_TOP_TIER: ReadonlySet<string> = new Set([

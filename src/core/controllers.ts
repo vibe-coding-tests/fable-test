@@ -219,13 +219,13 @@ function zoneEscapePoint(z: Zone, u: Unit): Vec2 | null {
     if (!z.pos) return null;
     const dir = norm(sub(u.pos, z.pos));
     const safeDir = dir.x === 0 && dir.y === 0 ? v2(1, 0) : dir;
-    return add(z.pos, scale(safeDir, (z.radius ?? 0) + u.radius + 180));
+    return add(z.pos, scale(safeDir, (z.radius ?? 0) + u.radius + TUNING.ai.zoneEscapeMargin));
   }
   if (!z.a || !z.b) return null;
   const closest = closestOnSeg(u.pos, z.a, z.b);
   const dir = norm(sub(u.pos, closest));
   const safeDir = dir.x === 0 && dir.y === 0 ? v2(1, 0) : dir;
-  return add(closest, scale(safeDir, z.width / 2 + u.radius + 180));
+  return add(closest, scale(safeDir, z.width / 2 + u.radius + TUNING.ai.zoneEscapeMargin));
 }
 
 function evalCondition(sim: Sim, u: Unit, cond: GambitCondition, focus: Unit | undefined): boolean {
@@ -356,7 +356,7 @@ function resolveGambitTarget(sim: Sim, u: Unit, mode: GambitTargetMode, focus: U
       let bestUnit: Unit | undefined;
       for (const o of sim.unitsArr) {
         if (!enemyCandidate(sim, u, o)) continue;
-        const count = sim.unitsInRadius(o.pos, 360, (x) => enemyCandidate(sim, u, x)).length;
+        const count = sim.unitsInRadius(o.pos, TUNING.ai.clusterRadius, (x) => enemyCandidate(sim, u, x)).length;
         if (count > bestCount) {
           bestCount = count;
           bestPoint = { ...o.pos };
@@ -415,12 +415,12 @@ function applyAction(sim: Sim, u: Unit, action: GambitAction, focus: Unit | unde
     }
     case 'kite': {
       if (!focus) return false;
-      const desired = action.distance ?? Math.max(320, Math.min(900, u.stats.attackRange * 0.85));
+      const desired = action.distance ?? Math.max(TUNING.ai.kiteActionMin, Math.min(TUNING.ai.kiteActionMax, u.stats.attackRange * TUNING.ai.kiteActionRangeFrac));
       const d = dist(u.pos, focus.pos);
       if (d < desired) {
         const away = norm(sub(u.pos, focus.pos));
         const dir = away.x === 0 && away.y === 0 ? v2(-1, 0) : away;
-        u.order = { kind: 'move', point: add(u.pos, scale(dir, desired - d + 160)) };
+        u.order = { kind: 'move', point: add(u.pos, scale(dir, desired - d + TUNING.ai.kiteActionStepBonus)) };
         return true;
       }
       u.order = { kind: 'attack-unit', uid: focus.uid };
@@ -436,7 +436,7 @@ function applyAction(sim: Sim, u: Unit, action: GambitAction, focus: Unit | unde
     }
     case 'retreat': {
       const home = u.ctrl.homePos ?? u.pos;
-      if (dist2(u.pos, home) < 100 * 100) return false;
+      if (dist2(u.pos, home) < TUNING.ai.retreatArriveDist * TUNING.ai.retreatArriveDist) return false;
       u.order = { kind: 'move', point: { ...home } };
       return true;
     }

@@ -36,23 +36,29 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, '..', '..');
 const PUBLIC_ASSETS = path.join(ROOT, 'public', 'assets');
 const MANIFEST_PATH = path.join(PUBLIC_ASSETS, 'manifest.json');
+// No-budget policy (DECISIONS 2026-06-13): download/repo size is explicitly NOT a
+// constraint. We ship a per-hero retextured GLB for every cohort member (80+ heroes)
+// and any HDRIs/props/music the theme wants. These caps are kept only as a sanity
+// ceiling against a runaway/corrupt build, set far above the real footprint — not as
+// a size gate. Per-file caps still guard against a single pathological asset.
+const GB = 1024 * 1024 * 1024;
 const DEFAULT_BUDGETS = {
-  maxTotalBytes: 90 * 1024 * 1024,
+  maxTotalBytes: 4 * GB,
   maxGroupBytes: {
-    creep: 35 * 1024 * 1024,
-    terrain: 28 * 1024 * 1024,
-    town: 18 * 1024 * 1024,
-    hero: 45 * 1024 * 1024,
-    env: 32 * 1024 * 1024,
-    ui: 5 * 1024 * 1024
+    creep: 1 * GB,
+    terrain: 1 * GB,
+    town: 1 * GB,
+    hero: 2 * GB,
+    env: 1 * GB,
+    ui: 256 * 1024 * 1024
   },
   maxFileBytesByGroup: {
-    creep: 8 * 1024 * 1024,
-    terrain: 10 * 1024 * 1024,
-    town: 8 * 1024 * 1024,
-    hero: 15 * 1024 * 1024,
-    env: 20 * 1024 * 1024,
-    ui: 4 * 1024 * 1024
+    creep: 64 * 1024 * 1024,
+    terrain: 64 * 1024 * 1024,
+    town: 64 * 1024 * 1024,
+    hero: 64 * 1024 * 1024,
+    env: 128 * 1024 * 1024,
+    ui: 32 * 1024 * 1024
   }
 };
 

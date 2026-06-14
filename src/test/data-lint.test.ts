@@ -14,7 +14,7 @@ import { ALL_TRAINERS } from '../data/trainers';
 import { ESPORTS_DENYLIST, denylistHit } from '../data/denylist';
 import { REG } from '../core/registry';
 import { ACTIVE_ELEMENTS, elementForAbility, elementForHero, elementForItemHit } from '../core/resonance';
-import { PHASE5_STARTER_ASSETS } from '../engine/assets';
+import { PHASE5_STARTER_ASSETS, ENABLED_HERO_COHORTS, heroBaseId } from '../engine/assets';
 import { HERO_LIKENESS_PROFILES } from '../engine/models';
 import { PERFORMANCE_BUDGET } from '../engine/performance';
 import type { AbilityDef, AnimGesture, AttackVisualKind, DropSource, EffectNode, ItemAppearancePart, ItemWeaponVisualKind, SoundArchetype, ValueRef, VfxArchetype } from '../core/types';
@@ -358,9 +358,17 @@ describe('data lint: Phase 4/5 polish infrastructure', () => {
     expect(PERFORMANCE_BUDGET.maxPixelRatio).toBeLessThanOrEqual(2);
   });
 
-  it('has a Phase 5 starter hero glTF manifest with procedural fallback', () => {
-    expect(PHASE5_STARTER_ASSETS.map((a) => a.heroId).sort()).toEqual(['crystal-maiden', 'earthshaker', 'juggernaut', 'lich', 'pudge', 'sniper'].sort());
+  it('ships a per-hero glTF manifest for every enabled cohort, with procedural fallback', () => {
+    const ids = new Set(PHASE5_STARTER_ASSETS.map((a) => a.heroId));
+    // The original starters stay shipped, now alongside the full KayKit cohorts.
+    for (const starter of ['crystal-maiden', 'earthshaker', 'juggernaut', 'lich', 'pudge', 'sniper']) {
+      expect(ids.has(starter), `${starter} shipped`).toBe(true);
+    }
+    // Knight + Mage + Barbarian + Rogue cohorts (no-budget policy: one file per hero).
+    expect(PHASE5_STARTER_ASSETS.length).toBe(80);
     for (const asset of PHASE5_STARTER_ASSETS) {
+      // Every shipped model belongs to an enabled humanoid cohort.
+      expect(ENABLED_HERO_COHORTS.has(heroBaseId(asset.heroId)), `${asset.heroId} cohort`).toBe(true);
       expect(asset.modelUrl).toMatch(/\.glb$/);
       expect(asset.clips.attack).toBeTruthy();
       expect(asset.clips.death).toBeTruthy();

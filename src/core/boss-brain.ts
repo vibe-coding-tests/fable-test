@@ -1,3 +1,4 @@
+import { TUNING } from '../data/tuning';
 import { combatProfile } from './combat-profile';
 import { dist2 } from './math2d';
 import { pickThreatTarget } from './threat';
@@ -40,7 +41,7 @@ export interface BossState {
   pref?: BossTargetPref;
 }
 
-const CLUSTER_RADIUS = 360;
+const CLUSTER_RADIUS = TUNING.ai.clusterRadius;
 const PHASE_RANK: Record<BossPhase, number> = { opening: 0, sustained: 1, pressure: 2, desperation: 3, enrage: 4 };
 
 function enemyOf(sim: Sim, boss: Unit, o: Unit): boolean {
@@ -61,10 +62,11 @@ export function bossPhaseOf(sim: Sim, boss: Unit): BossPhase {
 /** Seeded posture for a phase. Higher depth => more off-threat plays. Isolated rng. */
 function rollPref(sim: Sim, boss: Unit, phase: BossPhase, depth: number): BossTargetPref {
   const r = sim.rng.fork(boss.uid * 131 + phaseCode(phase) * 7 + Math.floor(sim.time));
+  const p = TUNING.ai.boss;
   switch (phase) {
-    case 'pressure': return r.chance(depth * 0.45) ? 'healer' : 'threat';
-    case 'enrage': return r.chance(depth * 0.5) ? 'cluster' : 'threat';
-    case 'desperation': return r.chance(depth * 0.5) ? 'kill' : 'threat';
+    case 'pressure': return r.chance(depth * p.prefHealerChance) ? 'healer' : 'threat';
+    case 'enrage': return r.chance(depth * p.prefClusterChance) ? 'cluster' : 'threat';
+    case 'desperation': return r.chance(depth * p.prefKillChance) ? 'kill' : 'threat';
     default: return 'threat'; // opening / sustained: honor the threat table
   }
 }
@@ -94,9 +96,10 @@ function reachableHealer(sim: Sim, boss: Unit): Unit | null {
     const d = dist2(o.pos, boss.pos);
     const hpNeed = 1 - o.hp / Math.max(1, o.stats.maxHp);
     const threat = boss.ctrl.threat?.[o.uid] ?? 0;
-    const lowThreat = 1 / (1 + threat / 600);
-    const reach = 1 / (1 + d / (900 * 900));
-    const score = hpNeed * 2.2 + lowThreat * 0.9 + reach * 0.45;
+    const b = TUNING.ai.boss;
+    const lowThreat = 1 / (1 + threat / b.healerThreatNorm);
+    const reach = 1 / (1 + d / (b.healerReachDist * b.healerReachDist));
+    const score = hpNeed * b.healerHpNeed + lowThreat * b.healerLowThreat + reach * b.healerReach;
     if (score > bestScore || (score === bestScore && best !== null && o.uid < best.uid)) {
       bestScore = score;
       best = o;
@@ -177,11 +180,12 @@ function partyClusterCount(sim: Sim, boss: Unit): number {
 }
 
 function mechanicBase(kind: BossMechanicKind): number {
+  const b = TUNING.ai.boss.mechanicBase;
   switch (kind) {
-    case 'enrage': return 100;
-    case 'signature': return 70;
-    case 'add-wave': return 55;
-    case 'zone': return 45;
+    case 'enrage': return b.enrage;
+    case 'signature': return b.signature;
+    case 'add-wave': return b.addWave;
+    case 'zone': return b.zone;
   }
 }
 

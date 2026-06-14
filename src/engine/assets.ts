@@ -15,49 +15,11 @@ export interface HeroAssetManifestEntry {
   fallback: 'procedural';
 }
 
-export const PHASE5_STARTER_ASSETS: HeroAssetManifestEntry[] = [
-  'juggernaut',
-  'crystal-maiden',
-  'pudge',
-  'earthshaker',
-  'sniper',
-  'lich'
-].map((heroId) => ({
-  heroId,
-  modelUrl: `/assets/heroes/${heroId}.glb`,
-  clips: { idle: 'idle', run: 'run', attack: 'attack', cast: 'cast', channel: 'channel', death: 'death' },
-  sockets: ['weapon', 'back', 'shoulder'],
-  fallback: 'procedural'
-}));
-
-/**
- * Heroes whose authored glTF is actually shipped in /public/assets/heroes.
- * Gating here keeps the runtime from firing 404s (clean console) for heroes whose
- * GLB hasn't shipped yet, while the whole pipeline + fallback stays wired and tested.
- * The six starters ship as CC0 KayKit Adventurers bases retextured to each hero's
- * palette (VFX_OVERHAUL WS-J batch 13; see scripts/assets/specs/heroes.json + ASSETS.md).
- * Asset policy: original + generated + CC0/CC-BY only, never Valve.
- */
-export const ENABLED_HERO_MODELS: ReadonlySet<string> = new Set<string>([
-  'juggernaut',
-  'crystal-maiden',
-  'pudge',
-  'earthshaker',
-  'sniper',
-  'lich'
-]);
-
-/** The manifest entry for a hero, but only when its model is actually available. */
-export function heroAssetEntry(heroId: string | undefined): HeroAssetManifestEntry | null {
-  if (!heroId || !ENABLED_HERO_MODELS.has(heroId)) return null;
-  return PHASE5_STARTER_ASSETS.find((a) => a.heroId === heroId) ?? null;
-}
-
 // ------------------------------------------------------------------
-// WS-A0: shared base meshes + runtime recolor (VFX_ASSETS §2-3).
-// One CC0 base per archetype serves a whole cohort; the loader caches PER BASE
-// (so 122 heroes trigger ~16 loads, not 122) and the renderer recolors the clone
-// to each hero's three-color palette. Procedural rigs remain the floor: a hero
+// WS-A: shared base meshes + per-hero retexture (VFX_ASSETS §2-3).
+// One CC0 base per archetype serves a whole cohort; the build retextures a copy
+// to each hero's three-color palette (build_assets.mjs recolorToPalette) and the
+// loader still resolves per-hero GLBs. Procedural rigs remain the floor: a hero
 // with base 'procedural', or any base whose file has not shipped, simply keeps
 // its hand-tuned primitive likeness.
 // ------------------------------------------------------------------
@@ -112,6 +74,59 @@ export const HERO_BASE: Readonly<Record<string, HeroBaseId>> = (() => {
 export function heroBaseId(heroId: string | undefined): HeroBaseId {
   if (!heroId) return 'procedural';
   return HERO_BASE[heroId] ?? 'procedural';
+}
+
+// ------------------------------------------------------------------
+// Shipped hero GLBs (VFX_ASSETS WS-A). Every hero in an enabled CC0 cohort gets
+// its own retextured KayKit Adventurers GLB built by scripts/assets/build_assets.mjs
+// (palette recolor + clip trim), so the manifest below is derived straight from the
+// cohort map rather than hand-listed. Storage is no longer a constraint (no-budget
+// policy, DECISIONS 2026-06-13): we ship a per-hero file for every cohort member.
+// Gating still keeps the runtime from firing 404s for cohorts whose art hasn't been
+// built, while the whole pipeline + procedural fallback stays wired and tested.
+// Asset policy: original + generated + CC0/CC-BY only, never Valve.
+// ------------------------------------------------------------------
+
+/** KayKit humanoid cohorts whose per-hero GLBs are actually built + shipped. */
+export const ENABLED_HERO_COHORTS: ReadonlySet<HeroBaseId> = new Set<HeroBaseId>([
+  'knight', 'mage', 'barbarian', 'rogue'
+]);
+
+// After the build renames KayKit's 76-clip universal rig down to our six logical
+// clips, every shipped GLB exposes the same names; only the mage cohort ships a
+// distinct channel clip (Spellcast_Long), so its entry advertises one.
+function cohortClips(base: HeroBaseId): HeroAssetManifestEntry['clips'] {
+  return base === 'mage'
+    ? { idle: 'idle', run: 'run', attack: 'attack', cast: 'cast', channel: 'channel', death: 'death' }
+    : { idle: 'idle', run: 'run', attack: 'attack', cast: 'cast', death: 'death' };
+}
+
+export const PHASE5_STARTER_ASSETS: HeroAssetManifestEntry[] = (() => {
+  const out: HeroAssetManifestEntry[] = [];
+  for (const [base, ids] of Object.entries(HERO_COHORTS) as [Exclude<HeroBaseId, 'procedural'>, string[]][]) {
+    if (!ENABLED_HERO_COHORTS.has(base)) continue;
+    for (const heroId of ids) {
+      out.push({
+        heroId,
+        modelUrl: `/assets/heroes/${heroId}.glb`,
+        clips: cohortClips(base),
+        sockets: ['weapon', 'back', 'shoulder'],
+        fallback: 'procedural'
+      });
+    }
+  }
+  return out.sort((a, b) => a.heroId.localeCompare(b.heroId));
+})();
+
+/** Heroes whose authored glTF is actually shipped in /public/assets/heroes. */
+export const ENABLED_HERO_MODELS: ReadonlySet<string> = new Set<string>(
+  PHASE5_STARTER_ASSETS.map((a) => a.heroId)
+);
+
+/** The manifest entry for a hero, but only when its model is actually available. */
+export function heroAssetEntry(heroId: string | undefined): HeroAssetManifestEntry | null {
+  if (!heroId || !ENABLED_HERO_MODELS.has(heroId)) return null;
+  return PHASE5_STARTER_ASSETS.find((a) => a.heroId === heroId) ?? null;
 }
 
 /**

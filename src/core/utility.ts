@@ -341,10 +341,16 @@ function enemyCandidate(sim: Sim, u: Unit, o: Unit): boolean {
 
 export function dangerousScore(o: Unit): number {
   const attackDps = o.stats.damage / Math.max(0.2, o.stats.attackInterval);
-  const casterBias = o.abilities.some((a) => a.level > 0 && a.cooldownUntil <= 0 && a.def.targeting !== 'passive' && a.def.targeting !== 'aura') ? 120 : 0;
-  const heroBias = o.kind === 'hero' ? 150 : 0;
-  const lowHpPenalty = (1 - o.hp / Math.max(1, o.stats.maxHp)) * 80;
+  const casterBias = o.abilities.some((a) => a.level > 0 && a.cooldownUntil <= 0 && a.def.targeting !== 'passive' && a.def.targeting !== 'aura') ? TUNING.ai.casterBias : 0;
+  const heroBias = o.kind === 'hero' ? TUNING.ai.heroBias : 0;
+  const lowHpPenalty = (1 - o.hp / Math.max(1, o.stats.maxHp)) * TUNING.ai.lowHpPenalty;
   return attackDps + casterBias + heroBias - lowHpPenalty;
+}
+
+/** Extra ai-depth past the normal-tier baseline (0 at default, up to ~0.55 at Hell). */
+function aiDepthBonus(u: Unit): number {
+  const depth = u.ctrl.aiDepth ?? TUNING.ai.bossAiDepth;
+  return Math.max(0, depth - TUNING.ai.depthRefAiDepth);
 }
 
 function dangerNorm(o: Unit): number {
@@ -463,9 +469,10 @@ function bossPresent(sim: Sim, u: Unit): boolean {
  */
 export function raidPeelTarget(sim: Sim, u: Unit, profile: CombatProfile): Unit | null {
   if (profile.posture !== 'frontline' || !bossPresent(sim, u)) return null;
-  const depthBonus = Math.max(0, (u.ctrl.aiDepth ?? TUNING.ai.bossAiDepth) - TUNING.bossTierAiDepth.normal);
-  const searchRadius = 800 + depthBonus * 260;
-  const menaceRadius = 450 + depthBonus * 160;
+  const depthBonus = aiDepthBonus(u);
+  const r = TUNING.ai.raid;
+  const searchRadius = r.peelSearch + depthBonus * r.peelSearchPerDepth;
+  const menaceRadius = r.peelMenace + depthBonus * r.peelMenacePerDepth;
   let best: Unit | null = null;
   let bestD = Infinity;
   sim.forEachNearbyUnit(u.pos, searchRadius + 20, (e) => {
@@ -487,12 +494,12 @@ export function raidPeelTarget(sim: Sim, u: Unit, profile: CombatProfile): Unit 
 
 function raidSignatureScatterOrder(sim: Sim, u: Unit): Order | null {
   if (!bossPresent(sim, u)) return null;
-  const depthBonus = Math.max(0, (u.ctrl.aiDepth ?? TUNING.ai.bossAiDepth) - TUNING.bossTierAiDepth.normal);
-  const earlyMargin = 260 + depthBonus * 160;
+  const r = TUNING.ai.raid;
+  const earlyMargin = r.scatterMargin + aiDepthBonus(u) * r.scatterMarginPerDepth;
   for (const z of sim.zones) {
     if (z.team === u.team || !z.tickEffects || z.shape !== 'circle' || !z.pos) continue;
     const radius = z.radius ?? 0;
-    if (radius < 420) continue;
+    if (radius < r.scatterMinRadius) continue;
     const harms = z.tickEffects.some((e) => e.kind === 'damage') && z.tickAffects !== 'allies';
     if (!harms) continue;
     if (dist2(u.pos, z.pos) > (radius + earlyMargin) * (radius + earlyMargin)) continue;
@@ -531,15 +538,16 @@ function woundedRaidAlliesNear(sim: Sim, team: Team, center: Vec2, radius: numbe
 
 function raidStackForHealOrder(sim: Sim, u: Unit): Order | null {
   if (!bossPresent(sim, u)) return null;
-  const depthBonus = Math.max(0, (u.ctrl.aiDepth ?? TUNING.ai.bossAiDepth) - TUNING.bossTierAiDepth.normal);
-  const stackHpPct = 0.72 + depthBonus * 0.08;
+  const depthBonus = aiDepthBonus(u);
+  const r = TUNING.ai.raid;
+  const stackHpPct = r.stackHpPct + depthBonus * r.stackHpPctPerDepth;
   if (u.hp / Math.max(1, u.stats.maxHp) >= stackHpPct) return null;
   const carrier = readyMekCarrier(sim, u);
   if (!carrier || carrier.uid === u.uid) return null;
-  const stackRange = 1700 + depthBonus * 360;
+  const stackRange = r.stackRange + depthBonus * r.stackRangePerDepth;
   if (woundedRaidAlliesNear(sim, u.team, carrier.pos, stackRange) < 2) return null;
   const d = dist(u.pos, carrier.pos);
-  if (d <= 650 || d > stackRange) return null;
+  if (d <= r.stackMinDist || d > stackRange) return null;
   return { kind: 'move', point: { ...carrier.pos } };
 }
 
@@ -551,7 +559,9 @@ function manaAdjustedScore(u: Unit, score: number, manaCost: number): number {
   const floor = TUNING.ai.manaFloorPct;
   if (afterPct >= floor) return score;
   const pressure = Math.min(1, (floor - afterPct) / Math.max(0.01, floor));
-  return score * Math.max(0.25, 1 - pressure * TUNING.ai.manaConservationWeight);
+  // §5.7: deeper-AI units husband mana harder (difficulty plays better, not just bigger).
+  const weight = TUNING.ai.manaConservationWeight * (1 + aiDepthBonus(u) * TUNING.ai.depthDisciplineGain);
+  return score * Math.max(0.25, 1 - pressure * weight);
 }
 
 function finalAbilityScore(u: Unit, score: number, intent: AbilityIntent, order: Order, focus: Unit | null, manaCost = 0, clusterCount = Infinity, isUlt = false): number {
@@ -562,16 +572,17 @@ function finalAbilityScore(u: Unit, score: number, intent: AbilityIntent, order:
 
   const boss = u.ctrl.kind === 'boss' ? u.ctrl.boss : undefined;
   if (boss) {
-    if (boss.pref === 'cluster' && intent.aoe) out *= 1.28;
-    if (boss.pref === 'kill' && intent.offensive && !intent.aoe) out *= 1.22;
-    if (boss.pref === 'healer' && (intent.hardControl || intent.softControl)) out *= 1.18;
-    if (boss.phase === 'enrage' && intent.offensive) out *= 1.12;
-    if (boss.phase === 'desperation' && (intent.hardControl || intent.escape || intent.buff)) out *= 1.12;
+    const m = TUNING.ai.bossScore;
+    if (boss.pref === 'cluster' && intent.aoe) out *= m.cluster;
+    if (boss.pref === 'kill' && intent.offensive && !intent.aoe) out *= m.kill;
+    if (boss.pref === 'healer' && (intent.hardControl || intent.softControl)) out *= m.healer;
+    if (boss.phase === 'enrage' && intent.offensive) out *= m.enrage;
+    if (boss.phase === 'desperation' && (intent.hardControl || intent.escape || intent.buff)) out *= m.desperation;
   }
 
   if (isUlt && intent.aoe && clusterCount < TUNING.ai.holdClusterMin) {
     const depth = u.ctrl.aiDepth ?? TUNING.ai.bossAiDepth;
-    if (depth >= TUNING.bossTierAiDepth.nightmare) out *= Math.max(0.4, 1 - 0.45 * depth);
+    if (depth >= TUNING.bossTierAiDepth.nightmare) out *= Math.max(TUNING.ai.ultHoldFloor, 1 - TUNING.ai.ultHoldDiscount * depth);
   }
   return manaAdjustedScore(u, out, manaCost);
 }
@@ -583,11 +594,13 @@ function comboAdjustedScore(u: Unit, def: AbilityDef, now: number, score: number
   let mult = 1;
   for (const c of combo) {
     if (c.after !== def.id || c.before !== u.lastAbilityCastId) continue;
-    const window = c.windowSec ?? 4;
+    const window = c.windowSec ?? TUNING.ai.comboWindowSec;
     const age = now - u.lastAbilityCastAt;
     if (age < 0 || age > window) continue;
-    mult = Math.max(mult, c.weight ?? 1.25);
+    mult = Math.max(mult, c.weight ?? TUNING.ai.comboWeight);
   }
+  // §5.7: deeper-AI units lean into combo sequencing harder.
+  if (mult > 1) mult = 1 + (mult - 1) * (1 + aiDepthBonus(u) * TUNING.ai.depthDisciplineGain);
   return score * mult;
 }
 
@@ -700,7 +713,7 @@ function scoreItemByIntent(sim: Sim, u: Unit, slot: number, focus: Unit | null, 
     const dir = norm(sub(u.pos, awayFrom));
     const point = t === 'point-target' ? add(u.pos, scale(dir.x === 0 && dir.y === 0 ? v2(1, 0) : dir, 650)) : undefined;
     const order: Order = t === 'point-target' ? { kind: 'item', invSlot: slot, point } : { kind: 'item', invSlot: slot, uid: u.uid };
-    return { score: finalAbilityScore(u, bossBias * 1.15 * Math.max(0.8, w.survival), intent, order, focus, manaCost), order, slot: ITEM };
+    return { score: finalAbilityScore(u, bossBias * TUNING.ai.itemScore.intentEscape * Math.max(0.8, w.survival), intent, order, focus, manaCost), order, slot: ITEM };
   }
 
   if (intent.affectsAlly && (intent.heal || intent.buff)) {
@@ -745,7 +758,7 @@ function scoreItemByIntent(sim: Sim, u: Unit, slot: number, focus: Unit | null, 
   if (!target) return null;
   const value = targetValue(target);
   let s = bossBias * ((intent.offensive ? w.burst * value : 0) + controlW * (0.6 + dangerNorm(target)));
-  if ((intent.hardControl || active.piercesImmunity) && (target.castingUntil > sim.time || (target.channel && target.channel.until > sim.time))) s += 0.8;
+  if ((intent.hardControl || active.piercesImmunity) && (target.castingUntil > sim.time || (target.channel && target.channel.until > sim.time))) s += TUNING.ai.itemScore.interruptBonus;
   const order: Order = t === 'unit-target' ? { kind: 'item', invSlot: slot, uid: target.uid } : { kind: 'item', invSlot: slot, point: { ...target.pos } };
   return { score: finalAbilityScore(u, s, intent, order, focus, manaCost), order, slot: ITEM };
 }
@@ -759,6 +772,8 @@ function scoreItemActive(sim: Sim, u: Unit, slot: number, focus: Unit | null, pr
   const w = profile.weights;
   const ITEM = 1000 + slot; // tie-break bucket so items lose tie with same-score abilities
 
+  const is = TUNING.ai.itemScore;
+  const ir = TUNING.ai.itemRange;
   switch (it.defId) {
     case 'black-king-bar': {
       // pop magic immunity when a hard disable is landing or an enemy ult/channel is up nearby
@@ -766,33 +781,33 @@ function scoreItemActive(sim: Sim, u: Unit, slot: number, focus: Unit | null, pr
       if (!fighting) return null;
       const threatened = incomingDisable(sim, u, 1000) || enemyCastSeen(sim, u, 'ult', 1100) || enemyCastSeen(sim, u, 'channel', 1100);
       if (!threatened) return null;
-      return { score: 1.5 * Math.max(0.9, w.survival), order: { kind: 'item', invSlot: slot }, slot: ITEM };
+      return { score: is.bkb * Math.max(0.9, w.survival), order: { kind: 'item', invSlot: slot }, slot: ITEM };
     }
     case 'force-staff': {
       // self-peel out of a melee crush when low
       if (u.hp / Math.max(1, u.stats.maxHp) > profile.retreatHpPct) return null;
-      if (enemiesNear(sim, u, 360) === 0) return null;
-      return { score: 1.4 * Math.max(0.9, w.survival), order: { kind: 'item', invSlot: slot, uid: u.uid }, slot: ITEM };
+      if (enemiesNear(sim, u, ir.forceFight) === 0) return null;
+      return { score: is.force * Math.max(0.9, w.survival), order: { kind: 'item', invSlot: slot, uid: u.uid }, slot: ITEM };
     }
     case 'glimmer-cape': {
-      const ally = lowestWoundedAlly(sim, u, 800 + u.stats.castRangeBonus, TUNING.ai.saveAllyHpPct);
+      const ally = lowestWoundedAlly(sim, u, ir.glimmerAlly + u.stats.castRangeBonus, TUNING.ai.saveAllyHpPct);
       if (!ally) return null;
       const need = 1 - ally.hp / Math.max(1, ally.stats.maxHp);
-      const underFire = sim.time - ally.lastEnemyDamageAt < 1.5 ? 0.5 : 0;
-      return { score: w.saveAllies * (0.6 + need) + underFire, order: { kind: 'item', invSlot: slot, uid: ally.uid }, slot: ITEM };
+      const underFire = sim.time - ally.lastEnemyDamageAt < 1.5 ? is.glimmerUnderFire : 0;
+      return { score: w.saveAllies * (is.glimmer + need) + underFire, order: { kind: 'item', invSlot: slot, uid: ally.uid }, slot: ITEM };
     }
     case 'mekansm': {
-      const wounded = woundedAlliesNear(sim, u, 750, 0.7);
-      if (wounded < 2) return null;
-      return { score: w.saveAllies * (0.5 + wounded * 0.5), order: { kind: 'item', invSlot: slot }, slot: ITEM };
+      const wounded = woundedAlliesNear(sim, u, ir.mekWounded, ir.mekWoundedPct);
+      if (wounded < ir.mekMinWounded) return null;
+      return { score: w.saveAllies * (is.mekBase + wounded * is.mekPer), order: { kind: 'item', invSlot: slot }, slot: ITEM };
     }
     case 'euls-scepter': {
-      const range = 575 + u.stats.castRangeBonus;
+      const range = ir.euls + u.stats.castRangeBonus;
       const channeling = enemyChannelingInRange(sim, u, range);
       const target = channeling ?? bestOffensiveTarget(sim, u, focus, range);
       if (!target) return null;
-      let s = w.control * (0.6 + dangerNorm(target));
-      if (channeling) s += 0.8; // interrupt
+      let s = w.control * (is.eulsBase + dangerNorm(target));
+      if (channeling) s += is.interruptBonus; // interrupt
       return { score: s, order: { kind: 'item', invSlot: slot, uid: target.uid }, slot: ITEM };
     }
   }
@@ -808,32 +823,34 @@ function scoreBossItemActive(sim: Sim, u: Unit, slot: number, focus: Unit | null
   if (!itemReady(it, def, u, sim.time).ok) return null;
   const ITEM = 1000 + slot;
 
+  const is = TUNING.ai.itemScore;
+  const ir = TUNING.ai.itemRange;
   switch (it.defId) {
     case 'black-king-bar': {
       if (u.summary.magicImmune) return null;
       const threatened = incomingDisable(sim, u, 1200) || enemyCastSeen(sim, u, 'ult', 1300) || enemyCastSeen(sim, u, 'channel', 1300);
       if (!threatened) return null;
-      return { score: 3.2 * Math.max(0.9, profile.weights.survival), order: { kind: 'item', invSlot: slot }, slot: ITEM };
+      return { score: is.bossBkb * Math.max(0.9, profile.weights.survival), order: { kind: 'item', invSlot: slot }, slot: ITEM };
     }
     case 'glimmer-cape': {
       if (u.summary.invisible || u.summary.fading) return null;
       const hpPct = u.hp / Math.max(1, u.stats.maxHp);
-      if (hpPct > 0.45 && sim.time - u.lastEnemyDamageAt > 1.5) return null;
-      return { score: 2.3 * Math.max(0.8, profile.weights.survival), order: { kind: 'item', invSlot: slot, uid: u.uid }, slot: ITEM };
+      if (hpPct > ir.bossGlimmerHpPct && sim.time - u.lastEnemyDamageAt > 1.5) return null;
+      return { score: is.bossGlimmer * Math.max(0.8, profile.weights.survival), order: { kind: 'item', invSlot: slot, uid: u.uid }, slot: ITEM };
     }
     case 'euls-scepter': {
-      const range = 575 + u.stats.castRangeBonus;
+      const range = ir.euls + u.stats.castRangeBonus;
       const target = enemyChannelingInRange(sim, u, range) ?? bestOffensiveTarget(sim, u, focus, range);
       if (!target) return null;
-      return { score: 1.8 * Math.max(0.8, profile.weights.control), order: { kind: 'item', invSlot: slot, uid: target.uid }, slot: ITEM };
+      return { score: is.bossEuls * Math.max(0.8, profile.weights.control), order: { kind: 'item', invSlot: slot, uid: target.uid }, slot: ITEM };
     }
     case 'force-staff': {
       const hpPct = u.hp / Math.max(1, u.stats.maxHp);
-      if (hpPct > 0.35 || enemiesNear(sim, u, 420) === 0) return null;
-      return { score: 1.7 * Math.max(0.8, profile.weights.survival), order: { kind: 'item', invSlot: slot, uid: u.uid }, slot: ITEM };
+      if (hpPct > ir.bossForceHpPct || enemiesNear(sim, u, 420) === 0) return null;
+      return { score: is.bossForce * Math.max(0.8, profile.weights.survival), order: { kind: 'item', invSlot: slot, uid: u.uid }, slot: ITEM };
     }
   }
-  return scoreItemByIntent(sim, u, slot, focus, profile, 1.2);
+  return scoreItemByIntent(sim, u, slot, focus, profile, is.bossIntentBias);
 }
 
 /**
@@ -888,10 +905,10 @@ export function chooseUtilityOrder(sim: Sim, u: Unit, focus: Unit | null): Order
   // when the boss is enraged, when the party burns instead of giving ground (§6).
   if (profile.kiteDistance > 0 && !enemyBossEnraged(sim, u)) {
     const d = dist(u.pos, focus.pos);
-    if (d < profile.kiteDistance * 0.7) {
+    if (d < profile.kiteDistance * TUNING.ai.kiteCloseFrac) {
       const away = norm(sub(u.pos, focus.pos));
       const dir = away.x === 0 && away.y === 0 ? v2(-1, 0) : away;
-      return { kind: 'move', point: add(u.pos, scale(dir, profile.kiteDistance - d + 120)) };
+      return { kind: 'move', point: add(u.pos, scale(dir, profile.kiteDistance - d + TUNING.ai.kiteStepBonus)) };
     }
   }
   return { kind: 'attack-unit', uid: focus.uid };

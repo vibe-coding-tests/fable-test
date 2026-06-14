@@ -37,13 +37,14 @@ describe('procedural model cache', () => {
 
 describe('pluggable hero rig (Phase 5)', () => {
   it('resolves an asset entry only for heroes whose GLB is enabled', () => {
-    // The six starters ship a retextured CC0 GLB (WS-J batch 13) and resolve an entry.
+    // Every hero in an enabled KayKit cohort ships a retextured CC0 GLB + resolves an entry.
     for (const a of PHASE5_STARTER_ASSETS) {
       expect(ENABLED_HERO_MODELS.has(a.heroId), `${a.heroId} enabled`).toBe(true);
       expect(heroAssetEntry(a.heroId), `${a.heroId} entry`).not.toBeNull();
     }
-    // Heroes without a shipped GLB (and unknowns) never fire a load — clean console.
-    expect(heroAssetEntry('axe')).toBeNull();
+    // Creature-cohort + procedural-holdout heroes (and unknowns) never fire a load.
+    expect(heroAssetEntry('broodmother')).toBeNull(); // spider cohort, art not built yet
+    expect(heroAssetEntry('io')).toBeNull(); // procedural holdout
     expect(heroAssetEntry('unknown-hero')).toBeNull();
     expect(heroAssetEntry(undefined)).toBeNull();
     // The gate matches exactly the shipped manifest entries.

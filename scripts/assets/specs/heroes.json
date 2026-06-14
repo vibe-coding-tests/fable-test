@@ -1,16 +1,413 @@
 {
-  "_comment": "Phase 5 hero GLBs (VFX_OVERHAUL WS-J batch 13). CC0 KayKit Adventurers bases (Knight/Mage/Barbarian/Rogue), retextured to each hero's three-color palette via the build recolor step and trimmed to the six clips the animator drives (idle/run/attack/cast/channel/death). Raw bases live in tmp/asset_src/kaykit (gitignored); only the optimized output under public/assets/heroes is committed. materialMap maps KayKit's single *_texture atlas material to the palette's primary so each hero reads in its signature color.",
+  "_comment": "Phase 5 / VFX_ASSETS WS-A hero GLBs. Generated from hero data by src/test/_gen_hero_specs.test.ts — every hero in an enabled KayKit cohort (Knight/Mage/Barbarian/Rogue) gets its own retextured CC0 base, recolored to its three-color palette and trimmed to the clips the animator drives. Raw bases live in tmp/asset_src/kaykit (gitignored); only the optimized output under public/assets/heroes is committed. No-budget policy (DECISIONS 2026-06-13): one file per cohort hero, storage is not a constraint.",
   "items": [
     {
       "src": "tmp/asset_src/kaykit/Knight.glb",
-      "out": "heroes/juggernaut.glb",
+      "out": "heroes/abaddon.glb",
       "type": "model",
       "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
       "maxTex": 128,
-      "recolor": ["#c8742c", "#f3e3c2", "#7adfc4"],
-      "materialMap": { "texture": "primary" },
-      "renameClips": { "Idle": "idle", "Running_A": "run", "1H_Melee_Attack_Slice_Diagonal": "attack", "Spellcasting": "cast", "Death_A": "death" },
-      "keepClips": ["idle", "run", "attack", "cast", "death"]
+      "recolor": [
+        "#58d8c8",
+        "#1d3340",
+        "#d8fff8"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Melee_Attack_Slice_Diagonal": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Barbarian.glb",
+      "out": "heroes/alchemist.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#b8d84a",
+        "#5b3318",
+        "#f0d46a"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "2H_Melee_Attack_Chop": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Rogue.glb",
+      "out": "heroes/anti-mage.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#7c4dff",
+        "#1d1538",
+        "#d8c8ff"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Melee_Attack_Slice_Diagonal": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Mage.glb",
+      "out": "heroes/arc-warden.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#65d8ff",
+        "#1c2440",
+        "#f6f0a8"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "Spellcast_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death",
+        "Spellcast_Long": "channel"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "channel",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Barbarian.glb",
+      "out": "heroes/axe.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#b32621",
+        "#5b2a22",
+        "#ffb34d"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "2H_Melee_Attack_Chop": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Barbarian.glb",
+      "out": "heroes/beastmaster.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#b8723a",
+        "#3d2716",
+        "#f0c080"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "2H_Melee_Attack_Chop": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Rogue.glb",
+      "out": "heroes/bloodseeker.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#b01818",
+        "#2a0808",
+        "#ff9a5a"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Melee_Attack_Slice_Diagonal": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Rogue.glb",
+      "out": "heroes/bounty-hunter.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#d99a28",
+        "#4a2a12",
+        "#f2df7a"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Melee_Attack_Slice_Diagonal": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Barbarian.glb",
+      "out": "heroes/brewmaster.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#d8a048",
+        "#3a2410",
+        "#70c8ff"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "2H_Melee_Attack_Chop": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Barbarian.glb",
+      "out": "heroes/bristleback.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#d8a04a",
+        "#6a3520",
+        "#f7e0a0"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "2H_Melee_Attack_Chop": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Knight.glb",
+      "out": "heroes/chaos-knight.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#d84a32",
+        "#1a0a0a",
+        "#f0c060"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Melee_Attack_Slice_Diagonal": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Knight.glb",
+      "out": "heroes/chen.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#f4e4a0",
+        "#ffffff",
+        "#67513a"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Ranged_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Rogue.glb",
+      "out": "heroes/clinkz.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#ff6b2f",
+        "#1a1010",
+        "#ffd08a"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Ranged_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Knight.glb",
+      "out": "heroes/clockwerk.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#d85a32",
+        "#303848",
+        "#ffd48a"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Melee_Attack_Slice_Diagonal": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
     },
     {
       "src": "tmp/asset_src/kaykit/Mage.glb",
@@ -18,32 +415,272 @@
       "type": "model",
       "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
       "maxTex": 128,
-      "recolor": ["#7ec8f2", "#f4fbff", "#b8c4d8"],
-      "materialMap": { "texture": "primary" },
-      "renameClips": { "Idle": "idle", "Running_A": "run", "Spellcast_Shoot": "attack", "Spellcasting": "cast", "Spellcast_Long": "channel", "Death_A": "death" },
-      "keepClips": ["idle", "run", "attack", "cast", "channel", "death"]
+      "recolor": [
+        "#7ec8f2",
+        "#f4fbff",
+        "#b8c4d8"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "Spellcast_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death",
+        "Spellcast_Long": "channel"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "channel",
+        "death"
+      ]
     },
     {
       "src": "tmp/asset_src/kaykit/Mage.glb",
-      "out": "heroes/lich.glb",
+      "out": "heroes/dark-seer.glb",
       "type": "model",
       "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
       "maxTex": 128,
-      "recolor": ["#7ec8f2", "#2c4a78", "#d8f4ff"],
-      "materialMap": { "texture": "primary" },
-      "renameClips": { "Idle": "idle", "Running_A": "run", "Spellcast_Shoot": "attack", "Spellcasting": "cast", "Spellcast_Long": "channel", "Death_A": "death" },
-      "keepClips": ["idle", "run", "attack", "cast", "channel", "death"]
+      "recolor": [
+        "#8a5cff",
+        "#201838",
+        "#80d8ff"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "Spellcast_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death",
+        "Spellcast_Long": "channel"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "channel",
+        "death"
+      ]
     },
     {
-      "src": "tmp/asset_src/kaykit/Barbarian.glb",
-      "out": "heroes/pudge.glb",
+      "src": "tmp/asset_src/kaykit/Mage.glb",
+      "out": "heroes/dark-willow.glb",
       "type": "model",
       "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
       "maxTex": 128,
-      "recolor": ["#7a9b3a", "#d8a39b", "#8a4b2f"],
-      "materialMap": { "texture": "primary" },
-      "renameClips": { "Idle": "idle", "Running_A": "run", "2H_Melee_Attack_Chop": "attack", "Spellcasting": "cast", "Death_A": "death" },
-      "keepClips": ["idle", "run", "attack", "cast", "death"]
+      "recolor": [
+        "#d85cff",
+        "#1c1028",
+        "#ffb8e8"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "Spellcast_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death",
+        "Spellcast_Long": "channel"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "channel",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Knight.glb",
+      "out": "heroes/dawnbreaker.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#ffd36a",
+        "#b84a32",
+        "#fff3c0"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Melee_Attack_Slice_Diagonal": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Mage.glb",
+      "out": "heroes/dazzle.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#f05cff",
+        "#302040",
+        "#ffd8ff"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "Spellcast_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death",
+        "Spellcast_Long": "channel"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "channel",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Mage.glb",
+      "out": "heroes/death-prophet.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#78e0b0",
+        "#243830",
+        "#d8fff0"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "Spellcast_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death",
+        "Spellcast_Long": "channel"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "channel",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Mage.glb",
+      "out": "heroes/disruptor.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#70c8ff",
+        "#223a5a",
+        "#ffffff"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "Spellcast_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death",
+        "Spellcast_Long": "channel"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "channel",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Knight.glb",
+      "out": "heroes/dragon-knight.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#c84632",
+        "#314a38",
+        "#f0b05a"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Melee_Attack_Slice_Diagonal": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Rogue.glb",
+      "out": "heroes/drow-ranger.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#8ec8ff",
+        "#1e406b",
+        "#d8f0ff"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Ranged_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
     },
     {
       "src": "tmp/asset_src/kaykit/Barbarian.glb",
@@ -51,10 +688,1222 @@
       "type": "model",
       "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
       "maxTex": 128,
-      "recolor": ["#5b8cc8", "#a9743c", "#e8b15c"],
-      "materialMap": { "texture": "primary" },
-      "renameClips": { "Idle": "idle", "Running_A": "run", "2H_Melee_Attack_Chop": "attack", "Spellcasting": "cast", "Death_A": "death" },
-      "keepClips": ["idle", "run", "attack", "cast", "death"]
+      "recolor": [
+        "#5b8cc8",
+        "#a9743c",
+        "#e8b15c"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "2H_Melee_Attack_Chop": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Rogue.glb",
+      "out": "heroes/ember-spirit.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#ff6b2a",
+        "#ffd27a",
+        "#4a1308"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Melee_Attack_Slice_Diagonal": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Mage.glb",
+      "out": "heroes/enchantress.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#73d86b",
+        "#fff2a6",
+        "#345d2f"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "Spellcast_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death",
+        "Spellcast_Long": "channel"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "channel",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Knight.glb",
+      "out": "heroes/faceless-void.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#5a46c8",
+        "#1c163a",
+        "#c2b8ff"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Melee_Attack_Slice_Diagonal": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Mage.glb",
+      "out": "heroes/grimstroke.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#d84a7a",
+        "#201020",
+        "#f0d8ff"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "Spellcast_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death",
+        "Spellcast_Long": "channel"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "channel",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Barbarian.glb",
+      "out": "heroes/huskar.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#d84a2a",
+        "#ffd06a",
+        "#401510"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Ranged_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Mage.glb",
+      "out": "heroes/invoker.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#f8d36a",
+        "#a8e8ff",
+        "#7a3cff"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "Spellcast_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death",
+        "Spellcast_Long": "channel"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "channel",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Knight.glb",
+      "out": "heroes/juggernaut.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#c8742c",
+        "#f3e3c2",
+        "#7adfc4"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Melee_Attack_Slice_Diagonal": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Mage.glb",
+      "out": "heroes/keeper-of-the-light.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#ffe78a",
+        "#ffffff",
+        "#7aa8ff"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "Spellcast_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death",
+        "Spellcast_Long": "channel"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "channel",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Knight.glb",
+      "out": "heroes/kunkka.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#2a6d9a",
+        "#e8d8a0",
+        "#112940"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Melee_Attack_Slice_Diagonal": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Knight.glb",
+      "out": "heroes/legion-commander.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#c23b2a",
+        "#f0d48a",
+        "#642018"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Melee_Attack_Slice_Diagonal": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Mage.glb",
+      "out": "heroes/lich.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#7ec8f2",
+        "#2c4a78",
+        "#d8f4ff"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "Spellcast_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death",
+        "Spellcast_Long": "channel"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "channel",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Barbarian.glb",
+      "out": "heroes/lifestealer.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#b24a32",
+        "#34120d",
+        "#e8b082"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "2H_Melee_Attack_Chop": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Mage.glb",
+      "out": "heroes/lina.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#ff6b30",
+        "#ffd36b",
+        "#7a1f12"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "Spellcast_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death",
+        "Spellcast_Long": "channel"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "channel",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Mage.glb",
+      "out": "heroes/lion.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#a347ff",
+        "#ffca66",
+        "#3d124f"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "Spellcast_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death",
+        "Spellcast_Long": "channel"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "channel",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Rogue.glb",
+      "out": "heroes/luna.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#2e3f78",
+        "#d8e5ff",
+        "#b9b0ff"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Ranged_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Barbarian.glb",
+      "out": "heroes/magnus.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#7a4a32",
+        "#d8b080",
+        "#331a14"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "2H_Melee_Attack_Chop": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Rogue.glb",
+      "out": "heroes/marci.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#f0b06a",
+        "#3a2418",
+        "#ffe8c0"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Melee_Attack_Slice_Diagonal": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Knight.glb",
+      "out": "heroes/mars.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#d83a2e",
+        "#d8b05a",
+        "#3a1010"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Melee_Attack_Slice_Diagonal": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Rogue.glb",
+      "out": "heroes/meepo.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#78b85a",
+        "#4a2a18",
+        "#d8f0a0"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Melee_Attack_Slice_Diagonal": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Rogue.glb",
+      "out": "heroes/mirana.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#9ec8ff",
+        "#f3f7ff",
+        "#4a5c94"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Ranged_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Rogue.glb",
+      "out": "heroes/monkey-king.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#d8a048",
+        "#4a2410",
+        "#fff0a0"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Melee_Attack_Slice_Diagonal": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Mage.glb",
+      "out": "heroes/natures-prophet.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#4dbd62",
+        "#8b5a2b",
+        "#d8ffd8"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "Spellcast_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death",
+        "Spellcast_Long": "channel"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "channel",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Mage.glb",
+      "out": "heroes/necrophos.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#84d86a",
+        "#283820",
+        "#d8ffb0"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "Spellcast_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death",
+        "Spellcast_Long": "channel"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "channel",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Barbarian.glb",
+      "out": "heroes/ogre-magi.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#3d8cff",
+        "#d84a32",
+        "#ffe08a"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "2H_Melee_Attack_Chop": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Knight.glb",
+      "out": "heroes/omniknight.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#f8e59a",
+        "#ffffff",
+        "#5a7cc8"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Melee_Attack_Slice_Diagonal": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Mage.glb",
+      "out": "heroes/outworld-destroyer.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#64d8ff",
+        "#222244",
+        "#d8f7ff"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "Spellcast_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death",
+        "Spellcast_Long": "channel"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "channel",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Knight.glb",
+      "out": "heroes/pangolier.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#d8a04a",
+        "#2c2440",
+        "#80d8ff"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Melee_Attack_Slice_Diagonal": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Rogue.glb",
+      "out": "heroes/phantom-assassin.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#5560a8",
+        "#cfd6ff",
+        "#1c2038"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Melee_Attack_Slice_Diagonal": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Rogue.glb",
+      "out": "heroes/phantom-lancer.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#4a8cff",
+        "#18224a",
+        "#d8e8ff"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Melee_Attack_Slice_Diagonal": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Barbarian.glb",
+      "out": "heroes/pudge.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#7a9b3a",
+        "#d8a39b",
+        "#8a4b2f"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "2H_Melee_Attack_Chop": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Mage.glb",
+      "out": "heroes/pugna.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#9aff70",
+        "#243818",
+        "#f0ffd8"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "Spellcast_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death",
+        "Spellcast_Long": "channel"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "channel",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Mage.glb",
+      "out": "heroes/queen-of-pain.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#d84aff",
+        "#2a102e",
+        "#ffb0d8"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "Spellcast_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death",
+        "Spellcast_Long": "channel"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "channel",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Mage.glb",
+      "out": "heroes/razor.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#72d8ff",
+        "#1c2a5a",
+        "#ffffff"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "Spellcast_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death",
+        "Spellcast_Long": "channel"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "channel",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Rogue.glb",
+      "out": "heroes/riki.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#6a4cff",
+        "#1c1436",
+        "#c8b8ff"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Melee_Attack_Slice_Diagonal": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Mage.glb",
+      "out": "heroes/rubick.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#7ad85a",
+        "#204020",
+        "#d8ffd0"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "Spellcast_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death",
+        "Spellcast_Long": "channel"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "channel",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Mage.glb",
+      "out": "heroes/shadow-shaman.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#f0c45c",
+        "#4a2410",
+        "#70d8ff"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "Spellcast_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death",
+        "Spellcast_Long": "channel"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "channel",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Mage.glb",
+      "out": "heroes/silencer.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#b78cff",
+        "#e8e8ff",
+        "#332255"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "Spellcast_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death",
+        "Spellcast_Long": "channel"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "channel",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Mage.glb",
+      "out": "heroes/skywrath-mage.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#7ec8ff",
+        "#f7e39a",
+        "#244d86"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "Spellcast_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death",
+        "Spellcast_Long": "channel"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "channel",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Knight.glb",
+      "out": "heroes/slardar.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#8050d8",
+        "#2a1a4a",
+        "#cbb8ff"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Melee_Attack_Slice_Diagonal": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Barbarian.glb",
+      "out": "heroes/slark.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#2a6f8f",
+        "#1b2730",
+        "#9bdcff"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "2H_Melee_Attack_Chop": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
     },
     {
       "src": "tmp/asset_src/kaykit/Rogue.glb",
@@ -62,10 +1911,475 @@
       "type": "model",
       "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
       "maxTex": 128,
-      "recolor": ["#c8a05c", "#5c4a32", "#ffd27f"],
-      "materialMap": { "texture": "primary" },
-      "renameClips": { "Idle": "idle", "Running_A": "run", "1H_Ranged_Shoot": "attack", "Spellcasting": "cast", "Death_A": "death" },
-      "keepClips": ["idle", "run", "attack", "cast", "death"]
+      "recolor": [
+        "#c8a05c",
+        "#5c4a32",
+        "#ffd27f"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Ranged_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Mage.glb",
+      "out": "heroes/storm-spirit.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#58a8ff",
+        "#ffffff",
+        "#1c3c7a"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "Spellcast_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death",
+        "Spellcast_Long": "channel"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "channel",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Knight.glb",
+      "out": "heroes/sven.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#3c5f94",
+        "#d9dde6",
+        "#ff8a3d"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Melee_Attack_Slice_Diagonal": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Rogue.glb",
+      "out": "heroes/templar-assassin.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#d88cff",
+        "#3a1a5a",
+        "#ffe8ff"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Ranged_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Knight.glb",
+      "out": "heroes/timbersaw.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#d85a32",
+        "#4a4a4a",
+        "#b8f0ff"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Melee_Attack_Slice_Diagonal": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Barbarian.glb",
+      "out": "heroes/troll-warlord.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#4a9ad8",
+        "#d85a2a",
+        "#f0e0a0"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Ranged_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Barbarian.glb",
+      "out": "heroes/underlord.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#6fd84f",
+        "#301830",
+        "#f0a05a"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "2H_Melee_Attack_Chop": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Barbarian.glb",
+      "out": "heroes/undying.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#5aa36a",
+        "#233323",
+        "#d8e8aa"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "2H_Melee_Attack_Chop": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Mage.glb",
+      "out": "heroes/vengeful-spirit.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#5d75ff",
+        "#c7d4ff",
+        "#252a72"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "Spellcast_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death",
+        "Spellcast_Long": "channel"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "channel",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Rogue.glb",
+      "out": "heroes/void-spirit.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#9a5cff",
+        "#181028",
+        "#ff8ad8"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Melee_Attack_Slice_Diagonal": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Mage.glb",
+      "out": "heroes/warlock.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#9b2d2d",
+        "#3a1010",
+        "#f2c06b"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "Spellcast_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death",
+        "Spellcast_Long": "channel"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "channel",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Rogue.glb",
+      "out": "heroes/windranger.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#6fd46f",
+        "#f5d06a",
+        "#b84028"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Ranged_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Mage.glb",
+      "out": "heroes/winter-wyvern.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#9fe8ff",
+        "#ffffff",
+        "#3d75b8"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "Spellcast_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death",
+        "Spellcast_Long": "channel"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "channel",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Mage.glb",
+      "out": "heroes/witch-doctor.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#7c4bd8",
+        "#39c46a",
+        "#f4e37a"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "Spellcast_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death",
+        "Spellcast_Long": "channel"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "channel",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Knight.glb",
+      "out": "heroes/wraith-king.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#41d878",
+        "#143821",
+        "#d8ffd8"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "1H_Melee_Attack_Slice_Diagonal": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "death"
+      ]
+    },
+    {
+      "src": "tmp/asset_src/kaykit/Mage.glb",
+      "out": "heroes/zeus.glb",
+      "type": "model",
+      "source": "KayKit Adventurers (Kay Lousberg) base, retextured by us — CC0",
+      "maxTex": 128,
+      "recolor": [
+        "#f5e76b",
+        "#ffffff",
+        "#4a70d8"
+      ],
+      "materialMap": {
+        "texture": "primary"
+      },
+      "renameClips": {
+        "Idle": "idle",
+        "Running_A": "run",
+        "Spellcast_Shoot": "attack",
+        "Spellcasting": "cast",
+        "Death_A": "death",
+        "Spellcast_Long": "channel"
+      },
+      "keepClips": [
+        "idle",
+        "run",
+        "attack",
+        "cast",
+        "channel",
+        "death"
+      ]
     }
   ]
 }

@@ -22,7 +22,7 @@ never imports `three` or reads renderer-only fields.
 | Surface | State |
 |---------|-------|
 | Hero likeness profiles | **122 / 122** unique, no duplicates (`engine/models.ts`) |
-| Hero GLBs enabled | **6 / 122** — `juggernaut, crystal-maiden, pudge, earthshaker, sniper, lich` (`ENABLED_HERO_MODELS`). Shared-base scaffolding shipped: `HERO_BASE` (122→16 cohorts) + runtime `recolorToPalette` + per-base loader cache, gated by `ENABLED_HERO_BASES` (empty until base art ships) |
+| Hero GLBs enabled | **80 / 122** — every hero in the four KayKit humanoid cohorts (Knight 17 + Mage 30 + Barbarian 15 + Rogue 18), each a per-hero retextured CC0 GLB (`ENABLED_HERO_MODELS`, derived from `HERO_COHORTS ∩ ENABLED_HERO_COHORTS`). Remaining 42 = creature cohorts (31) + procedural holdouts (11). **No-budget policy** (DECISIONS 2026-06-13): one file per cohort hero, ~118MB total. Shared-base recolor scaffolding (`ENABLED_HERO_BASES`, `loadBase`, runtime `recolorToPalette`) stays wired as an inert fallback |
 | Ability VFX coverage | **488 / 488** authored; archetypes incl. `vortex`/`dome`/`mine` |
 | Attack animation | weapon-driven (`attackStyleFor`): 8 styles incl. `bird-dive`, `creature-lunge` |
 | Cast/anim gestures | `AnimGesture` ×9, auto-resolved + hand-set on signatures |
@@ -186,10 +186,16 @@ bespoke generated GLB is a later, optional upgrade per hero.
   is inert and 404-free today; the 6 starters keep their dedicated retextured GLBs.
   Remaining: vendor the 4 KayKit base files, enable them, and wire the scene mount
   to prefer base+recolor. Gate: model-cache base-coverage + recolor tests — green.
-- **A1 — Knight + Mage cohorts** (the two biggest, 47 heroes) on shared bases.
-- **A2 — Barbarian + Rogue cohorts** (33 heroes).
+- **A1+A2 — Knight + Mage + Barbarian + Rogue cohorts (80 heroes). SHIPPED.**
+  No-budget policy: instead of one shared base recolored at runtime, every cohort
+  hero ships its own retextured CC0 GLB (`heroes/<id>.glb`, ~118MB total). The spec
+  (`scripts/assets/specs/heroes.json`) is generated from hero data — palette →
+  build recolor, `baseStats.attackRange` → melee/ranged/spell attack clip — and
+  `ENABLED_HERO_MODELS`/`PHASE5_STARTER_ASSETS` derive from `HERO_COHORTS ∩
+  ENABLED_HERO_COHORTS`. Reuses the proven `heroAssetEntry → mountHeroModel` path;
+  procedural fallback intact.
 - **A3 — creature cohort** (31 heroes) reusing the vendored creature GLBs +
-  creature clip wiring (WS-C).
+  creature clip wiring (WS-C). *Next up.*
 - **A4 — bespoke marquee retextures** (raid bosses + iconic heroes) as their own
   files, flipped on one at a time.
 

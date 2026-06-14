@@ -8,6 +8,15 @@ import { ICEWRACK } from './regions/icewrack';
 import { PHASE3_REGIONS } from './regions/phase3';
 
 const REGIONS: RegionDef[] = [TRANQUIL_VALE, NIGHTSILVER_WOODS, ICEWRACK, ...PHASE3_REGIONS];
+export const OUTWORLD_CLAIMANT_RAID_IDS = [
+  'renegade-marshal',
+  'void-prelate',
+  'queen-of-blades',
+  'lord-of-terror',
+  'lord-of-destruction',
+  'lord-of-hatred',
+  'forsaken-queen'
+];
 
 const setpieceShot = { angle: 'wide', move: 'push-in', palette: 'moonlit gold', mood: 'mythic' } as const;
 const stingerShot = { angle: 'title-card', move: 'hold', palette: 'biome grade', mood: 'revealing' } as const;
@@ -286,6 +295,198 @@ const CHAMPION_CLEAR: CutsceneDef = {
   ]
 };
 
+const AEGIS_FIRST_HOLD: CutsceneDef = {
+  id: 'item-aegis-of-the-immortal-first-hold',
+  title: 'A Held Promise',
+  tier: 'setpiece',
+  trigger: { kind: 'item-first-hold', itemId: 'aegis-of-the-immortal' },
+  skippable: true,
+  letterbox: true,
+  category: 'Items',
+  replayable: true,
+  beats: [
+    {
+      shot: { angle: 'high', move: 'crane', palette: 'roshan gold', mood: 'ancient bargain' },
+      stage: [{ kind: 'focus', target: 'item' }],
+      line: { speaker: 'Aegis of the Immortal', text: 'Roshan woke. You walked away. The Moon keeps that promise once.' },
+      sound: 'raid-clear',
+      hold: 3.6
+    },
+    {
+      shot: { angle: 'close', move: 'push-in', palette: 'white-gold', mood: 'held breath' },
+      stage: [{ kind: 'vfx', archetype: 'shield', color: '#ffd86a' }],
+      line: { speaker: 'Aegis of the Immortal', text: 'Die once. Stand once.' },
+      hold: 2.6
+    }
+  ]
+};
+
+const RAPIER_FIRST_HOLD: CutsceneDef = {
+  id: 'item-divine-rapier-first-hold',
+  title: 'A Victory Condition with a Handle',
+  tier: 'setpiece',
+  trigger: { kind: 'item-first-hold', itemId: 'divine-rapier' },
+  skippable: true,
+  letterbox: true,
+  category: 'Items',
+  replayable: true,
+  beats: [
+    {
+      shot: { angle: 'low', move: 'push-in', palette: 'sunblade gold', mood: 'dangerous' },
+      stage: [{ kind: 'vfx', archetype: 'global-mark', color: '#fff1a6' }],
+      line: { speaker: 'Divine Rapier', text: '{itemLore}' },
+      sound: 'raid-clear',
+      hold: 3.4
+    }
+  ]
+};
+
+const OUTWORLD_FIRST_CONTACT: CutsceneDef = {
+  id: 'outworld-first-contact',
+  title: 'The Seal Tears',
+  tier: 'setpiece',
+  trigger: { kind: 'outworld-first-contact' },
+  skippable: true,
+  letterbox: true,
+  category: 'Claimants',
+  replayable: true,
+  beats: [
+    {
+      shot: { angle: 'wide', move: 'crane', palette: 'wrong-world blue', mood: 'intrusion' },
+      stage: [{ kind: 'title', text: 'A grade that does not belong to this biome bleeds through the air.' }],
+      line: { speaker: 'The Seal', text: 'The Sundering rang farther than this world.' },
+      hold: 3.4
+    },
+    {
+      shot: { angle: 'low', move: 'push-in', palette: 'void and ember', mood: 'claimant' },
+      stage: [{ kind: 'focus', target: 'boss' }],
+      line: { speaker: '{claimant}', text: 'Something from outside has heard the Ancients calling.' },
+      sound: 'raid-clear',
+      hold: 3
+    }
+  ]
+};
+
+const OUTWORLD_ALL_CLEAR: CutsceneDef = {
+  id: 'outworld-all-clear',
+  title: 'Outworld Held',
+  tier: 'setpiece',
+  trigger: { kind: 'outworld-all-clear' },
+  skippable: true,
+  letterbox: true,
+  category: 'Claimants',
+  replayable: true,
+  beats: [
+    {
+      shot: { angle: 'wide', move: 'pull-back', palette: 'sealed horizon', mood: 'defended' },
+      stage: [{ kind: 'title', text: 'Every claimant from beyond has fallen.' }],
+      line: { speaker: 'The Seal', text: 'The world keeps its heart. For this turn of the Loop, outside stays outside.' },
+      sound: 'raid-clear',
+      hold: 4
+    }
+  ]
+};
+
+const SEASONAL_INTROS: CutsceneDef[] = [
+  {
+    id: 'seasonal-diretide-roshan-candy',
+    title: 'Roshan Wakes Hungry',
+    tier: 'setpiece',
+    trigger: { kind: 'seasonal-event', eventId: 'diretide-roshan-candy' },
+    skippable: true,
+    letterbox: true,
+    category: 'Festivals',
+    replayable: true,
+    beats: [
+      {
+        shot: { angle: 'low', move: 'push-in', palette: 'candy ember', mood: 'mischief' },
+        stage: [{ kind: 'focus', target: 'boss' }],
+        line: { speaker: 'Roshan', text: 'The Pit remembers hunger too. Bring tribute, or become it.' },
+        sound: 'raid-clear',
+        hold: 3.2
+      }
+    ]
+  },
+  {
+    id: 'seasonal-wraith-night-altar',
+    title: 'The Altar Holds',
+    tier: 'setpiece',
+    trigger: { kind: 'seasonal-event', eventId: 'wraith-night-altar' },
+    skippable: true,
+    letterbox: true,
+    category: 'Festivals',
+    replayable: true,
+    beats: [
+      {
+        shot: { angle: 'wide', move: 'crane', palette: 'frost crown', mood: 'siege' },
+        stage: [{ kind: 'title', text: 'Thirteen waves ring against the altar.' }],
+        line: { speaker: 'Wraith-Night', text: 'Count the dead king carefully. He counts himself more than once.' },
+        hold: 3.5
+      }
+    ]
+  },
+  {
+    id: 'seasonal-continuum-descent',
+    title: "Aghanim's Continuum Descent",
+    tier: 'setpiece',
+    trigger: { kind: 'seasonal-event', eventId: 'continuum-descent' },
+    skippable: true,
+    letterbox: true,
+    category: 'Festivals',
+    replayable: true,
+    beats: [
+      {
+        shot: { angle: 'high', move: 'crane', palette: 'arcane violet', mood: 'impossible map' },
+        stage: [{ kind: 'title', text: 'The next room is beside yesterday.' }],
+        line: { speaker: 'Aghanim', text: 'Down is such a limiting word.' },
+        sound: 'levelup',
+        hold: 3.4
+      }
+    ]
+  }
+];
+
+const LEGEND_CALLOUTS: CutsceneDef[] = [
+  {
+    id: 'legend-pit-remembers',
+    title: 'The Pit Remembers',
+    tier: 'stinger',
+    trigger: { kind: 'legend-callout', legendId: 'pit-remembers' },
+    skippable: true,
+    letterbox: false,
+    category: 'Legends',
+    replayable: true,
+    beats: [
+      {
+        shot: { angle: 'high', move: 'snap', palette: 'pit lightning', mood: 'crowd roar' },
+        stage: [{ kind: 'vfx', archetype: 'ground-aoe', color: '#9db8ff' }],
+        line: { speaker: 'Legend', text: 'The pit heard that Echo before.' },
+        sound: 'levelup',
+        hold: 2.6
+      }
+    ]
+  },
+  {
+    id: 'legend-hooked-home',
+    title: 'Hooked Home',
+    tier: 'stinger',
+    trigger: { kind: 'legend-callout', legendId: 'hooked-home' },
+    skippable: true,
+    letterbox: false,
+    category: 'Legends',
+    replayable: true,
+    beats: [
+      {
+        shot: { angle: 'over-shoulder', move: 'snap', palette: 'fountain white', mood: 'impossible angle' },
+        stage: [{ kind: 'vfx', archetype: 'hook', color: '#e9efff' }],
+        line: { speaker: 'Legend', text: 'A hook is a line. This one remembered home.' },
+        sound: 'capture',
+        hold: 2.6
+      }
+    ]
+  }
+];
+
 export const ALL_CUTSCENES: CutsceneDef[] = [
   PROLOGUE,
   BIND_FIRST,
@@ -298,5 +499,11 @@ export const ALL_CUTSCENES: CutsceneDef[] = [
   ECHO_MILESTONE,
   ELITE_OPEN,
   ...ELITE_PERSONAS,
-  CHAMPION_CLEAR
+  CHAMPION_CLEAR,
+  AEGIS_FIRST_HOLD,
+  RAPIER_FIRST_HOLD,
+  OUTWORLD_FIRST_CONTACT,
+  OUTWORLD_ALL_CLEAR,
+  ...SEASONAL_INTROS,
+  ...LEGEND_CALLOUTS
 ];

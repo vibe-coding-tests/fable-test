@@ -1,4 +1,4 @@
-import type { BossDef, CreepDef, CutsceneDef, DraftDef, DungeonDef, GymDef, HeroDef, ItemDef, LoreEntryDef, NeutralItemDef, RaidDef, RecruitmentQuestDef, RegionDef, RoomTemplate, TrainerDef, TrialDef } from './types';
+import type { BossDef, CreepDef, CutsceneDef, DraftDef, DungeonDef, GymDef, HeroDef, ItemDef, LegendDef, LoreEntryDef, NeutralItemDef, RaidDef, RecruitmentQuestDef, RegionDef, RoomTemplate, SeasonalEventDef, TrainerDef, TrialDef } from './types';
 
 // ---------------------------------------------------------------
 // Content registry. Data files register themselves; systems are
@@ -20,6 +20,8 @@ class Registry {
   raids = new Map<string, RaidDef>();
   loreEntries = new Map<string, LoreEntryDef>();
   cutscenes = new Map<string, CutsceneDef>();
+  seasonalEvents = new Map<string, SeasonalEventDef>();
+  legends = new Map<string, LegendDef>();
   dungeons = new Map<string, DungeonDef>();
   roomTemplates = new Map<string, RoomTemplate>();
   drafts = new Map<string, DraftDef>();
@@ -59,6 +61,12 @@ class Registry {
   }
   registerCutscene(def: CutsceneDef): void {
     this.cutscenes.set(def.id, def);
+  }
+  registerSeasonalEvent(def: SeasonalEventDef): void {
+    this.seasonalEvents.set(def.id, def);
+  }
+  registerLegend(def: LegendDef): void {
+    this.legends.set(def.id, def);
   }
   registerDungeon(def: DungeonDef): void {
     this.dungeons.set(def.id, def);
@@ -134,6 +142,16 @@ class Registry {
     if (!d) throw new Error(`unknown cutscene: ${id}`);
     return d;
   }
+  seasonalEvent(id: string): SeasonalEventDef {
+    const d = this.seasonalEvents.get(id);
+    if (!d) throw new Error(`unknown seasonal event: ${id}`);
+    return d;
+  }
+  legend(id: string): LegendDef {
+    const d = this.legends.get(id);
+    if (!d) throw new Error(`unknown legend: ${id}`);
+    return d;
+  }
   dungeon(id: string): DungeonDef {
     const d = this.dungeons.get(id);
     if (!d) throw new Error(`unknown dungeon: ${id}`);
@@ -171,6 +189,8 @@ class Registry {
     this.raids.clear();
     this.loreEntries.clear();
     this.cutscenes.clear();
+    this.seasonalEvents.clear();
+    this.legends.clear();
     this.dungeons.clear();
     this.roomTemplates.clear();
     this.drafts.clear();

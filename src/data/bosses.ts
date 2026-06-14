@@ -1,16 +1,20 @@
 import type { BossDef, ItemRarity, LootTable } from '../core/types';
 import { TUNING } from './tuning';
 
+// GAMEPLAY_2.0_REHAUL §3.3: every boss is an *efficient* themed home, classified
+// by its hero's combat identity so a str titan never hands out caster cores (and
+// vice versa). Covers the full boss roster; anything unlisted falls to the int lane.
 const AGILITY_CARRIES = new Set([
   'phantom-assassin', 'medusa', 'naga-siren', 'slark', 'broodmother', 'faceless-void', 'terrorblade', 'spectre',
-  'templar-assassin', 'drow-ranger'
+  'templar-assassin', 'drow-ranger', 'nyx-assassin', 'viper', 'ember-spirit'
 ]);
 const STRENGTH_TITANS = new Set([
   'pudge', 'lifestealer', 'doom', 'wraith-king', 'tidehunter', 'magnus', 'elder-titan', 'centaur-warrunner', 'sven', 'axe',
-  'dragon-knight'
+  'dragon-knight', 'sand-king', 'kunkka', 'slardar', 'night-stalker', 'undying', 'beastmaster', 'tiny', 'treant-protector'
 ]);
 const INTELLIGENCE_BOSSES = new Set([
-  'invoker', 'zeus', 'silencer', 'outworld-destroyer', 'skywrath-mage', 'tinker', 'lich', 'crystal-maiden', 'lina'
+  'invoker', 'zeus', 'silencer', 'outworld-destroyer', 'skywrath-mage', 'tinker', 'lich', 'crystal-maiden', 'lina',
+  'natures-prophet', 'enchantress', 'chen', 'warlock', 'visage', 'storm-spirit'
 ]);
 
 const BOSS_ITEM_RARITY: Partial<Record<string, ItemRarity>> = {
@@ -46,7 +50,8 @@ function themedLoot(heroId: string, rank: BossDef['rank']): LootTable {
   let assembledPool = ['aghanims-scepter', 'refresher-orb'];
   if (AGILITY_CARRIES.has(heroId)) {
     guaranteed = ['eaglesong'];
-    assembledPool = ['butterfly', 'eye-of-skadi', 'abyssal-blade', 'bloodthorn', 'diffusal-blade'];
+    // crit/attack carries are the efficient home for the crit cores (§3.3: "a Daedalus farms from a crit carry").
+    assembledPool = ['butterfly', 'eye-of-skadi', 'abyssal-blade', 'bloodthorn', 'diffusal-blade', 'daedalus', 'monkey-king-bar', 'mjollnir'];
   } else if (STRENGTH_TITANS.has(heroId)) {
     guaranteed = ['reaver'];
     assembledPool = ['heart-of-tarrasque', 'satanic', 'radiance', 'assault-cuirass', 'black-king-bar'];

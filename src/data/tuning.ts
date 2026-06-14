@@ -56,7 +56,59 @@ export const TUNING = {
     manaFloorPct: 0.18,
     manaConservationWeight: 0.5,
     holdClusterMin: 2,
-    itemIntentFallback: true
+    itemIntentFallback: true,
+    // --- GAMEPLAY 2.0 §5.4: scorer/heuristic constants pulled out of the AI files
+    // so a balance pass is a data edit, not a code edit. Values match the prior inline numbers.
+    casterBias: 120,            // a ready-to-cast enemy reads this much more dangerous
+    heroBias: 150,              // heroes outweigh creeps in danger/focus scoring
+    lowHpPenalty: 80,           // a near-dead enemy is discounted as a threat
+    clusterRadius: 360,         // AoE cluster sampling radius (scorer + boss brain + gambit)
+    zoneEscapeMargin: 180,      // step this far past a hostile zone edge when dodging
+    kiteCloseFrac: 0.7,         // kite when the focus is within this fraction of kiteDistance
+    kiteStepBonus: 120,         // extra step past the kite distance when repositioning
+    kiteActionMin: 320,         // gambit `kite` action default min distance
+    kiteActionMax: 900,         // gambit `kite` action default max distance
+    kiteActionRangeFrac: 0.85,  // gambit `kite` default distance = attackRange × this
+    kiteActionStepBonus: 160,   // gambit `kite` extra step past the desired distance
+    retreatArriveDist: 100,     // gambit `retreat` counts as arrived within this of home
+    comboWindowSec: 4,          // default combo follow-up window
+    comboWeight: 1.25,          // default combo score multiplier
+    ultHoldDiscount: 0.45,      // AoE-ult discount slope below holdClusterMin (scaled by depth)
+    ultHoldFloor: 0.4,          // ult-hold never discounts an ult below this multiplier
+    depthRefAiDepth: 0.45,      // baseline (normal-tier) depth for depth-scaled behaviors
+    // §5.7: how strongly extra ai-depth past the baseline sharpens mana discipline and combos.
+    depthDisciplineGain: 0.6,
+    // Boss-posture score multipliers applied in finalAbilityScore (was inline).
+    bossScore: { cluster: 1.28, kill: 1.22, healer: 1.18, enrage: 1.12, desperation: 1.12 },
+    // Hand-tuned item-active score weights + the intent-fallback biases.
+    itemScore: {
+      bkb: 1.5, bossBkb: 3.2,
+      force: 1.4, bossForce: 1.7,
+      glimmer: 0.6, glimmerUnderFire: 0.5, bossGlimmer: 2.3,
+      mekBase: 0.5, mekPer: 0.5,
+      eulsBase: 0.6, bossEuls: 1.8,
+      interruptBonus: 0.8,
+      intentEscape: 1.15, bossIntentBias: 1.2
+    },
+    // Item-active leash/heal radii and HP gates (was inline cast-range constants).
+    itemRange: {
+      glimmerAlly: 800, mekWounded: 750, mekWoundedPct: 0.7, mekMinWounded: 2, euls: 575,
+      bkbFight: 360, forceFight: 360, bossGlimmerHpPct: 0.45, bossForceHpPct: 0.35
+    },
+    // Raid-aware behaviors, with per-depth scaling (AI_OVERHAUL §6 / 2.0 §5.7).
+    raid: {
+      peelSearch: 800, peelSearchPerDepth: 260,
+      peelMenace: 450, peelMenacePerDepth: 160,
+      scatterMargin: 260, scatterMarginPerDepth: 160, scatterMinRadius: 420,
+      stackHpPct: 0.72, stackHpPctPerDepth: 0.08,
+      stackRange: 1700, stackRangePerDepth: 360, stackMinDist: 650
+    },
+    // Boss phase-FSM constants (was inline in boss-brain).
+    boss: {
+      prefHealerChance: 0.45, prefClusterChance: 0.5, prefKillChance: 0.5,
+      healerHpNeed: 2.2, healerLowThreat: 0.9, healerReach: 0.45, healerThreatNorm: 600, healerReachDist: 900,
+      mechanicBase: { enrage: 100, signature: 70, addWave: 55, zone: 45 }
+    }
   },
 
   // --- threat (AI_OVERHAUL §4, WoW-grounded): generalized past boss-only ---
