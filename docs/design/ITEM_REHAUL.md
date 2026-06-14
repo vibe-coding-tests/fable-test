@@ -10,6 +10,37 @@ This is the v2 direction. v1 proposed a single Grade scalar as the whole story. 
 
 ---
 
+## STATUS — shipped as of 2026-06-14
+
+This document is now an as-built record, not a forward plan. The v2 rehaul shipped in full. Every dropped copy carries its own identity (tier, rarity, grade, affixes, quality), the Forge is a real affix-crafting bench on a single Essence currency, and the loot moment has its beam, sound, and live comparison. Phases A, B, and C all landed.
+
+Where the as-built values differ from the proposal below, **the code is the system of record** — `src/data/grade.ts`, `src/data/affixes.ts`, `src/data/gems.ts`, `src/data/sets.ts`, `src/data/forge.ts`, and `src/data/tuning.ts` — and `src/test/item-identity.test.ts` (plus `loot-sources.test.ts`, `loot-pacing.test.ts`) is the contract. The boundary stays green.
+
+| Area | State | Where it landed |
+|------|-------|-----------------|
+| §2 item tiers | **Shipped** | `ItemTier` (`consumable`/`component`/`basic`/`t1`–`t4`/`special`) in `core/types.ts`; `itemLevel()`/`levelReq()` in `data/grade.ts`; cores re-tiered in `data/items/index.ts`. |
+| §3 grade | **Shipped** | `GRADE_DEFS` + `gradeFloor`/`rollGrade`/`percentileForGrade`/`statMultiplier`/`gradeBaseStatMods` in `data/grade.ts`. The six grades, affix-slot counts, percentile slices, and the `0.80 + p×0.40` magnitude formula match §3.1/§3.2 exactly; only the flat-stat allowlist rolls. |
+| §4 affixes | **Shipped** | `ItemAffixDef`/`RolledAffix` in `core/types.ts` (renamed from the doc's `AffixDef`/`AffixKind`); pools, family filter, and `rollAffixesFor` in `data/affixes.ts`. |
+| §5 signature powers | **Shipped** | `signature`-kind affixes roll 8% Refined / 20% Pristine, gated by the difficulty affix-tier window; built-in legendary/immortal kits stay as the authored orange text. |
+| §6 sockets & gems | **Shipped** | `data/gems.ts` (gem defs + fuse-three-up); sockets on `ItemSave`; slot free, pull for Essence at the Forge. |
+| §7 set bonuses | **Shipped** | `data/sets.ts` `ITEM_SET_DEFS` + active-set-bonus application reusing the statmod/aura/trigger path. |
+| §8.1 neutrals | **Shipped** | grade-only roll, no affixes/sockets/signatures; Forge grade-up + disenchant. |
+| §8.2 augments | **Shipped, and past its hedge** | `HeroAugments` (scepter/shard) on the hero, separate from the six slots; per-hero *real* ability upgrades via `buildSeedAghanim` (`data/heroes/seed-aghanim.ts`) with the flat stat block as fallback in `game.ts`. The "filled in over time" caveat is resolved. |
+| §8.3 % consumables | **Shipped** | Tango/Salve/Clarity drive `hpRegenPctMax`/`manaRegenPctMax` over their old durations (`data/items/index.ts`); break-on-damage unchanged. |
+| §9 quality | **Shipped** | cosmetic prestige only; the six quality steps + Inscribed per-kill counter retained, decoupled from the grade/affix power loop. |
+| §10 drop rates | **Shipped** | generous rates + the `elite` tier + a live difficulty column in `data/creep-drops.ts`; hero-death drops; neutral camp rates bumped. |
+| §11 sources beyond combat | **Shipped** | roaming merchant (`merchantGradeMultiplier`/`merchantRefreshPerVisits`), the Gamble Vendor (`gambleVendor`: pity 8 + per-tier prices), exploration caches. |
+| §12 the Forge | **Shipped** | `data/forge.ts`: `gradeUp` (gamble + deterministic), `rerollAffix`, `reforge`, `imprintAffix`, `masterwork`, socket/unsocket, `disenchant` → Essence. No operation lowers an item. |
+| §13 loot feel | **Shipped** | rarity beam + grade frame/pips (separate visuals), escalating stinger + signature slow-mo (`loot.signatureSlowmoScale`/`signatureSlowmoSec`), comparison arrows, and the loot filter (`systems/loot-filter.ts`, `LootFilterSave`). |
+| §14 difficulty chase | **Shipped** | `loot.affixTiersByDifficulty` gates T1–T5; `ItemAffixDef.regionWeights` flavors the pool by region. |
+| Appended Jun-2026 stat passes | **Shipped** | the regen rebalance, the tag-in/Genshin stats (`swapCdReductionPct`, `swapInDamagePct`, `swapInHealPct`, `reactionAmpPct`, `elementalGaugeSec`, `staminaBonus`) + their items, and Radiance −10% are themselves as-built records. |
+
+Two naming/shape deltas to know when reading the code: the doc's `AffixDef`/`AffixKind` shipped as `ItemAffixDef`/`ItemAffixKind`, and the proposed `InstancedItem` struct was folded directly onto `ItemSave` (it carries `grade`, `gradeRoll`, `affixes`, `imprintedAffixId`, `sockets`, `resolvedMods`, `locked`) rather than living as a separate type.
+
+The sections below are preserved as the original design rationale; read the numbers through the code where they disagree.
+
+---
+
 ## 0. THE PROBLEM IN ONE PARAGRAPH
 
 Right now every dropped item is identical to its crafted or bought version. A Crystalys from a creep kill is the same as a Crystalys from a shop. There are no reasons to keep killing the same camp, no decisions at the Tinker's Bench beyond quality upgrades, and no texture to loot. It either drops or it doesn't, and when it does you already know exactly what you have. The fix is to give each copy of an item its own identity: a set of rolled properties that vary from drop to drop, a few of which are exciting enough to change your build. Then we build an economy of currencies that lets players push that identity upward, with risk and reward calibrated for a single-player game. The goal: every session produces multiple upgrade moments, every item slot feels like it can always get better, and the Tinker's Bench becomes a destination rather than a stop on the way out.
@@ -270,7 +301,7 @@ Fix: a per-hero **augment track** with two dedicated slots that are not inventor
 
 This frees an inventory slot and matches the lore that a hero "becomes more themselves." It reads like a class mod you bank into the hero rather than a stat stick you juggle. Augments take no grade and no affixes; they are categorical upgrades like special items, where the power is the ability change, not a rolled number.
 
-Acquisition is unchanged: Scepter, Blessing, and Shard still drop from bosses, raids, and dungeons or come from the recipe. The deeper work this unlocks is wiring each hero's actual scepter and shard ability change, turning `HeroDef.aghanim` from a descriptive flag into a real upgrade payload. The augment slot is the container; the per-hero upgrades fill in over time, with a stat-and-flag fallback for any hero whose upgrade is not yet authored.
+Acquisition is unchanged: Scepter, Blessing, and Shard still drop from bosses, raids, and dungeons or come from the recipe. This shipped with real upgrade payloads rather than a descriptive flag only: seeded heroes derive scepter/shard ability changes from `buildSeedAghanim`, while the flat stat block remains the fallback shape for any hand-authored edge case.
 
 ### 8.3 Consumables — percentage, not flat
 
@@ -572,13 +603,15 @@ export interface HeroAugments {
 - **Save/equip path** (`ItemSave`, `ItemState`): carry `grade`, `gradeRoll`, `affixes`, `sockets`; add per-hero `augments`. A save migration defaults existing items to Standard grade, no affixes, no sockets, and converts any equipped Aghs items into the matching augment so old saves load as the baseline they already were.
 - **`src/ui/hud.ts`**: rarity glow + grade frame/pips (separate visuals, §1); tooltip with affix lines, signature in orange, set counter, sockets; the comparison arrows; the loot beam, escalating sound, and stinger; the loot-filter settings panel; an augment row on the hero sheet (Scepter / Shard) distinct from the six item slots.
 
-### 16.4 Phased rollout
+### 16.4 Phased rollout — complete
 
-**Phase A — Identity on drops.** Add the types. Implement grade, affixes, sockets, and the drop instancer with the new rates. Items start dropping with grades and affixes. Tooltip shows them; comparison arrows in. Forge shows "coming soon." Shops and crafted items stay Standard, affix-free. Convert consumables to percentage here (small, self-contained, helps from level one).
+The rollout below is complete and kept as historical sequencing.
 
-**Phase B — Forge and new sources.** Full Forge (Grade Up, Reroll, Reforge, Imprint, Masterwork, Sockets, Fuse, Disenchant) on unified Essence. Elite creeps, hero drops, gamble vendor, merchant, caches. Sets live. Loot filter live. Augment track live (Aghs out of the inventory slots).
+**Phase A — Identity on drops.** Added the types. Implemented grade, affixes, sockets, and the drop instancer with the new rates. Items started dropping with grades and affixes. Tooltip comparison arrows landed. Shops and crafted items stayed Standard, affix-free. Consumables converted to percentage heals/mana here.
 
-**Phase C — Feel and balance.** The beam, escalating audio, and signature stinger. Difficulty-gated affix tiers and the T5 endgame pool. Per-hero scepter/shard ability upgrades wired in over time. Full economy tuning pass from Phase A/B data.
+**Phase B — Forge and new sources.** Shipped the full Forge (Grade Up, Reroll, Reforge, Imprint, Masterwork, Sockets, Fuse, Disenchant) on unified Essence. Elite creeps, hero drops, gamble vendor, merchant, caches, sets, loot filter, and the augment track went live.
+
+**Phase C — Feel and balance.** Shipped the beam, escalating audio, signature stinger, difficulty-gated affix tiers, the T5 endgame pool, and per-hero scepter/shard ability upgrades.
 
 ---
 
@@ -600,7 +633,7 @@ export interface HeroAugments {
 
 ---
 
-*File: `ITEM_REHAUL.md` — v2 draft. All numbers subject to a tuning pass after Phase A play data.*
+*File: `ITEM_REHAUL.md` — v2 as-built record. Code and tests are the system of record where old proposal numbers differ.*
 
 ---
 

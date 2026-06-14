@@ -13,9 +13,19 @@ contributors**, available at <https://game-icons.net> under the
 We use a curated subset, recolored per item tier. No icons were altered beyond tinting
 and scaling. See `scripts/assets/generate_item_icons.mjs` for the exact mapping.
 
+## Poly Pizza hero models — CC BY 3.0 (attribution required)
+
+The following GLBs were downloaded from **Poly Pizza**, processed through
+`scripts/assets/specs/asset-gaps-polypizza.json`, and used as enhanced hero models:
+
+- **Walrus** by **Poly by Google** — <https://poly.pizza/m/2ivrvruGzxc>, used for `tusk`.
+- **Squirrel** by **Poly by Google** — <https://poly.pizza/m/2WqY_AFEn-M>, used for `hoodwink`.
+- **Lizard** by **madtrollstudio** — <https://poly.pizza/m/0z3NJc5zAE>, used for `snapfire`.
+
 ## Other vendored assets — CC0 (no attribution required, credited as courtesy)
 
 - 3D characters, creatures, props, and town buildings — **Quaternius** (<https://quaternius.com>) and **Kay Lousberg / KayKit** (<https://kaylousberg.com>), CC0.
+- Additional Poly Pizza models — **Quaternius** snake (<https://poly.pizza/m/x9x0viZs8V>) and **kazuma** helicopter (<https://poly.pizza/m/EQJ2MECUbx>), CC0.
 - Terrain PBR textures — **ambientCG** (<https://ambientcg.com>), CC0.
 - Sky / IBL maps — **Poly Haven** (<https://polyhaven.com>), CC0.
 - Sound effects — **Kenney** (<https://kenney.nl>), CC0.

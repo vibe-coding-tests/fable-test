@@ -8,50 +8,82 @@ Same footing as the rest of the project. **The headless deterministic core (`src
 
 ---
 
-## 0. WHERE WE ARE — measured honestly
+## STATUS — 2026-06-14 (as built)
+
+**The whole overhaul shipped.** Every phase L0–L7 landed, plus the L8 Armory addendum and later loot-pacing work, and the cross-cutting gates hold: `npm test` and `npm run build` are green, `rollLoot` keeps its signature as a wrapper, and `boundary.test.ts` stays green (the core never reads rarity or quality). Section 0 below is preserved as the *pre-overhaul baseline that motivated the work* — its three findings ("most drops are gold," "boss tables are an id-hash," "gold inflates") were true when this was written and have since been fixed. The rest of the doc reads as the design of record for the system that now exists.
+
+What's live, by slice:
+
+- **L0 — the drop-table keystone: done.** `src/core/types.ts` carries `ItemRarity` / `ItemQuality` / `DropSource` / `ItemDropTable` / `DropSlot` / `DropEntry` (plus `ItemDef.rarity`/`exclusiveTo`, `ItemSave.quality`/`bound`/`inscribedKills`, `CreepDef.drops`). `rollItemDrops` lives in `src/core/phase3.ts`; `rollLoot` is now a thin wrapper over it (`lootTableToDropTable`), so every shipped boss/raid table rolls identically. Seeded, headless, deterministic.
+- **L1 — drops on creeps: done.** `src/data/creep-drops.ts` defaults a table by creep tier; `rollItemDropsForCreep` runs in the kill path beside the preserved neutral roll, with an extra `rollEliteCreepDrop` for elite variants. Overworld kills roll at the region's combat tier.
+- **L2 + L8 — bind to a hero and the Armory: done.** Top-tier drops carry `ItemSave.bound`; `sellItem` refuses a bound item and returns it to the Armory (`inventoryStash`) instead of minting gold. The L8 addendum widened it to the whole bench: `armoryView()`, per-hero equip/reclaim, saved `loadouts`, `gearFieldLoadouts`, contention reporting, all behind the v6 save migration.
+- **L3 — curated chase and reserved sources: done.** `data/bosses.ts` `themedLoot` anchors items by the boss's attribute lane (agility → Butterfly/Skadi, strength → Heart/Assault, intelligence → Scythe/Refresher/Aghs); every item resolves a rarity; `exclusiveTo` reservations are enforced by one shared source predicate used by shops and the Black Market; owned-hero echoes drop attribute-themed components.
+- **L4 — the gold rebalance: done.** The Black Market gamble vendor (`blackMarketRecipeWheel`, `blackMarketRelicWheel`) with the Legendary relic ceiling and escalating in-visit cost; bound-dupe salvage into `essence`; recipe re-tier so anchors need a drop-gated core; the faucet retune in `tuning.ts` (deepest `regionRewardMult` and `postCapXpToGold` pulled down).
+- **L5 — quality: done.** `src/data/quality.ts` ships the six grades (Standard/Inscribed/Genuine/Frozen/Corrupted/Unusual) as bounded `StatModMap` deltas summed through `unit.aggregateMods`; `qualityOdds` on drop slots is luck-at-source; Inscribed banks the holder's kills (`creditInscribedKills`, capped); `upgradeArmoryItemQuality` spends essence + gold for the deterministic grind path.
+- **L6 — readability and feedback: done.** The Valve rarity palette + quality colors in `data/quality.ts`, rarity-tinted loot toasts across every source, quality borders, and the loot filter (`src/systems/loot-filter.ts`).
+- **L7 — the Compendium: done.** `atlasEntries()` inverts every drop table / shop list / gamble pool into an item-sourced Atlas; `heroCompendium()` projects `HeroDef` (abilities + full talent/facet/Aghs tree); both are pure view-models surfaced in the codex (`K`) hub. Covered by `src/test/compendium.test.ts`.
+
+Beyond the original phasing: per-band **loot pacing** with an EG rarity split (`TUNING.loot.egRaritySplit`, `src/test/loot-pacing.test.ts`), Gameplay 2.0 combat-tier wiring so deep-region kills roll the nightmare/hell columns, and the dungeon `DropSource` consuming all of this (`DUNGEON_OVERHAUL.md`). The per-decision resolutions the build settled are recorded inline in §7.
+
+---
+
+## 0. WHERE WE WERE — the pre-overhaul baseline (kept for the rationale)
+
+> Historical. This section is the honest measurement from *before* the overhaul, kept because it is the argument for why the loot loop exists. The three findings below describe the starting point; see the STATUS block above for the shipped state, and the inline code references for where each gap now lives.
 
 The item *engine* is in good shape. Recipes, component consumption, six slots with the active/passive split, the dedicated neutral slot, charges, lockouts, auras, and item actives through the ability engine all work and are tested. The catalog is a faithful, closed Dota set: about 78 items (7 consumables, ~40 components, ~30 assembled) plus 15 neutral items across 5 tiers. The economy is wired end to end: kills pay scaled gold/XP, bosses and raids roll loot with pity, gold sinks exist, and the gated top-tier set is kept out of every shop.
 
 The gap is the loot *loop*. Three findings.
 
-**Finding 1 — most "drops" are gold, not items.** A wild creep kill pays gold and XP and rolls one neutral item by tier (10 / 14 / 20 / 28% for small / medium / large / ancient). That is the entire item yield from the overworld:
+**Finding 1 — most "drops" are gold, not items.** A wild creep kill pays gold and XP and rolls one neutral item by tier (10 / 14 / 20 / 28% for small / medium / large / ancient). At the time that was the entire item yield from the overworld (the kill path now also routes a creep item-drop table — the L1 fix, shown here):
 
-```2671:2674:src/systems/game.ts
-    // neutral drop on a slain wild creep (§3.7): rolls into the dedicated neutral stash
+```6834:6842:src/systems/game.ts
+    // neutral drop on a slain wild creep (§3.7): rolls into the dedicated neutral stash.
     if (victim && victim.kind === 'creep' && victim.tier) {
+      this.rollItemDropsForCreep(victim.creepId, victim.tier, ev.victimUid, creepCombatTier(this.region.id), victim.pos);
+      if (this.eliteCreepUids.delete(ev.victimUid)) this.rollEliteCreepDrop(victim.tier, ev.victimUid, victim.pos);
       this.rollNeutralFor(victim.tier, ev.victimUid);
+      this.advanceQuests({ kind: 'kill-creeps', amount: 1, tier: victim.tier, regionId: this.region.id });
     }
 ```
 
-`SPEC.md` §5 says "Consumables (tangos, salves, clarities, dust, smoke) drop from creeps; components drop from echoes and trainers." Neither ships. Creeps drop no consumables and no components; echoes pay a gold surplus and unlock talents but drop nothing. So the only items that fall in the open world are neutrals, and the only place a "major item" can drop is a boss or a raid.
+> **As built:** the `rollItemDropsForCreep` / `rollEliteCreepDrop` calls above are L1 — the gap below is closed. When this finding was written, only the neutral roll existed.
 
-**Finding 2 — the boss/raid tables are thin and uncurated.** A boss table is one guaranteed component plus one assembled-pool entry, both picked by hashing the boss's hero id:
+`SPEC.md` §5 says "Consumables (tangos, salves, clarities, dust, smoke) drop from creeps; components drop from echoes and trainers." Neither shipped at the time. Creeps drop no consumables and no components; echoes pay a gold surplus and unlock talents but drop nothing. So the only items that fall in the open world are neutrals, and the only place a "major item" can drop is a boss or a raid.
 
-```7:15:src/data/bosses.ts
-function loot(heroId: string): LootTable {
-  const idx = Math.abs(heroId.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0));
-  return {
-    guaranteed: [COMPONENTS[idx % COMPONENTS.length]],
-    assembledPool: [ANCHORS[idx % ANCHORS.length]],
-    dropPct: TUNING.bossAssembledDropPct,
-    pity: TUNING.raidBadLuckPity
-  };
+**Finding 2 — the boss/raid tables are thin and uncurated.** At the time, a boss table was one guaranteed component plus one assembled-pool entry, both picked by hashing the boss's hero id. That hash is now the attribute-lane `themedLoot` builder (L3):
+
+```52:66:src/data/bosses.ts
+function themedLoot(heroId: string, rank: BossDef['rank']): LootTable {
+  const isMini = rank === 'mini-boss';
+  let guaranteed = ['ultimate-orb'];
+  let assembledPool = ['aghanims-scepter', 'refresher-orb'];
+  if (AGILITY_CARRIES.has(heroId)) {
+    guaranteed = ['eaglesong'];
+    assembledPool = ['butterfly', 'eye-of-skadi', 'abyssal-blade', 'bloodthorn', /* ... */];
+  } else if (STRENGTH_TITANS.has(heroId)) {
+    guaranteed = ['reaver'];
+    assembledPool = ['heart-of-tarrasque', 'satanic', 'radiance', /* ... */];
+  } else if (INTELLIGENCE_BOSSES.has(heroId)) {
+    guaranteed = ['mystic-staff'];
+    assembledPool = ['scythe-of-vyse', 'refresher-orb', 'octarine-core', /* ... */];
+  }
+  ...
 }
 ```
 
-The roller behind every boss and raid is a single guaranteed list plus a single assembled slot with pity:
+The roller behind every boss and raid was a single guaranteed list plus a single assembled slot with pity. `rollLoot` survives with its old shape but is now a thin wrapper that delegates to the L0 `rollItemDrops` keystone:
 
-```24:35:src/core/phase3.ts
-export function rollLoot(table: LootTable, tier: DifficultyTier, dryStreak: number, seed: number): LootRoll {
-  const rng = new Rng(seed);
-  const pityUsed = dryStreak + 1 >= table.pity;
-  const hit = table.assembledPool.length > 0 && (pityUsed || rng.chance(table.dropPct[tier]));
-  const assembled = hit ? { id: rng.pick(table.assembledPool) } : undefined;
+```213:223:src/core/phase3.ts
+export function rollLoot(table: LootTable, tier: DifficultyTier, dryStreak: number, seed: number, band?: LootBand, source?: DropSource, opts: { /* ... */ } = {}): LootRoll {
+  const roll = rollItemDrops(lootTableToDropTable(table, source), tier, { assembled: dryStreak }, new Rng(seed), band, { source, /* ... */ });
+  const guaranteed = roll.items.slice(0, table.guaranteed.length);
+  const assembled = roll.items[table.guaranteed.length];
   return {
-    guaranteed: table.guaranteed.map((id) => ({ id })),
+    guaranteed,
     assembled,
-    dryStreak: assembled ? 0 : dryStreak + 1,
-    pityUsed: !!assembled && pityUsed
+    dryStreak: roll.dryStreaks.assembled ?? dryStreak,
+    pityUsed: !!assembled && roll.pityUsed
   };
 }
 ```
@@ -60,7 +92,7 @@ export function rollLoot(table: LootTable, tier: DifficultyTier, dryStreak: numb
 
 **Finding 3 — gold inflates because its only big outlet is closed, and drops leak into it.** The faucet scales hard with depth. Kill gold multiplies region by tier by creep-tier by star:
 
-```55:69:src/data/tuning.ts
+```146:157:src/data/tuning.ts
   regionRewardMult: {
     'tranquil-vale': 1.0,
     'nightsilver-woods': 1.12,
@@ -69,33 +101,39 @@ export function rollLoot(table: LootTable, tier: DifficultyTier, dryStreak: numb
     shadeshore: 1.6,
     'vile-reaches': 1.82,
     quoidge: 2.05,
-    'hidden-wood': 2.3,
-    'mount-joerlak': 2.6,
-    'mad-moon-crater': 3.0
+    'hidden-wood': 2.15,
+    'mount-joerlak': 2.35,
+    'mad-moon-crater': 2.55
   },
-  tierRewardMult: { normal: 1.0, nightmare: 1.65, hell: 2.45 },
-  creepTierRewardMult: { small: 1.0, medium: 1.35, large: 1.85, ancient: 2.6 },
-  creepStarBountyMult: [1.0, 1.75, 2.8],
 ```
 
-A Mad Moon ancient three-star on Hell pays roughly 3.0 × 2.45 × 2.6 × 2.8 ≈ 54× the base bounty, and at the level cap every kill also mints gold through `postCapXpToGold`. The sinks do not keep up. The shop carries consumables, components, and a few mid assembled per region; once a fielded hero is built, gold has little to buy, because the expensive end (Rapier, Butterfly, Scythe, Heart, Skadi, Refresher, Aghs) is correctly drop-gated out of every shop. So gold's largest natural outlet is removed by design, while the faucet climbs.
+The other multipliers stack on top (`tierRewardMult`, `creepTierRewardMult`, `creepStarBountyMult` at `tuning.ts:185-187`). When this was written, a Mad Moon ancient three-star on Hell paid roughly 3.0 × 2.45 × 2.6 × 2.8 ≈ 54× the base bounty, and at the level cap every kill also minted gold through `postCapXpToGold` — the sinks did not keep up. **As built (L4):** the deep `regionRewardMult` values were pulled down (Mad Moon 3.0 → 2.55) and `postCapXpToGold` capped, so the worst-case multiple is meaningfully lower and the surplus moved into drop rates. The shop carries consumables, components, and a few mid assembled per region; once a fielded hero is built, gold has little to buy, because the expensive end (Rapier, Butterfly, Scythe, Heart, Skadi, Refresher, Aghs) is correctly drop-gated out of every shop. So gold's largest natural outlet is removed by design, while the faucet climbs.
 
-Worse, dropped power leaks back into gold. Selling is a flat fraction of cost with no exception for gated items:
+Worse, dropped power leaked back into gold. Selling was a flat fraction of cost with no exception for gated items. **As built (L2)**, `sellItem` now refuses a bound item and returns it to the Armory instead, plugging the leak — liquid items still sell at the normal ratio:
 
-```2195:2206:src/systems/game.ts
+```6187:6212:src/systems/game.ts
   sellItem(invSlot: number): void {
     const u = this.activeUnit();
     if (!u) return;
     const it = u.items[invSlot];
     if (!it) return;
     const def = REG.item(it.defId);
+    if (it.bound) {
+      // ... pull the bound copy out of the inventory ...
+      this.inventoryStash.push(saved);
+      this.msg(`${def.name} is bound — returned to the Armory`, 'info');
+      return;
+    }
+    u.items[invSlot] = null;
+    u.items = sortInventory(u.items);
+    // ...
     const value = sellValue(def);
     this.awardGold(value, 'sell', u.pos);
     this.msg(`Sold ${def.name} (+${value}g)`, 'info');
   }
 ```
 
-A dropped Divine Rapier (cost 6200) sells for 3100 gold. The rarest thing in the game converts straight into the most abundant. That is the loop the player intuition flagged: more gold than items to spend it on.
+Before that fix, a dropped Divine Rapier (cost 6200) sold for 3100 gold — the rarest thing in the game converting straight into the most abundant. That was the loop the player intuition flagged: more gold than items to spend it on.
 
 **The root cause, in one line.** The game has a Diablo *appetite* for drops sitting on a Dota *closed set*, and the two were never reconciled. You cannot flood items the way Diablo does, because a Battlefury is always a Battlefury. So the looter feeling has to come from where a closed set can actually supply it: breadth across a 65-hero roster, a curated chase per source, dupes that feed upgrades instead of dying, and Dota's own **rarity and quality** axes instead of invented affixes. None of that is built, so the drop excitement defaulted to gold, and gold inflated.
 
@@ -133,18 +171,21 @@ What we are explicitly not doing: random-affix items, an infinite generated cata
 
 ## 2. THE KEYSTONE — one item drop table, carrying rarity and quality
 
-Today `LootTable` is a guaranteed list plus a single assembled slot:
+The original `LootTable` was a guaranteed list plus a single assembled slot. It still exists (so the shipped tables keep working), now carrying optional rarity pools and source quality odds:
 
-```520:525:src/core/types.ts
+```704:712:src/core/types.ts
 export interface LootTable {
   guaranteed: string[];
   assembledPool: string[];
+  assembledRarityPools?: Partial<Record<ItemRarity, string[]>>;
   dropPct: Record<DifficultyTier, number>;
   pity: number;
+  /** Optional luck-at-source quality odds for the assembled drop (LOOT L5). */
+  qualityOdds?: Partial<Record<ItemQuality, number>>;
 }
 ```
 
-Generalize it to a weighted, multi-slot table that also rolls rarity and quality, so creeps, bosses, raids, echoes, chests, and the gamble vendor all speak one vocabulary:
+The keystone generalized it to a weighted, multi-slot table that also rolls rarity and quality, so creeps, bosses, raids, echoes, chests, and the gamble vendor all speak one vocabulary. **As built**, the types below ship in `src/core/types.ts` and the roller in `src/core/phase3.ts`:
 
 ```ts
 // data-side; the core's resolution layer never reads it
@@ -364,17 +405,28 @@ Cross-cutting gates (every slice): `npm test` and `npm run build` green; `bounda
 
 ---
 
-## 7. OPEN DECISIONS — settle these while building
+## 7. OPEN DECISIONS — settled by the build
+
+Each was meant to be settled while building; it was. The original framing is kept, with the resolution recorded inline.
 
 1. **Bind strength.** Hard-bound (recommended, and what the roster-as-sink model wants) versus sellable at a steep loss for an emergency gold valve. Hard-bound keeps the two economies clean; a steep-loss sale is friendlier but reopens a small leak. Decide in L2.
+   - **Resolved (L2):** hard-bound. `sellItem` refuses a bound item and returns it to the Armory; bound copies never convert to gold. No steep-loss valve was added.
 2. **What binds.** Recommended: `core`-tier, `heldUniques`, and rarity-`legendary`-and-up items bind; consumables, components, and basic assembled stay liquid so the shop keeps working. Confirm the cut line against `GATED_TOP_TIER` and the rarity ladder in L2/L3.
+   - **Resolved (L2):** the cut line is exactly the recommendation — `shouldBindDroppedItem` binds anything in `GATED_TOP_TIER`, any main-item tier, or rarity legendary-and-up; everything else stays liquid.
 3. **Relic-wheel ceiling and cost curve.** Recommended ceiling is Legendary, with escalating in-visit cost, so the gamble supplements bosses and never reaches the reserved Immortal/Arcana end. Tune in L4 against the retuned faucet, not before.
+   - **Resolved (L4):** Legendary ceiling, cost `relicWheelBaseCost + gambleRolls × relicWheelStepCost` (escalates per visit), `exclusiveTo`/`GATED_TOP_TIER` filtered out, result bound. The relic wheel supplements bosses, never replaces them.
 4. **How much weight quality carries.** Recommended: most grades are collectible + a small bounded stat; Inscribed (grows) and Corrupted (sidegrade with a downside) are the only grades with real mechanical character, and even they stay inside the item's Dota identity. Random affixes stay out. Confirm the per-grade deltas in L5 so power does not creep.
+   - **Resolved (L5):** `data/quality.ts` ships bounded `StatModMap` deltas per grade; Inscribed grows a capped per-kill stack, Corrupted is a sidegrade with a defined downside, the rest are mostly collectible. No random affixes — the core only reads the resolved mods.
 5. **How many quality grades to ship.** Recommended starting set: Standard, Inscribed, Frozen, Corrupted, Unusual (Genuine optional if special-battle drops want an authenticated grade). More Valve grades (Elder, Exalted, Autographed, Cursed) can join later as pure-cosmetic collectibles. Decide in L5.
+   - **Resolved (L5):** all six shipped, Genuine included (the authenticated "you beat them here" grade). Further Valve grades can still join as pure data.
 6. **What counts as a "special hero battle."** Recommended: the Elite Five, the Champion, and recruitment Bind duels. Open question whether owned-hero echo "perfected" completions also drop a reserved item. Decide in L3.
+   - **Resolved (L3):** the marquee/special-battle set reserves its items through the `exclusiveTo` source predicate; owned-hero echoes drop attribute-themed components but were not given a reserved special-battle drop, so the prestige reservation stays with the named battles.
 7. **Faucet retune magnitude.** Hold the region/tier/star and post-cap-gold numbers until L4 is playable, then balance against the new sinks. Keep the shipped reward-scaling tests as the reference for the auto-resolve and farming paths.
+   - **Resolved (L4):** the deepest `regionRewardMult` values were pulled down (Mad Moon 3.0 → 2.55) and `postCapXpToGold` capped, with the reward-scaling tests held green; later Gameplay 2.0 work added per-region creep-combat scaling on top.
 8. **Stash pressure.** Whether the Armory is unbounded or capped (a cap creates a salvage decision; unbounded is friendlier). Optional auto-salvage of unwanted dupes into essence. Decide in L4 alongside salvage.
+   - **Resolved (L4):** the Armory (`inventoryStash`) is unbounded; salvage to essence is a manual choice, not forced by a cap.
 9. **Atlas reveal model.** Encounter-gated like the codex (you see only sources you have met) versus a full almanac (a strategy guide that shows every source up front). Recommended hybrid: the item and its rarity show once seen, exact sources reveal as you encounter them, and a settings toggle opens full spoilers for players who want the whole map. Decide in L7.
+   - **Resolved (L7):** the Atlas (`atlasEntries()`) is a pure derivation that inverts the live drop tables / shop lists / gamble pools, surfaced in the codex (`K`) hub and inheriting the codex's encounter-gated reveal, so the guide can never drift from the data.
 
 ---
 

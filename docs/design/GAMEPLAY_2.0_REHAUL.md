@@ -47,7 +47,7 @@ None of this is broken. All of it is the difference between "the autobattler tra
 
 ## 1. GOALS & PILLARS
 
-1. **A deliberate loot heartbeat.** One *endgame-grade* item (a completed Legendary+ core) every **10–30 minutes** of active play — slower early, faster late — with the rhythm holding regardless of which activity the player grinds.
+1. **A deliberate loot heartbeat.** One *endgame-grade* item (a completed Legendary+ core) on a band-paced cadence — slower early, faster late — with the rhythm holding regardless of which activity the player grinds. (As shipped this landed faster than the original slower hypothesis; see the §2 status note for the live floors.)
 2. **Rarity and quality do the fine-grain pacing.** A single "drop event" is not binary. It rolls a *rarity* (mostly Legendary, occasionally Immortal) and a *quality* (Standard → Unusual), and items keep eating loot through the quality ladder and Inscribed kills long after they first drop. The chase never collapses to "I have the item, done."
 3. **Combat numbers set time-to-kill, and TTK sets pacing.** Every balance number is justified by a target TTK band, so loot math and combat math share one currency: seconds.
 4. **The AI plays to the player's power, not a fixed wall.** Content scales with depth/tier; the AI scales its competence with `aiDepth`; the two together keep fights winnable-but-earned across 30 levels.
@@ -60,6 +60,8 @@ None of this is broken. All of it is the difference between "the autobattler tra
 
 This is the core of the rehaul. Everything else exists to serve this curve.
 
+> **Shipped values (2026-06-14).** The pacing model landed, but the cadence was retuned *faster* than the original slower hypothesis: the live floors are `TUNING.loot.egCadenceMinByBand = { early: 6, mid: 4, late: 2 }` — one Legendary+ roughly every **2–6 minutes** of single-activity farming, faster late. `overworldEgSlotPct` shipped correspondingly higher (large creep 0.15/0.25/0.35, ancient 0.20/0.32/0.46, echo 0.03/0.045/0.06 by tier). The rarity split, quality odds, and band-mark quota below match the code. **`src/test/loot-pacing.test.ts` is the authority** for the cadence; the sub-tables in §2.2–§2.3 are preserved as the original slower hypothesis and should be read through that test where they disagree. Per §9, loot pacing was always a simulation problem to be locked by the test, not by hand math — and it was.
+
 ### 2.1 The four loot tiers (mapped to existing `ItemRarity`)
 
 We already have a 7-grade rarity enum (`common → arcana`) and a `defaultRarity` function in `src/data/items/index.ts`. We group them into four *felt* tiers:
@@ -68,10 +70,10 @@ We already have a 7-grade rarity enum (`common → arcana`) and a `defaultRarity
 |-----------|----------|------------|----------------|
 | **Chaff** | common, uncommon | consumables, basic components | constant background; not counted |
 | **Progress** | rare, mythical | mid components, mid cores, recipe parts | ~1 every **2–4 min** |
-| **Endgame (EG)** | legendary | completed build-defining cores | **1 every 10–30 min** ← the target |
+| **Endgame (EG)** | legendary | completed build-defining cores | **1 every 2–6 min as shipped** |
 | **Chase** | immortal, arcana | marquee items (Rapier, Butterfly, Heart, Radiance, Aegis…) | long-tail spikes inside the EG stream |
 
-The user-facing target ("one endgame item per 10–30 min") is the **EG cadence**. Chase items are a weighted *subset* of EG events, not a separate timer.
+The user-facing target is the **EG cadence** recorded in `TUNING.loot.egCadenceMinByBand` and guarded by `src/test/loot-pacing.test.ts`. Chase items are a weighted *subset* of EG events, not a separate timer.
 
 ### 2.2 The cadence curve (slower early, faster late)
 
@@ -127,7 +129,7 @@ Quality is a *second power axis* on the same item (see `src/data/quality.ts`: ge
 
 ### 2.6 The grind never ends: items as ongoing loot sinks
 
-The reason 1 item / 10–30 min stays satisfying for hundreds of items' worth of playtime is that **each item keeps consuming loot**:
+The reason a generous EG cadence stays satisfying for hundreds of items' worth of playtime is that **each item keeps consuming loot**:
 
 - **Quality ladder** (`standard → genuine → frozen → inscribed → corrupted → unusual`) costs essence + gold per grade (`TUNING.blackMarket.qualityUpgrade`). Six grades per item is a long horizontal tail.
 - **Inscribed kills** grow an item per-kill up to `killCap: 60` (`src/data/quality.ts`), so even a "finished" build accrues power passively as you play.
@@ -322,9 +324,9 @@ creepCombatScale: {
 applyBossArmorTier: true,           // wire bossTierScale.armor (currently dead)
 cleaveIgnoresArmor: false,          // cleave now respects armor
 
-// --- loot pacing (NEW) ---
+// --- loot pacing (NEW) --- shipped values; see TUNING.loot
 loot: {
-  egCadenceMinByBand: { early: 28, mid: 18, late: 11 },   // target minutes per Legendary+
+  egCadenceMinByBand: { early: 6, mid: 4, late: 2 },       // SHIPPED minutes per Legendary+ (retuned from the 28/18/11 hypothesis)
   egRaritySplit: {
     early: { legendary: 0.95, immortal: 0.05, arcana: 0.0 },
     mid:   { legendary: 0.90, immortal: 0.095, arcana: 0.005 },
@@ -333,9 +335,9 @@ loot: {
   qualityDropChance: { normal: 0.08, nightmare: 0.18, hell: 0.30 },
   bandMarkQuota: { early: 24, mid: 18, late: 12 }          // hard-pity Loot Marks per EG
 },
-overworldEgSlotPct: {               // new Legendary slots on overworld sources
-  largeCreep:  { normal: 0.02, nightmare: 0.035, hell: 0.05 },
-  ancientCreep:{ normal: 0.04, nightmare: 0.055, hell: 0.07 },
+overworldEgSlotPct: {               // SHIPPED Legendary slots on overworld sources (higher than the early draft)
+  largeCreep:  { normal: 0.15, nightmare: 0.25, hell: 0.35 },
+  ancientCreep:{ normal: 0.20, nightmare: 0.32, hell: 0.46 },
   echo:        { normal: 0.03, nightmare: 0.045, hell: 0.06 }
 },
 
@@ -362,7 +364,7 @@ Delivered in batches, each shipping green (`npm run typecheck`, `npm test`, `npm
 
 1. **Combat scaling** (§4). Add `creepCombatScale`, apply boss armor tier, fix cleave-armor, smooth recruit cap and the XP-curve quirk. Gate: new `combat-scaling` tests assert TTK bands (§4.1) at representative region/level/tier points; existing combat/economy tests stay green.
 2. **Drop tables 2.0** (§3). Author multi-slot tables with rarity/quality/pity; wake the creep tier columns; persist dungeon pity; add overworld EG slots; theme boss/raid tables to the full catalog. Gate: extend `economy.test.ts` / `dungeon.test.ts` to assert EG cadence per band over a seeded sample, and assert `GATED_TOP_TIER` still never vends from shop/gamble.
-3. **Pacing model** (§2). Implement the band cadence, rarity split, quality odds, and Loot Marks; add a headless **loot-pacing simulation test** that farms each band for N simulated minutes and asserts EG/min lands in `[floor, floor × 1.6]`. This test is the living contract for "1 item per 10–30 min."
+3. **Pacing model** (§2). Implement the band cadence, rarity split, quality odds, and Loot Marks; add a headless **loot-pacing simulation test** that farms each band for N simulated minutes and asserts EG/min lands in the shipped floor-to-ceiling contract. This test is the living contract for the EG cadence.
 4. **AI polish** (§5). Generalize item-active scoring, add mana budgeting + ult discipline, centralize magic numbers, dedup `dangerousScore`, fix the small heuristics, route clustering through the spatial grid. Gate: extend `utility-ai`/`reactive-ai`/`raid-ai` tests; add cases for "AI uses a non-whitelisted item active," "AI holds AoE ult for a cluster," "AI doesn't cast unaffordable spells." Perf budget test (`perf-budget.test.ts`) stays green.
 5. **Gambling/crafting 2.0** (§6). Tune relic-wheel escalation to the band floor, balance essence↔quality rates, add the deterministic assembly bench, resolve the dead knobs. Gate: `quality.test.ts` extensions for the essence/quality rate parity; a gamble-pacing test that asserts gold→EG conversion ≈ band floor and that the wheel never yields Immortal/Arcana.
 

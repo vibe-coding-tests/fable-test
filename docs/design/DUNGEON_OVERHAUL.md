@@ -10,7 +10,36 @@ This doc is research-led. The model borrows specific, named mechanics from the g
 
 ---
 
-## 0. WHERE WE ARE — measured honestly
+## STATUS — 2026-06-14 (as built)
+
+**The whole overhaul shipped.** Every phase D0–D7 landed, plus content beyond the original cut, and the cross-cutting gates hold: `npm test` is green (the dungeon/boundary/data-lint/save-migration suites run 1075 tests clean) and `npm run build` is green. Section 0 below is preserved as the *pre-overhaul baseline that motivated the work* — "there is no dungeon" was true when this was written; it isn't now. The rest of the doc reads as the design of record for the system that now exists.
+
+What's live, by slice:
+
+- **D0 — generator keystone: done.** `src/core/dungeon.ts` holds the two pure, seeded planners (`generateDungeon`, `rollRoomSpawns`) plus `dungeonDailySeed`/`dungeonWeeklySeed`. Layout, room graph, budget curve, rarity upgrades, and affix picks are deterministic on a seed; affix tier-gates and exclusions are enforced. The core never reads "rarity" — affixes resolve through the existing `EffectNode` path. `boundary.test.ts` stays green.
+- **D1 — one room, playable: done.** `src/systems/dungeon-session.ts` (`DungeonSession`) enters from a portal, spawns the seed-planned packs through the ring-spawn primitive, rolls kill loot, grants the room reward, and ejects cleanly on a wipe without saving mid-run state.
+- **D2 — the descent: done.** Multi-room runs with locked exits that open on clear, explicit route choice, passive rooms (rest heals the party), and a final guardian room running the existing boss-mechanic engine (`createRaidMechanicRunner` + `BossDef.phases`) via `guardianRaidDef`. The HUD shows live room number/type, driver, remaining foes, and exits.
+- **D3 — the threat ladder: done.** Monster rarity (normal / champion / rare) and the full eight-affix library in `src/data/dungeon-affixes.ts`, each composed from existing primitives: Jailer (root status), Frozen/Molten (ground zones), Vortex (displace), Waller (Fissure wall), Shielding (bounded armor/MR buff), Fast (speed buff), Health Link (follow-aura). Affix count scales by tier (1 → up to 4). Applied at spawn through `applyPackAffixes` → `execEffects`.
+- **D4 — rewards, curated and telegraphed: done.** Per-room-type `ItemDropTable`s wired to `rollItemDrops`; `RoomReward` telegraphs each door (`rewardFor`); curated guardian anchors replace the id-hash (e.g. Frost Hollow → Eye of Skadi / Refresher Orb; the agility/strength marquee descents anchor their lanes). Guardian pity (`pity: 4`) persists across runs via `DungeonProgressSave.dryStreaks`.
+- **D5 — difficulty and depth: done.** Normal/Nightmare/Hell gate affix count and drop quality; the depth budget/rarity curve climbs per room; opt-in Path-of-Exile-style modifiers (Packed Halls, Champion Sigil, Frozen Oath, Deep Map, Single Life) raise risk and reward together and are folded into a `ModifierProfile`.
+- **D6 — adaptive pacing and polish: done.** The Left 4 Dead intensity loop (`build-up` → `peak` → `relax`) shapes *when* the seed-planned packs spawn without changing the planned content (asserted by a determinism test); rest rooms are the valleys; `GameScene.setDungeonRoom` renders the room floor/border/door/anchor overlay and the HUD names the live template + dimensions.
+- **D7 — endgame: done.** Endless escalating descent with a rarity-weighted progress meter that opens the guardian route at 100%; frontier-gated levels (`clampEndlessLevel`); shared, reproducible daily/weekly seeds; capture + entourage mirror into the run.
+
+Content and surfaces beyond the original phasing:
+
+- **Four dungeons, not one.** `src/data/dungeons.ts` ships Frost Hollow (Icewrack) plus three marquee descents from `MARQUEE_AND_ARMORY_ADDENDUM.md` — The Severed Dark (Quoidge / Void Prelate), Worldstone Vault (Vile Reaches / Wraith King), Ember Caldera (Mad Moon Crater / Last Eldwurm) — each with a themed spawn pool, marquee-boss guardian, and lane-anchored loot. Portals are placed on all four regions (`region.dungeons`).
+- **Authored room interiors.** `src/data/room-templates.ts` registers `RoomTemplate`s with sizes, connectors, spawn anchors, allowed types, and prop hints (the richer Open-Decision-1 path), with a synthetic fallback for isolated tests.
+- **Entry UI.** `hud.ts` renders the dungeon-entry modal (tier radios, modifier checkboxes, Open Descent / Endless / Daily / Weekly) and the live in-run HUD; `Game.dungeonEntryOptions` / `startDungeon` back it.
+- **Seasonal/festival modes.** `DungeonSession` carries an optional `festivalMode` (hazard-survival, act-trials, endless-descent / continuum) layered on the same run, per `STORY.md`'s seasonal plans.
+- **Save persistence.** `DungeonProgressSave` (clears, wipes, best depth/tier, last tier/modifiers, dry streaks, best endless level) persists beside `raidProgress`; old saves migrate with the new fields defaulted.
+
+The per-decision resolutions the build settled are recorded inline in §7.
+
+---
+
+## 0. WHERE WE WERE — the pre-overhaul baseline (kept for the rationale)
+
+> Historical. This section is the honest measurement from *before* the overhaul, kept because it is the argument for why dungeons exist. The findings below ("there is no dungeon") describe the starting point; see the STATUS block above for the shipped state.
 
 Ancients has a Diablo *appetite* for dungeon crawling stated in the SPEC, and a world that is entirely hand-authored open overworld plus abstract arena fights. The two were never reconciled. The SPEC names dungeons four times as intended content — pathing "inside walled dungeons" (§3), mini-bosses "guarding routes, dungeons, and shrines" (§4), "dungeon quests" as a top-tier item source (§5), and the micro layer hosting "wild creep fights and capture, echo duels, recruitment trials, dungeons, and raids" (§6) — and none of it is built. There is no dungeon.
 
@@ -18,7 +47,7 @@ Four findings.
 
 **Finding 1 — the overworld is static, hand-placed camps with no variety or escalation.** A region's encounters are a fixed list of camps, each one creep type at one count at one spot on a respawn timer:
 
-```29:42:src/data/regions/tranquil-vale.ts
+```25:42:src/data/regions/tranquil-vale.ts
   camps: [
     { id: 'tv-kobold-tutorial', creepId: 'kobold', count: 2, pos: { x: 7050, y: 7300 }, radius: 220, respawnSec: 45 },
     { id: 'tv-kobold-1', creepId: 'kobold', count: 4, pos: { x: 4400, y: 5200 }, radius: 260, respawnSec: 60 },
@@ -29,7 +58,7 @@ Four findings.
 
 A camp is the simplest possible spawner. It spawns `count` copies of one creep in a ring and refills on a timer:
 
-```1546:1558:src/systems/game.ts
+```5354:5381:src/systems/game.ts
   private spawnCampCreeps(campId: string): number[] {
     const camp = this.region.camps.find((c) => c.id === campId)!;
     const def = REG.creep(camp.creepId);
@@ -38,6 +67,7 @@ A camp is the simplest possible spawner. It spawns `count` copies of one creep i
       const a = (i / camp.count) * Math.PI * 2;
       const r = camp.radius * 0.55;
       const pos = { x: camp.pos.x + Math.cos(a) * r, y: camp.pos.y + Math.sin(a) * r };
+      // ... (an optional ★2 elite on large camps was added later; the shape is unchanged)
       const u = this.sim.spawnCreep(def, { team: 1, pos, wild: true, homePos: { ...camp.pos } });
       uids.push(u.uid);
     }
@@ -45,7 +75,7 @@ A camp is the simplest possible spawner. It spawns `count` copies of one creep i
   }
 ```
 
-```2703:2730:src/systems/game.ts
+```6895:6923:src/systems/game.ts
   private updateCamps(): void {
     for (const [id, st] of this.camps) {
       if (st.respawnAt > 0) {
@@ -72,24 +102,27 @@ There is no density knob, no pack composition, no escalation, no elites, no vari
 
 **Finding 3 — bosses and raids are decoupled from geography and from exploration.** `BossDef.region` and `RaidDef.location` are labels, not coordinates. You do not walk to a boss; you open Town Services and click Normal / Nightmare / Hell, and a headless 5v1 resolves. The boss loot is a hash of the hero's id (see `LOOT_OVERHAUL.md` §0), and the fight is the same every time. The mechanics that *should* make a boss a destination — phases, add waves, telegraphed zones, enrage — already exist and compose cleanly:
 
-```368:402:src/core/macro.ts
+```452:498:src/core/macro.ts
   const tick = (s: Sim) => {
     if (!boss.alive) return;
     const hpPct = 100 * boss.hp / Math.max(1, boss.stats.maxHp);
     for (const m of mechs) {
       if (done.has(m.key)) continue;
-      if (m.kind === 'enrage') { ... }
-      if (hpPct > m.atHpPct) continue;
-      if (m.kind === 'add-wave' && m.wave) {
-        for (let i = 0; i < m.wave.count; i++) {
-          const ang = (i / m.wave.count) * Math.PI * 2;
-          const pos = { x: boss.pos.x + Math.cos(ang) * 150, y: boss.pos.y + Math.sin(ang) * 150 };
-          s.spawnSummon(m.wave.summon, boss, pos, ctx);
-        }
-        record(m);
-      } else if (m.kind === 'zone' && m.zone) { spawnZone(m.zone); record(m); }
-      ...
+      if (m.kind === 'enrage') { if (s.time >= def.enrageSec) arm(m, s.time); continue; }
+      if (hpPct <= m.atHpPct) arm(m, s.time);
     }
+    // a scorer picks one armed mechanic to fire this tick (pickBossMechanic)
+    const chosenKey = pickBossMechanic(s, boss, candidates);
+    ...
+    if (m.kind === 'add-wave' && m.wave) {
+      for (let i = 0; i < m.wave.count; i++) {
+        const ang = (i / m.wave.count) * Math.PI * 2;
+        const pos = { x: boss.pos.x + Math.cos(ang) * 150, y: boss.pos.y + Math.sin(ang) * 150 };
+        s.spawnSummon(m.wave.summon, boss, pos, ctx);
+      }
+      record(m);
+    } else if (m.kind === 'zone' && m.zone) { spawnZone(m.zone); record(m); }
+    ...
   };
 ```
 
@@ -267,16 +300,17 @@ Each subsection names the change, the design (with its research source), and the
 
 **The seam.** Affixes are `AffixDef` data whose `apply` is an `EffectNode[]` built from the existing primitives, attached to a unit at spawn through the same `externalMods` / status path the raid enrage already uses to buff the boss:
 
-```373:381:src/core/macro.ts
-        if (s.time >= def.enrageSec) {
-          // hard ramp: the boss stops playing fair once the timer expires.
-          boss.externalMods.damagePct = (boss.externalMods.damagePct ?? 0) + 120;
-          boss.externalMods.attackSpeed = (boss.externalMods.attackSpeed ?? 0) + 120;
-          boss.externalMods.moveSpeedPct = (boss.externalMods.moveSpeedPct ?? 0) + 30;
-          boss.markStatsDirty();
-          boss.refresh(s.time);
-          record(m);
-        }
+```472:481:src/core/macro.ts
+    if (m.kind === 'enrage') {
+      // hard ramp: the boss stops playing fair once the timer expires.
+      boss.externalMods.damagePct = (boss.externalMods.damagePct ?? 0) + 120;
+      boss.externalMods.attackSpeed = (boss.externalMods.attackSpeed ?? 0) + 120;
+      boss.externalMods.moveSpeedPct = (boss.externalMods.moveSpeedPct ?? 0) + 30;
+      boss.markStatsDirty();
+      boss.refresh(s.time);
+      record(m);
+      return;
+    }
 ```
 
 Champion health and damage reuse the creep **star** scaling (`starStatMult` / `starDamageMult` in `tuning.ts`), so a champion is mechanically a starred creep wearing affixes — no new stat system. The renderer reads rarity for the name plate and beam color (the rarity palette `LOOT_OVERHAUL.md` §3.6 already specifies), and the affix set for its telegraph VFX, the same render-only overlay path items use. The core never reads "rarity" as a concept; it reads the stat mods and statuses the affix resolved into, the way it reads any other buff.
@@ -289,17 +323,24 @@ Champion health and damage reuse the creep **star** scaling (`starStatMult` / `s
 
 ### 3.5 The guardian and boss rooms (the destination)
 
-**Design (Diablo III rift guardian).** The final room is the dungeon's boss, and it carries the run's real reward, so clearing to the end is the goal. Reuse the boss that already exists: a `BossDef` with phases and the raid mechanic runner (add waves, telegraphed zones, signature beat, enrage), now standing at the bottom of a map you traveled to instead of behind a menu button. Mini-bosses become elite-room leaders (the SPEC's "mini-bosses guarding dungeons," §4). The guardian's loot is a curated `ItemDropTable` themed to the dungeon (the agility-carry dungeon anchors Butterfly, the strength dungeon anchors Heart — `LOOT_OVERHAUL.md` §3.3's exact mapping), replacing the id-hash that picks boss loot today:
+**Design (Diablo III rift guardian).** The final room is the dungeon's boss, and it carries the run's real reward, so clearing to the end is the goal. Reuse the boss that already exists: a `BossDef` with phases and the raid mechanic runner (add waves, telegraphed zones, signature beat, enrage), now standing at the bottom of a map you traveled to instead of behind a menu button. Mini-bosses become elite-room leaders (the SPEC's "mini-bosses guarding dungeons," §4). The guardian's loot is a curated, per-dungeon `ItemDropTable` themed to the dungeon (the agility-carry dungeon anchors Butterfly, the strength dungeon anchors Heart — `LOOT_OVERHAUL.md` §3.3's exact mapping), authored as `DungeonDef.loot.boss` in `data/dungeons.ts`. (When this was written, boss loot was an id-hash; it has since become attribute-lane `themedLoot`, and dungeon guardians get their own curated table on top of that — `as built`, see the STATUS block.)
 
-```7:15:src/data/bosses.ts
-function loot(heroId: string): LootTable {
-  const idx = Math.abs(heroId.split('').reduce((acc, ch) => acc + ch.charCodeAt(0), 0));
-  return {
-    guaranteed: [COMPONENTS[idx % COMPONENTS.length]],
-    assembledPool: [ANCHORS[idx % ANCHORS.length]],
-    dropPct: TUNING.bossAssembledDropPct,
-    pity: TUNING.raidBadLuckPity
-  };
+```52:66:src/data/bosses.ts
+function themedLoot(heroId: string, rank: BossDef['rank']): LootTable {
+  const isMini = rank === 'mini-boss';
+  let guaranteed = ['ultimate-orb'];
+  let assembledPool = ['aghanims-scepter', 'refresher-orb'];
+  if (AGILITY_CARRIES.has(heroId)) {
+    guaranteed = ['eaglesong'];
+    assembledPool = ['butterfly', 'eye-of-skadi', 'abyssal-blade', 'bloodthorn', /* ... */];
+  } else if (STRENGTH_TITANS.has(heroId)) {
+    guaranteed = ['reaver'];
+    assembledPool = ['heart-of-tarrasque', 'satanic', 'radiance', /* ... */];
+  } else if (INTELLIGENCE_BOSSES.has(heroId)) {
+    guaranteed = ['mystic-staff'];
+    assembledPool = ['scythe-of-vyse', 'refresher-orb', 'octarine-core', /* ... */];
+  }
+  ...
 }
 ```
 
@@ -397,17 +438,28 @@ Cross-cutting gates (every slice): `npm test` and `npm run build` green; `bounda
 
 ---
 
-## 7. OPEN DECISIONS — settle these while building
+## 7. OPEN DECISIONS — settled by the build
+
+Each was meant to be settled while building; it was. The original framing is kept, with the resolution recorded inline.
 
 1. **Generation grain.** Full room-template stitching (Diablo II, richest, most authoring) versus simpler bounded arenas connected by doorways (faster to ship, less varied interiors). Recommended: start with bounded arenas in D1–D2, add template stitching in a later pass once the loop is proven. Decide in D2.
+   - **Resolved (D2):** went to authored `RoomTemplate`s (`src/data/room-templates.ts`) — sizes, connectors, spawn anchors, allowed types, prop hints — the richer path, with a synthetic bounded-arena fallback kept for isolated tests. The session sizes each room's sim bounds from the selected template and places packs/guardians on its anchors.
 2. **Run length and structure.** Slay-the-Spire branching graph (route choice, more agency) versus Hades linear chambers with a choice of next door (simpler, still telegraphed). Recommended: linear-with-door-choice first, branching graph if route planning proves fun. Decide in D2.
+   - **Resolved (D2):** linear descent (6–9 rooms) with an occasional forward branch — `generateDungeon` adds a skip-ahead exit at ~30% in the run's middle, so most rooms offer one door and some offer two. Full Spire-style graph stayed on the shelf; the loop is fun without it.
 3. **Death penalty.** Hades-style clean eject (friendly, repeatable) versus a stake (lose unbanked drops, a Diablo II corpse run). Recommended: clean eject for the base game, an opt-in high-stakes modifier (§3.6) for players who want it. Decide in D5.
+   - **Resolved (D5):** clean eject is the base (a wipe returns the party to the portal, nothing banked is lost), and the opt-in **Single Life** modifier marks the high-stakes run (`highStakes`, no mid-run persistence, wipe recorded).
 4. **How affixes attach to packs.** All pack members share affixes (Diablo III champions) versus a leader-only model (Diablo III rares). Recommended: champions share, rares are leader-plus-minions, both supported by `PlannedPack`. Confirm in D3.
+   - **Resolved (D3):** every member of a pack shares its affixes (`applyPackAffixes` applies the affix `EffectNode`s to all spawned units). Rares are modeled as a small, higher-rarity pack with more affixes rather than a distinct leader+minion role split — the shared-affix model carried both without a separate code path.
 5. **Affix starting set.** Recommended first library, all composing from existing primitives: Jailer (root), Molten (trailing zone), Frozen (telegraphed zone), Vortex (force-move), Waller (Fissure wall), Shielding (timed invuln), Fast (speed buff), Health Link (shared damage). More can join as pure data later. Decide the cut in D3.
+   - **Resolved (D3):** all eight shipped exactly (`src/data/dungeon-affixes.ts`). Two composed pragmatically to stay inside the closed primitive set: **Shielding** is a bounded armor/magic-resist buff that dies with the carrier (not true invuln, which would make a pack unkillable), and **Health Link** is a follow-aura that reinforces nearby pack health/armor (true shared-damage isn't a current primitive). Jailer↔Vortex exclude; Vortex/Waller/Health-Link gate at Nightmare+.
 6. **Where portals live and how dungeons unlock.** A fixed portal per region (predictable) versus discoverable/roaming portals (exploration tie-in) versus quest-gated (SPEC's "dungeon quests"). Recommended: one fixed portal per region from Icewrack onward, plus quest-gated special dungeons for top-tier item firsts. Decide in D4 against the LOOT chase.
+   - **Resolved (D4):** one fixed portal per region (`region.dungeons`), shipped on Icewrack, Vile Reaches, Quoidge, and Mad Moon Crater. Dedicated quest-gating of special dungeons stayed deferred — the marquee descents are reached by their region portals, not a quest lock.
 7. **Save granularity.** Ephemeral runs (recommended, matches raids, simplest) versus resumable mid-run saves (friendlier, much heavier). Hold resumable until endless mode (D7) proves it is wanted.
+   - **Resolved (D7):** ephemeral, as recommended. Only `DungeonProgressSave` persists (clears, wipes, best depth/tier, last modifiers, guardian dry streaks, best endless level); no mid-run save. Resumable runs were not needed.
 8. **Pacing determinism boundary.** Confirm the rule that the director changes spawn *timing* only and never the seeded content, so tests assert on planned packs. If a future mode wants live-reactive *content* (L4D's true adaptivity), gate it behind a flag and log it in `DECISIONS.md`, the way Resonance-in-macro is gated.
+   - **Resolved (D6):** confirmed and tested — the pacing director changes only *when* the seed-planned packs arrive (a determinism test asserts the planned packs are unchanged). Live-reactive *content* exists only inside opt-in seasonal **festival modes** (`DungeonSession.festivalMode`), which are a separate mode, not the default seeded run.
 9. **Endless scaling ceiling.** Whether endless depth scales forever (Diablo III greater rifts) or caps at a tier, and how the progress meter weights elites versus trash (Diablo III progress orbs reward killing elites). Tune in D7 against the post-cap economy.
+   - **Resolved (D7):** endless scales without a hard ceiling (depth, budget, and champion/rare odds all climb with the level), frontier-gated so you can only push one level past your best (`clampEndlessLevel`). The progress meter is rarity-weighted — normal/champion/rare count 1/3/6 — so killing elites fills it faster, and reaching 100% opens the guardian route.
 
 ---
 
