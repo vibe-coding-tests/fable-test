@@ -2,7 +2,9 @@
 
 > *The Mad Moon broke. Its shards remember every war.*
 
-> **Note:** This is a Workday project for the Agentic Software Development Lifecycle. It exists primarily to stress test and understand the capabilities of new model releases for Agent architectural development, using the Cursor agent and its long-running harness as the testbed — a large, evolving codebase for exploring how AI agents plan, build, test, and maintain software over time. The game is real and playable, but that is the vehicle, not the goal.
+> **Status: unstable, close to unplayable.** The game does not currently hold together end to end. Fable was removed, and a round of bug fixes applied through the Opus and GPT agent harnesses broke a lot of things in the process. Expect crashes, broken flows, and features that no longer work as the rest of this README describes. Treat the descriptions below as the design target, not the current behavior, until the codebase is stabilized again.
+
+> **Note:** This is a Workday project for the Agentic Software Development Lifecycle. It exists primarily to stress test and understand the capabilities of new model releases for Agent architectural development, using the Cursor agent and its long-running harness as the testbed — a large, evolving codebase for exploring how AI agents plan, build, test, and maintain software over time. The game is the vehicle, not the goal, and right now the vehicle is up on blocks.
 
 Ancients drops the whole cast of **Dota 2** into an open world and lets you walk it. It is a browser-based 3D action RPG that fuses three games into one: the heroes, spells, items, and lore of Dota 2, the overworld of **Pokémon** (explore, capture, earn gym badges, climb an Elite ladder), and the loot loop of **Diablo 2** (boss runs, drops, builds). On top of that sit **WoW**-style raids and a **Genshin**-style elemental party layer. You cross one continent, bind a roster of over a hundred heroes, farm the gear that makes them sing, and fight on two layers at once: real-time action combat out in the world, and 5v5 auto-resolved battles at the gyms.
 
@@ -18,7 +20,7 @@ Other things hear the Moon ring, and claimants cross from neighboring worlds for
 
 ## What's in the game
 
-This is a full game, playable start to finish right now. One fresh save carries you through eight gym badges, four raid clears, the Elite Five draft, and the Champion fight at the Tower. Nothing is stubbed out, nothing blocks the path, and the whole continent is yours to farm, build, and break in any order a badge allows.
+This describes the intended game. On paper, one fresh save carries you through eight gym badges, four raid clears, the Elite Five draft, and the Champion fight at the Tower. In its current state that path is broken in places: see the status note at the top. The content below is built out, but recent harness-driven fixes left several systems in a state where they crash or misbehave, so treat this as the target rather than a promise of what works today.
 
 **Roster and content**
 
