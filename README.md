@@ -2,6 +2,8 @@
 
 > *The Mad Moon broke. Its shards remember every war.*
 
+> **Note:** This is a learning project for the Agentic Software Development Lifecycle. It exists primarily as a testbed for the Cursor agent and its long-running harness setup — a large, evolving codebase for exploring how AI agents plan, build, test, and maintain software over time. The game is real and playable, but that is the vehicle, not the goal.
+
 Ancients drops the whole cast of **Dota 2** into an open world and lets you walk it. It is a browser-based 3D action RPG that fuses three games into one: the heroes, spells, items, and lore of Dota 2, the overworld of **Pokémon** (explore, capture, earn gym badges, climb an Elite ladder), and the loot loop of **Diablo 2** (boss runs, drops, builds). On top of that sit **WoW**-style raids and a **Genshin**-style elemental party layer. You cross one continent, bind a roster of over a hundred heroes, farm the gear that makes them sing, and fight on two layers at once: real-time action combat out in the world, and 5v5 auto-resolved battles at the gyms.
 
 And it all runs in a browser tab from `npm run dev`, with no game engine. Vite, Three.js, and vanilla TypeScript do every bit of the work. Each hero, item, creep, and region is a plain data file read by generic systems, so most new content is data, not code. Visuals render from procedural models and generated icons by default, with a glTF pipeline ready to drop in higher-fidelity hero models when assets are present.
