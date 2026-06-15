@@ -483,10 +483,10 @@ export class VfxManager {
       case 'skill-spend': {
         const p = unitPos(ev.uid);
         if (p) {
-          const color = ev.kind === 'attribute' ? '#8adf7a' : ev.kind === 'talent' ? '#d990ff' : '#59c0e0';
-          const accent = ev.kind === 'attribute' ? '#ffffff' : '#ffd86a';
-          this.burst(p.x, p.y, color, ev.kind === 'talent' ? 1.05 : 0.82, 0.34, accent, ev.kind === 'ability' ? 'shard' : 'soft');
-          this.pillar(p.x, p.y, accent, ev.kind === 'talent' ? 0.42 : 0.28);
+          const color = ev.kind === 'attribute' ? '#8adf7a' : ev.kind === 'talent' ? '#d990ff' : ev.kind === 'mastery' ? '#ffd86a' : '#59c0e0';
+          const accent = ev.kind === 'attribute' ? '#ffffff' : ev.kind === 'mastery' ? '#7adfc4' : '#ffd86a';
+          this.burst(p.x, p.y, color, ev.kind === 'talent' || ev.kind === 'mastery' ? 1.05 : 0.82, 0.34, accent, ev.kind === 'ability' ? 'shard' : 'soft');
+          this.pillar(p.x, p.y, accent, ev.kind === 'talent' || ev.kind === 'mastery' ? 0.42 : 0.28);
         }
         break;
       }

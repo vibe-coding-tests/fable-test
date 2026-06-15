@@ -1,5 +1,6 @@
 import type { HeroDef } from '../../core/types';
 import { loopTurnLabel } from './loop-note';
+import { authoredMasteryTrees } from './mastery-authoring';
 
 export const CRYSTAL_MAIDEN: HeroDef = {
   id: 'crystal-maiden',
@@ -205,6 +206,40 @@ export const CRYSTAL_MAIDEN: HeroDef = {
       ]
     }
   },
+  masteryTrees: authoredMasteryTrees([
+    {
+      abilityId: 'cm-crystal-nova',
+      name: 'Winter Burst',
+      t1: { name: 'Glacial Bloom', description: 'Crystal Nova gains a small intelligence-scaling damage bump.', mods: { int: 2 }, override: { valueKey: 'damage' } },
+      t2: { name: 'Killing Chill', description: 'Crystal Nova marks chilled enemies, prioritizing them for Frostbite.', mechanic: 'mark', override: { valueKey: 'damage' } },
+      t3: { name: 'Deepening Frost', description: "Crystal Nova's growth node widens its burst and improves slow reliability.", override: { valueKey: 'radius' } },
+      t4: { name: 'Frozen Field', description: 'Crystal Nova leaves a frozen field that can feed Freezing Field explosions.', mechanic: 'persist' }
+    },
+    {
+      abilityId: 'cm-frostbite',
+      name: 'Glacier',
+      t1: { name: 'Biting Cold', description: 'Frostbite gains an intelligence-scaling damage-over-time bump.', mods: { int: 2 }, override: { valueKey: 'dps' } },
+      t2: { name: 'Stored Winter', description: 'Frostbite stores damage taken while rooted, then bursts when the root ends.', mechanic: 'store', override: { valueKey: 'dps' } },
+      t3: { name: 'Locked Ice', description: "Frostbite's growth node holds the target longer with steadier scaling.", override: { valueKey: 'duration' } },
+      t4: { name: 'Spreading Frost', description: 'Frostbite chains to a nearby chilled target.', mechanic: 'chain' }
+    },
+    {
+      abilityId: 'cm-arcane-aura',
+      name: 'Arcane Tide',
+      t1: { name: 'Cold Current', description: "Arcane Aura's mana regen scales with Crystal Maiden's intelligence.", mods: { int: 2 }, override: { valueKey: 'regen' } },
+      t2: { name: 'Spell Recovery', description: 'Arcane Aura turns excess mana regen into spell recovery after casts.', mechanic: 'convert', override: { valueKey: 'regen' } },
+      t3: { name: 'Glacial Flow', description: "Arcane Aura's growth node deepens the mana current it carries.", override: { valueKey: 'regen' } },
+      t4: { name: 'Primed Frost', description: 'Arcane Aura primes the next ice spell whenever Crystal Maiden spends enough mana.', mechanic: 'prime' }
+    },
+    {
+      abilityId: 'cm-freezing-field',
+      name: 'Blizzard',
+      t1: { name: 'Killing Frost', description: 'Freezing Field gains an intelligence-scaling explosion bump.', mods: { int: 2 }, override: { valueKey: 'explosion' } },
+      t2: { name: 'Cold Hunt', description: 'Freezing Field explosions seek chilled or rooted enemies first.', mechanic: 'retarget', override: { valueKey: 'explosion' } },
+      t3: { name: 'Widening Storm', description: "Freezing Field's growth node broadens the storm's reach.", override: { valueKey: 'fieldRadius' } },
+      t4: { name: 'Drifting Winter', description: 'Crystal Maiden can drift while channeling Freezing Field, leaving a trail of smaller frost bursts.', mechanic: 'follow' }
+    }
+  ]),
   silhouette: { build: 'biped', scale: 0.95, bodyShape: 'robed', head: 'hood', weapon: 'staff', extras: ['cape'] },
   palette: ['#7ec8f2', '#f4fbff', '#b8c4d8'],
   barks: [

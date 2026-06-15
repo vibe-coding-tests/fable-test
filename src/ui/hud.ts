@@ -13,7 +13,10 @@ import { itemReady, sellValue, computeBuyPlan } from '../core/items';
 import { buybackCost } from '../core/phase3';
 import { defaultInterfaceSettings } from '../core/phase4';
 import { abilityMaxLevel, abilityRankRequiredHeroLevel, levelArr } from '../core/values';
+import { deriveMasteryTrees, masteryNodeIndex, masteryNodeUnlocked, masteryPointsForLevel } from '../core/mastery';
 import { buildDefaultGambit } from '../core/controllers';
+import { BOARD_COLS, BOARD_ROWS, DOCTRINES, defaultFormation, doctrineFormation, placementHint, reachProfile, type DoctrineId } from '../core/board';
+import { describeRule, validateDraft } from '../core/draft';
 import { statLabel, fmtStatValue, statLines, buildAbilityCard, buildItemCard, buildNeutralItemCard, buildHeroCard, type TooltipCard } from '../core/describe';
 import { abilityIcon, itemIcon, neutralItemIcon, heroPortrait } from '../engine/icons';
 import { WORLD_SCALE } from '../engine/scale';
@@ -21,7 +24,7 @@ import { Game } from '../systems/game';
 import { ACTION_META, INPUT_ACTIONS, canRebindAction, glyphForAction, keyEventToBinding, rebindAction, resetKeyBindings } from '../systems/keybindings';
 import type { InputController } from '../systems/input';
 import type { Unit } from '../core/unit';
-import type { DifficultyTier, GambitAction, GambitCondition, GambitRule, GambitTargetMode, GraphicsSettings, HeroDef, InputAction, ItemDef, ItemRarity, ItemSave, SimEvent, StatModMap, StatusId, TalentDef, Vec2 } from '../core/types';
+import type { DifficultyTier, DraftTeam, GambitAction, GambitCondition, GambitRule, GambitTargetMode, GraphicsSettings, HeroDef, InputAction, ItemDef, ItemRarity, ItemSave, MacroHeroSetup, SimEvent, StatModMap, StatusId, TalentDef, Vec2 } from '../core/types';
 import * as THREE from 'three';
 
 // ------------------------------------------------------------------
@@ -329,6 +332,9 @@ export class Hud {
   private lastTrialChoiceKey = '';
   private liveGymBar: HTMLElement;
   private combatReadout: HTMLElement;
+  private counterReveal!: HTMLElement;
+  private counterRevealKey = '';
+  private counterRevealHideAt = 0;
   private cinematicLayer: HTMLElement;
   private hoverCard!: HTMLElement;
   private tips = new Map<string, string>();
@@ -355,15 +361,22 @@ export class Hud {
   // gambit editor working state (§3.5)
   private gambitDraft: GambitRule[] = [];
   private gambitEditRec = -1;
-  private gambitReturnTo: 'party' | 'prefight' | 'none' = 'none';
+  private gambitEditDraftHeroId: string | null = null;
+  private gambitReturnTo: 'party' | 'prefight' | 'draft' | 'none' = 'none';
   private prefightGymId: string | null = null;
+  // draft + board editor (AUTOBATTLER_OVERHAUL §3/§7)
+  private draftGymId: string | null = null;
+  private draftEdit: DraftTeam | null = null;
+  private draftPick: string | null = null; // heroId currently held for placement
+  private draftDragId: string | null = null; // heroId being dragged (drag-and-drop, §7)
+  private draftHoverId: string | null = null; // heroId under the cursor for the reach readout
   private dungeonEntryId: string | null = null;
 
   private floaters: Floater[] = [];
   private contactFloaterAt = new Map<string, number>();
   private coinFx: CoinFx[] = [];
   private shownToasts = 0;
-  private modalKind: 'none' | 'party' | 'shop' | 'menu' | 'talents' | 'journal' | 'codex' | 'character' | 'help' | 'gambit' | 'prefight' | 'dungeon-entry' | 'services' = 'none';
+  private modalKind: 'none' | 'party' | 'shop' | 'menu' | 'talents' | 'journal' | 'codex' | 'character' | 'help' | 'gambit' | 'prefight' | 'draft' | 'elite-draft' | 'dungeon-entry' | 'services' = 'none';
   /** When the Journal is opened by talking to a giver, spotlight its board. */
   private questGiverFocus: string | null = null;
   private captureUntil = 0;
@@ -411,6 +424,7 @@ export class Hud {
       <div id="hud-hint"></div>
       <div id="trial-choice" class="hidden"></div>
       <div id="combat-readout" class="hidden"></div>
+      <div id="counter-reveal" class="hidden"></div>
       <div id="live-gym-bar" class="hidden"></div>
       <div id="cinematic-layer" class="hidden"></div>
       <div id="modal-root" class="hidden"></div>
@@ -437,6 +451,7 @@ export class Hud {
     });
     this.liveGymBar = this.root.querySelector('#live-gym-bar')!;
     this.combatReadout = this.root.querySelector('#combat-readout')!;
+    this.counterReveal = this.root.querySelector('#counter-reveal')!;
     this.cinematicLayer = this.root.querySelector('#cinematic-layer')!;
     this.liveGymBar.addEventListener('click', (e) => {
       const btn = (e.target as HTMLElement).closest('[data-livegym]') as HTMLElement | null;
@@ -938,6 +953,7 @@ export class Hud {
     this.renderTrialChoice();
     this.renderLiveGym();
     this.renderCombatReadout();
+    this.renderCounterReveal();
     this.renderCinematic();
     this.updateLowHpHeartbeat();
     if (this.modalKind === 'shop' || this.modalKind === 'party') this.refreshModalDynamic();
@@ -1465,15 +1481,16 @@ export class Hud {
     const def = REG.hero(rec.heroId);
     const now = g.sim.time;
     const xp = xpProgress(u.level, u.xp);
-    const pendingSkillPoints = g.pendingSkillPoints(rec);
-    this.heroPanel.classList.toggle('skill-ready', pendingSkillPoints > 0);
+    const pendingAbilityPoints = g.pendingAbilityPoints(rec);
+    const pendingMasteryPoints = g.pendingMasteryPoints(rec);
+    this.heroPanel.classList.toggle('skill-ready', pendingAbilityPoints > 0 || pendingMasteryPoints > 0);
 
     let abilitiesHtml = '';
     u.abilities.forEach((a, i) => {
       if (i >= 6) return;
       const maxLevel = abilityMaxLevel(a.def);
       const nextReq = a.level < maxLevel ? abilityRankRequiredHeroLevel(a.def, a.level + 1) : 0;
-      const canUpgrade = pendingSkillPoints > 0 && g.canLevelAbility(g.activeIdx, i);
+      const canUpgrade = pendingAbilityPoints > 0 && g.canLevelAbility(g.activeIdx, i);
       const cdLeft = Math.max(0, a.cooldownUntil - now);
       const cdTotal = (levelArr(a.def.cooldown, Math.max(1, a.level), 1) || 1) * TUNING.cooldownScale;
       const cdPct = cdLeft > 0 ? Math.min(100, (cdLeft / cdTotal) * 100) : 0;
@@ -1496,7 +1513,7 @@ export class Hud {
           ${cdLeft > 0 ? `<div class="cd" style="--cd-deg:${(cdPct * 3.6).toFixed(1)}deg"></div><span class="cd-num">${cdLeft.toFixed(cdLeft > 5 ? 0 : 1)}</span>` : ''}
           <span class="hotkey">${passive ? '' : esc(hotkey)}</span>
           <span class="ab-level">${a.level}/${maxLevel}</span>
-          ${pendingSkillPoints > 0 && a.level < maxLevel ? `<button class="ab-plus" data-skill="${i}" ${canUpgrade ? '' : 'disabled'} title="${canUpgrade ? 'Spend a skill point' : `Requires hero level ${nextReq}`}">+</button>` : ''}
+          ${pendingAbilityPoints > 0 && a.level < maxLevel ? `<button class="ab-plus" data-skill="${i}" ${canUpgrade ? '' : 'disabled'} title="${canUpgrade ? 'Spend an ability point' : `Requires hero level ${nextReq}`}">+</button>` : ''}
           ${mana > 0 ? `<span class="ab-mana">${Math.round(mana)}</span>` : ''}
         </div>`;
     });
@@ -1536,8 +1553,6 @@ export class Hud {
         </div>`;
     });
 
-    const talentPending = pendingSkillPoints > 0 && g.pendingTalentTier(rec) >= 0;
-    const attrPending = pendingSkillPoints > 0 && g.canSpendAttributePoint(g.activeIdx);
     const facet = def.facets[rec.facetIdx];
     const regen = liveRegen(u.stats);
     const pickedTalents = rec.talentPicks
@@ -1569,14 +1584,40 @@ export class Hud {
       : 'Level cap';
     const hpRegenTitle = `HP regen: base + flat ${fmtRegen(u.stats.hpRegen)}/s, max-HP ${fmtRegen((u.stats.maxHp * u.stats.hpRegenPctMax) / 100)}/s, total +${fmtRegen(regen.hp)}/s`;
     const manaRegenTitle = `Mana regen: base + flat ${fmtRegen(u.stats.manaRegen)}/s, max-mana ${fmtRegen((u.stats.maxMana * u.stats.manaRegenPctMax) / 100)}/s, total +${fmtRegen(regen.mana)}/s`;
-    const skillSpendHtml = pendingSkillPoints > 0
-      ? `<div class="skill-points"><b>${pendingSkillPoints}</b> skill point${pendingSkillPoints === 1 ? '' : 's'} available
-          ${talentPending ? '<button class="talent-btn inline" id="talent-open">Talent</button>' : ''}
-          ${attrPending ? `<button class="btn tiny attr-btn" id="attr-up">+2 all stats (${rec.attributePoints}/${g.maxAttributePoints(rec)})</button>` : ''}
+    const masteryBranches = deriveMasteryTrees(def);
+    const masterySpent = rec.masteryRanks.reduce((sum, rank) => sum + (rank > 0 ? 1 : 0), 0);
+    const masteryHtml = `
+      <div class="mastery-panel">
+        <div class="mastery-head">
+          <b>Masteries</b>
+          <span>${pendingMasteryPoints} MP available · ${masterySpent}/${masteryPointsForLevel(rec.level)} spent</span>
+          ${masterySpent > 0 ? '<button class="btn tiny mastery-respec" id="mastery-respec">Refund</button>' : ''}
+        </div>
+        <div class="mastery-grid">
+          ${masteryBranches.map((branch, branchIdx) => {
+            const ability = def.abilities[branchIdx];
+            return `<div class="mastery-branch">
+              <div class="mastery-ability"><img src="${abilityIcon(ability)}" alt=""><span>${esc(branch.name)}</span></div>
+              <div class="mastery-nodes">
+                ${branch.nodes.map((node, tierIdx) => {
+                  const nodeIdx = masteryNodeIndex(branchIdx, tierIdx + 1);
+                  const bought = (rec.masteryRanks[nodeIdx] ?? 0) > 0;
+                  const unlocked = masteryNodeUnlocked(def, rec.level, rec.abilityLevels, nodeIdx);
+                  const canBuy = g.canBuyMasteryNode(g.activeIdx, nodeIdx);
+                  const title = `${node.name}: ${node.description}${unlocked ? '' : ' (locked by ability rank)'}`;
+                  return `<button class="mastery-node ${node.kind} ${bought ? 'bought' : ''} ${unlocked ? 'unlocked' : 'locked'}" data-mastery="${nodeIdx}" ${canBuy ? '' : 'disabled'} title="${esc(title)}">${tierIdx + 1}</button>`;
+                }).join('')}
+              </div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    const skillSpendHtml = (pendingAbilityPoints > 0 || pendingMasteryPoints > 0)
+      ? `<div class="skill-points">
+          ${pendingAbilityPoints > 0 ? `<span><b>${pendingAbilityPoints}</b> ability point${pendingAbilityPoints === 1 ? '' : 's'}</span>` : ''}
+          ${pendingMasteryPoints > 0 ? `<span><b>${pendingMasteryPoints}</b> mastery point${pendingMasteryPoints === 1 ? '' : 's'}</span>` : ''}
         </div>`
-      : rec.attributePoints > 0
-        ? `<div class="skill-points spent">Attributes +${rec.attributePoints * 2} all stats</div>`
-        : '';
+      : '';
 
     const heroTip = this.registerTip(`hero-active`, buildHeroCard(def, { level: u.level }), { accent: def.palette[2] ?? 'var(--brass)', extra: heroExtra });
     this.heroPanel.innerHTML = `
@@ -1593,6 +1634,7 @@ export class Hud {
           <div class="bar xp"><div style="width:${xp.pct * 100}%"></div><span>${xpText}</span></div>
           ${this.statusPipsHtml(u, 'hero', 6)}
           ${skillSpendHtml}
+          ${masteryHtml}
           <div class="hp-stats">DMG ${Math.round(u.stats.damage)} · ARM ${u.stats.armor.toFixed(1)} · MS ${Math.round(u.stats.moveSpeed)} · HP +${fmtRegen(regen.hp)}/s · MP +${fmtRegen(regen.mana)}/s</div>
         </div>
       </div>
@@ -1600,10 +1642,12 @@ export class Hud {
       <div class="item-grid">${itemsHtml}</div>
     `;
     this.heroPanel.querySelector('#character-open')?.addEventListener('click', () => this.toggleModal('character'));
-    this.heroPanel.querySelector('#talent-open')?.addEventListener('click', () => this.toggleModal('talents'));
-    this.heroPanel.querySelector('#attr-up')?.addEventListener('click', () => g.applyAttributePoint(g.activeIdx));
+    this.heroPanel.querySelector('#mastery-respec')?.addEventListener('click', () => g.respecMasteries(g.activeIdx));
     this.heroPanel.querySelectorAll('[data-skill]').forEach((el) => {
       el.addEventListener('click', () => g.levelAbility(g.activeIdx, Number((el as HTMLElement).dataset.skill)));
+    });
+    this.heroPanel.querySelectorAll('[data-mastery]').forEach((el) => {
+      el.addEventListener('click', () => g.buyMasteryNode(g.activeIdx, Number((el as HTMLElement).dataset.mastery)));
     });
     this.heroPanel.querySelectorAll<HTMLElement>('[data-item-slot]').forEach((el) => {
       el.addEventListener('dragstart', (e) => {
@@ -1827,6 +1871,11 @@ export class Hud {
   private updateFloaters(): void {
     const now = performance.now();
     const cam = this.game.scene.camera;
+    if (!cam) {
+      this.floaters.forEach((f) => f.el.remove());
+      this.floaters = [];
+      return;
+    }
     this.floaters = this.floaters.filter((f) => {
       const age = (now - f.born) / 1000;
       if (age > f.life) {
@@ -2044,6 +2093,7 @@ export class Hud {
 
   closeModal(): void {
     if (this.modalKind === 'gambit') this.commitGambit();
+    if (this.modalKind === 'elite-draft') this.game.cancelEliteDraft();
     if (this.modalKind !== 'none') this.playUi('close');
     this.modalKind = 'none';
     this.questGiverFocus = null;
@@ -2123,6 +2173,13 @@ export class Hud {
       const details = talentDetailLines(talent, def).join(' · ');
       return `<li><span>Lv ${tier.level}</span><b>${esc(talent.name)}${unlocked ? ' + echo' : ''}</b>${details ? `<em>${esc(details)}</em>` : ''}</li>`;
     }).join('');
+    const masteryBranches = deriveMasteryTrees(def);
+    const masteryList = masteryBranches.flatMap((branch, branchIdx) =>
+      branch.nodes.map((node, tierIdx) => {
+        const idx = masteryNodeIndex(branchIdx, tierIdx + 1);
+        return (rec.masteryRanks[idx] ?? 0) > 0 ? `<li><span>${esc(branch.name)} ${tierIdx + 1}</span><b>${esc(node.name)}</b><em>${esc(node.description)}</em></li>` : '';
+      })
+    ).filter(Boolean).join('');
     const facet = def.facets[rec.facetIdx];
     this.modalShell(
       `${def.name} — Character Sheet`,
@@ -2166,6 +2223,9 @@ export class Hud {
           ${section('Talents & Echo', `
             <ul class="cs-talents">${pickedTalents}</ul>
             <div class="cs-row"><span>Echo kills</span><b>${rec.echo.kills}</b><em>${rec.echo.talentTierUnlocks.filter(Boolean).length}/4 echo branches</em></div>
+          `)}
+          ${section('Masteries', `
+            <ul class="cs-talents">${masteryList || '<li><span>None</span><em>No mastery nodes bought yet</em></li>'}</ul>
           `)}
         </div>
       </div>`
@@ -2291,6 +2351,7 @@ export class Hud {
     { label: 'Enemies', kinds: ['enemy-hp-below', 'enemies-within', 'focus-is-role', 'enemy-count-by-role', 'distance-to-focus-gt', 'distance-to-focus-lt'] },
     { label: 'Reactions', kinds: ['enemy-cast-seen', 'incoming-disable', 'tag-in-ready', 'combo-setup-active'] },
     { label: 'Combos', kinds: ['combo-ready', 'save-assigned', 'in-friendly-field', 'enemy-in-hostile-field'] },
+    { label: 'Formation', kinds: ['in-formation', 'backline-threatened', 'enemy-clustered', 'flank-open', 'ally-channeling', 'enemy-channeling'] },
     { label: 'Abilities', kinds: ['ability-ready'] }
   ];
   private static readonly COND_KINDS = Hud.COND_GROUPS.flatMap((g) => g.kinds);
@@ -2303,11 +2364,14 @@ export class Hud {
     'enemy-cast-seen': 'Enemy casting', 'self-disabled': "I'm disabled", 'incoming-disable': 'Disable incoming',
     'tag-in-ready': 'Tag-in ready', 'combo-setup-active': 'Combo setup active',
     'combo-ready': 'Combo ready', 'save-assigned': "I'm the save-holder",
-    'in-friendly-field': 'In friendly field', 'enemy-in-hostile-field': 'Focus in our field'
+    'in-friendly-field': 'In friendly field', 'enemy-in-hostile-field': 'Focus in our field',
+    'in-formation': 'Holding formation', 'backline-threatened': 'Backline threatened',
+    'enemy-clustered': 'Enemies clustered', 'flank-open': 'Flank open',
+    'ally-channeling': 'Ally channeling', 'enemy-channeling': 'Enemy channeling'
   };
-  private static readonly ACT_KINDS = ['cast', 'use-item', 'attack-focus', 'focus-fire', 'kite', 'peel', 'spread', 'dodge-zones', 'retreat', 'hold'];
+  private static readonly ACT_KINDS = ['cast', 'use-item', 'combo-route', 'attack-focus', 'focus-fire', 'kite', 'peel', 'spread', 'dodge-zones', 'retreat', 'hold'];
   private static readonly ACT_LABEL: Record<string, string> = {
-    'cast': 'Cast ability', 'use-item': 'Use item', 'attack-focus': 'Attack focus', 'focus-fire': 'Focus-fire',
+    'cast': 'Cast ability', 'use-item': 'Use item', 'combo-route': 'Route combo', 'attack-focus': 'Attack focus', 'focus-fire': 'Focus-fire',
     'kite': 'Kite', 'peel': 'Peel for ally', 'spread': 'Spread out', 'dodge-zones': 'Dodge zones', 'retreat': 'Retreat', 'hold': 'Hold'
   };
   private static readonly TARGET_MODES = [
@@ -2326,6 +2390,7 @@ export class Hud {
     if (!rec) return;
     this.commitGambit(); // flush any prior edit
     this.gambitEditRec = recIdx;
+    this.gambitEditDraftHeroId = null;
     this.gambitReturnTo = returnTo;
     this.gambitDraft = rec.gambits.length > 0
       ? structuredClone(rec.gambits)
@@ -2338,11 +2403,36 @@ export class Hud {
     this.renderGambitModal();
   }
 
+  private openDraftGambitEditor(heroId: string, returnTo: 'draft' | 'prefight'): void {
+    if (!this.draftEdit || !this.draftEdit.heroes.some((h) => h.heroId === heroId)) return;
+    this.commitGambit(); // flush any prior edit
+    const hero = this.draftEdit.heroes.find((h) => h.heroId === heroId)!;
+    this.gambitEditRec = -1;
+    this.gambitEditDraftHeroId = heroId;
+    this.gambitReturnTo = returnTo;
+    this.gambitDraft = hero.gambits && hero.gambits.length > 0
+      ? structuredClone(hero.gambits)
+      : buildDefaultGambit(REG.hero(heroId).roles);
+    this.playUi(this.modalKind === 'none' ? 'open' : 'tab');
+    this.modalKind = 'gambit';
+    this.input.uiModalOpen = true;
+    this.modal.classList.remove('hidden');
+    this.game.paused = false;
+    this.renderGambitModal();
+  }
+
   private commitGambit(): void {
-    if (this.gambitEditRec >= 0 && this.gambitDraft.length > 0) {
+    if (this.gambitEditDraftHeroId && this.draftEdit && this.gambitDraft.length > 0) {
+      const hero = this.draftEdit.heroes.find((h) => h.heroId === this.gambitEditDraftHeroId);
+      if (hero) hero.gambits = structuredClone(this.gambitDraft);
+      if (this.gambitReturnTo === 'prefight' && this.prefightGymId) {
+        this.game.commitGymDraft(this.prefightGymId, this.draftEdit);
+      }
+    } else if (this.gambitEditRec >= 0 && this.gambitDraft.length > 0) {
       this.game.setGambits(this.gambitEditRec, this.gambitDraft);
     }
     this.gambitEditRec = -1;
+    this.gambitEditDraftHeroId = null;
   }
 
   private defaultCondition(kind: string): GambitCondition {
@@ -2370,6 +2460,12 @@ export class Hud {
       case 'save-assigned': return { k: 'save-assigned' };
       case 'in-friendly-field': return { k: 'in-friendly-field' };
       case 'enemy-in-hostile-field': return { k: 'enemy-in-hostile-field' };
+      case 'in-formation': return { k: 'in-formation' };
+      case 'backline-threatened': return { k: 'backline-threatened' };
+      case 'enemy-clustered': return { k: 'enemy-clustered', radius: 600, count: 3 };
+      case 'flank-open': return { k: 'flank-open' };
+      case 'ally-channeling': return { k: 'ally-channeling' };
+      case 'enemy-channeling': return { k: 'enemy-channeling' };
       default: return { k: 'always' };
     }
   }
@@ -2378,6 +2474,7 @@ export class Hud {
     switch (kind) {
       case 'cast': return { k: 'cast', slot: 0, targetMode: 'focus' };
       case 'use-item': return { k: 'use-item', itemId: itemId ?? '', targetMode: 'focus' };
+      case 'combo-route': return { k: 'combo-route' };
       case 'focus-fire': return { k: 'focus-fire', targetMode: 'focus' };
       case 'kite': return { k: 'kite', distance: 500 };
       case 'peel': return { k: 'peel' };
@@ -2393,7 +2490,7 @@ export class Hud {
     switch (kind) {
       case 'self-hp-below': case 'ally-hp-below': case 'enemy-hp-below':
       case 'self-mana-above': case 'self-mana-below': return [{ key: 'pct', label: '%' }];
-      case 'enemies-within': return [{ key: 'radius', label: 'radius' }, { key: 'count', label: 'count' }];
+      case 'enemies-within': case 'enemy-clustered': return [{ key: 'radius', label: 'radius' }, { key: 'count', label: 'count' }];
       case 'allies-alive': return [{ key: 'count', label: 'count' }];
       case 'ability-ready': return [{ key: 'slot', label: 'slot 0-3' }];
       case 'fight-time-gt': return [{ key: 'sec', label: 'sec' }];
@@ -2405,8 +2502,17 @@ export class Hud {
     }
   }
 
-  private heroItemIds(recIdx: number): string[] {
-    const rec = this.game.party[recIdx];
+  private gambitHeroId(): string | null {
+    if (this.gambitEditDraftHeroId) return this.gambitEditDraftHeroId;
+    const rec = this.game.party[this.gambitEditRec];
+    return rec?.heroId ?? null;
+  }
+
+  private gambitItemIds(): string[] {
+    if (this.gambitEditDraftHeroId && this.draftEdit) {
+      return this.draftEdit.heroes.find((h) => h.heroId === this.gambitEditDraftHeroId)?.items?.filter((id): id is string => !!id) ?? [];
+    }
+    const rec = this.game.party[this.gambitEditRec];
     if (!rec) return [];
     return rec.items.map((i) => i?.id).filter((id): id is string => !!id);
   }
@@ -2423,13 +2529,13 @@ export class Hud {
   }
 
   private renderGambitModal(): void {
-    const rec = this.game.party[this.gambitEditRec];
-    if (!rec) {
+    const heroId = this.gambitHeroId();
+    if (!heroId || !REG.heroes.has(heroId)) {
       this.closeModal();
       return;
     }
-    const def = REG.hero(rec.heroId);
-    const items = this.heroItemIds(this.gambitEditRec);
+    const def = REG.hero(heroId);
+    const items = this.gambitItemIds();
     const slotOpts = [0, 1, 2, 3].map((s) => `<option value="${s}">${Hud.SLOT_LABEL[s]} (slot ${s})</option>`).join('');
 
     const ruleRows = this.gambitDraft.map((rule, ri) => {
@@ -2519,7 +2625,7 @@ export class Hud {
             (cond as unknown as Record<string, string | number>)[param] = textParam ? value : Number(value);
           }
         } else if (field === 'act-kind') {
-          rule.then = this.defaultAction(value, this.heroItemIds(this.gambitEditRec)[0]);
+          rule.then = this.defaultAction(value, this.gambitItemIds()[0]);
         } else if (field === 'act-slot' && rule.then.k === 'cast') {
           rule.then.slot = Number(value);
         } else if (field === 'act-target' && (rule.then.k === 'cast' || rule.then.k === 'use-item' || rule.then.k === 'focus-fire')) {
@@ -2541,6 +2647,11 @@ export class Hud {
         } else if (act === 'done') {
           this.commitGambit();
           if (this.gambitReturnTo === 'prefight' && this.prefightGymId) this.openGymPrefight(this.prefightGymId);
+          else if (this.gambitReturnTo === 'draft') {
+            this.modalKind = 'draft';
+            this.game.paused = true;
+            this.renderDraftModal();
+          }
           else this.toggleModal('party');
           return;
         } else {
@@ -2563,7 +2674,9 @@ export class Hud {
     this.modal.querySelectorAll<HTMLElement>('[data-preset]').forEach((el) => {
       el.addEventListener('click', () => {
         const preset = el.dataset.preset!;
-        const def = REG.hero(this.game.party[this.gambitEditRec].heroId);
+        const heroId = this.gambitHeroId();
+        if (!heroId) return;
+        const def = REG.hero(heroId);
         this.gambitDraft = preset === 'default' ? buildDefaultGambit(def.roles) : this.gambitPreset(preset as 'aggro' | 'safe', def.roles);
         this.renderGambitModal();
       });
@@ -2671,7 +2784,21 @@ export class Hud {
     const g = this.game;
     const gym = REG.gym(this.prefightGymId!);
     const enemyCalls = TUNING.captainCallsPerFight + (gym.enemyBonusCaptainCalls ?? 0);
-    const roster = g.party.slice(0, 5).map((rec, i) => {
+    const draft = g.gymDraft(this.prefightGymId!);
+    const roster = draft && draft.heroes.length >= 5
+      ? draft.heroes.slice(0, 5).map((hero) => {
+      const def = REG.hero(hero.heroId);
+      const label = hero.gambits && hero.gambits.length > 0 ? `${hero.gambits.length} drafted rules` : 'default role gambit';
+      const itemBits = (hero.items ?? []).map((id) => REG.items.has(id) ? REG.item(id).name : null).filter(Boolean).join(', ') || 'no items';
+      return `<div class="pf-hero">
+        <img src="${heroPortrait(def.palette, def.name[0], 40, def.silhouette)}" alt="">
+        <div class="pf-main"><b>${def.name}</b> <em>Lv ${hero.level ?? 1}</em>
+          <div class="rr-sub">${def.roles.join(' / ')} · ${itemBits}</div>
+          <div class="rr-sub">Gambit: ${label} <button class="btn tiny accent" data-pf-edit-draft="${hero.heroId}">Edit draft rules</button></div>
+        </div>
+      </div>`;
+    }).join('')
+      : g.party.slice(0, 5).map((rec, i) => {
       const def = REG.hero(rec.heroId);
       const label = rec.gambits.length > 0 ? `${rec.gambits.length} authored rules` : 'default role gambit';
       const itemBits = rec.items.map((it) => it ? REG.item(it.id).name : null).filter(Boolean).join(', ') || 'no items';
@@ -2684,6 +2811,18 @@ export class Hud {
       </div>`;
     }).join('');
     const enemy = gym.enemyTeam.map((h) => `${REG.hero(h.heroId).name} <em>Lv ${h.level ?? 10}</em>`).join(' · ');
+    const draftLine = draft
+      ? `<p class="pf-draft">Drafted five: <b>${draft.heroes.map((h) => REG.hero(h.heroId).name).join(', ')}</b>, placed on the board.</p>`
+      : `<p class="pf-draft dim">No draft — you bring your walking party on the default formation.</p>`;
+    // Format pressure (§5): what this leader demands of your composition.
+    const fmt = gym.format;
+    const fmtBits = fmt ? [
+      ...fmt.rules.map((r) => describeRule(r)),
+      ...(fmt.counterDraft && fmt.counterDraft !== 'none' ? [`counter-draft: ${fmt.counterDraft}`] : [])
+    ] : [];
+    const formatLine = fmtBits.length
+      ? `<p class="pf-format"><b>Format:</b> ${fmtBits.map((b) => `<span class="pf-tag">${esc(b)}</span>`).join(' ')}</p>`
+      : '';
 
     this.modalShell(
       `${gym.name} — ${gym.leader}`,
@@ -2692,17 +2831,29 @@ export class Hud {
         <p class="dim">Best of ${gym.bestOf}. You hold <b>${TUNING.captainCallsPerFight} Captain Calls</b>; ${gym.leader}'s side gets <b>${enemyCalls}</b>. In live fights, select a hero with 1–5 or a click, then spend a call (Space or the button) to fully control them for ${TUNING.captainCallSec}s.</p>
         <h3>Your five</h3>
         <div class="pf-roster">${roster}</div>
+        ${draftLine}
+        ${formatLine}
         <h3>Opposition</h3>
         <p class="pf-enemy">${enemy}</p>
         <div class="pf-foot">
           <button class="btn accent big" data-pf="live">Fight Live</button>
           <button class="btn" data-pf="auto">Auto-Resolve</button>
+          <button class="btn" data-pf="draft">Draft &amp; Deploy</button>
           <button class="btn" data-pf="cancel">Back</button>
         </div>
       </div>`
     );
     this.modal.querySelectorAll<HTMLElement>('[data-pf-edit]').forEach((el) => {
       el.addEventListener('click', () => this.openGambitEditor(Number(el.dataset.pfEdit), 'prefight'));
+    });
+    this.modal.querySelectorAll<HTMLElement>('[data-pf-edit-draft]').forEach((el) => {
+      el.addEventListener('click', () => {
+        const saved = this.game.gymDraft(this.prefightGymId!);
+        if (!saved) return;
+        this.draftEdit = structuredClone(saved);
+        this.draftGymId = this.prefightGymId;
+        this.openDraftGambitEditor(el.dataset.pfEditDraft!, 'prefight');
+      });
     });
     this.modal.querySelectorAll<HTMLElement>('[data-pf]').forEach((el) => {
       el.addEventListener('click', () => {
@@ -2714,11 +2865,491 @@ export class Hud {
         } else if (action === 'auto') {
           this.closeModal();
           this.game.challengeGym(gymId);
+        } else if (action === 'draft') {
+          this.openDraftEditor(gymId);
         } else {
           this.closeModal();
         }
       });
     });
+  }
+
+  // --- draft + board editor (AUTOBATTLER_OVERHAUL §3/§7) ---
+
+  private openDraftEditor(gymId: string): void {
+    this.draftGymId = gymId;
+    this.draftEdit = this.game.defaultGymDraft(gymId);
+    this.draftPick = null;
+    this.playUi('tab');
+    this.modalKind = 'draft';
+    this.input.uiModalOpen = true;
+    this.modal.classList.remove('hidden');
+    this.game.paused = true;
+    this.renderDraftModal();
+  }
+
+  // --- Elite Five pick/ban screen (AUTOBATTLER_OVERHAUL §4.2/§7) ---
+
+  private openEliteDraft(): void {
+    this.playUi('tab');
+    this.modalKind = 'elite-draft';
+    this.input.uiModalOpen = true;
+    this.modal.classList.remove('hidden');
+    this.game.paused = true;
+    this.renderEliteDraftModal();
+  }
+
+  private renderEliteDraftModal(): void {
+    const g = this.game;
+    const s = g.eliteDraft;
+    if (!s) { this.closeModal(); return; }
+    const turn = g.eliteDraftTurn()!;
+    const yourTurn = !turn.done && turn.side === 0;
+
+    // the ban/pick order as a strip, current step highlighted
+    const steps = s.order.map((act, i) => {
+      const side = i % 2 === 0 ? 'you' : 'foe';
+      const state = i < s.step ? 'done' : i === s.step ? 'now' : 'todo';
+      return `<i class="ed-step ${act} ${side} ${state}" title="${side === 'you' ? 'You' : s.memberName}: ${act}">${act === 'ban' ? '⊘' : '●'}</i>`;
+    }).join('');
+
+    const teamRow = (heroes: typeof s.player, n: number): string =>
+      Array.from({ length: n }, (_, i) => {
+        const h = heroes[i];
+        if (!h) return '<div class="ed-slot empty"></div>';
+        const def = REG.hero(h.heroId);
+        return `<div class="ed-slot"><img src="${heroPortrait(def.palette, def.name[0], 40, def.silhouette)}" alt=""><span>${esc(def.name)}</span></div>`;
+      }).join('');
+
+    // the pool the player acts on this turn: their roster to pick, the leader's pool to ban
+    const taken = new Set([...s.bans, ...s.player.map((h) => h.heroId), ...s.enemy.map((h) => h.heroId)]);
+    const actPool = yourTurn ? (turn.action === 'ban' ? s.enemyPool : s.playerPool) : [];
+    const poolChips = [...new Set(actPool)].filter((id) => REG.heroes.has(id)).sort().map((id) => {
+      const def = REG.hero(id);
+      const gone = taken.has(id);
+      return `<button class="ed-chip ${gone ? 'gone' : ''} ${turn.action}" data-ed-pick="${id}" ${gone ? 'disabled' : ''}>
+        <img src="${heroPortrait(def.palette, def.name[0], 34, def.silhouette)}" alt=""><span>${esc(def.name)}</span>
+        <em>${def.roles.slice(0, 2).join('/')}</em>
+      </button>`;
+    }).join('');
+
+    const banChips = s.bans.length
+      ? s.bans.map((id) => `<span class="ed-ban">⊘ ${esc(REG.hero(id).name)}</span>`).join('')
+      : '<span class="dim">none yet</span>';
+
+    const prompt = turn.done
+      ? '<b>Draft complete.</b> Lock it in and fight.'
+      : yourTurn
+        ? `<b>Your ${turn.action === 'ban' ? 'ban' : 'pick'}.</b> ${turn.action === 'ban' ? `Deny one of ${esc(s.memberName)}'s pool.` : 'Pick from your recruited roster.'}`
+        : `<span class="dim">${esc(s.memberName)} is ${turn.action === 'ban' ? 'banning' : 'picking'}…</span>`;
+
+    this.modalShell(
+      `Elite Five — draft vs. ${esc(s.memberName)}`,
+      `<div class="elite-draft">
+        <div class="ed-order">${steps}</div>
+        <div class="ed-teams">
+          <div class="ed-team you"><h4>Your five (${s.player.length}/5)</h4><div class="ed-row">${teamRow(s.player, 5)}</div></div>
+          <div class="ed-team foe"><h4>${esc(s.memberName)} (${s.enemy.length}/5)</h4><div class="ed-row">${teamRow(s.enemy, 5)}</div></div>
+        </div>
+        <div class="ed-bans">Bans: ${banChips}</div>
+        <p class="ed-prompt">${prompt}</p>
+        <div class="ed-pool">${poolChips}</div>
+        <div class="pf-foot">
+          <button class="btn accent" data-ed="commit" ${turn.done ? '' : 'disabled'}>Lock in &amp; fight</button>
+          <button class="btn" data-ed="cancel">Cancel</button>
+        </div>
+      </div>`
+    );
+
+    this.modal.querySelectorAll<HTMLElement>('[data-ed-pick]').forEach((el) => el.addEventListener('click', () => {
+      if (g.eliteDraftChoose(el.dataset.edPick!)) this.renderEliteDraftModal();
+    }));
+    this.modal.querySelectorAll<HTMLElement>('[data-ed]').forEach((el) => el.addEventListener('click', () => {
+      if (el.dataset.ed === 'commit') {
+        g.commitEliteDraft();
+        this.closeModal();
+      } else {
+        this.closeModal();
+      }
+    }));
+  }
+
+  private draftCellHero(col: number, row: number): string | null {
+    const places = this.draftEdit!.formation.placements;
+    for (const [id, s] of Object.entries(places)) if (s.col === col && s.row === row) return id;
+    return null;
+  }
+
+  private draftFreeCell(preferCol: number): { col: 0 | 1 | 2; row: number } {
+    const cols = [preferCol, 1, 0, 2].filter((c, i, a) => a.indexOf(c) === i);
+    for (const c of cols) for (let r = 0; r < BOARD_ROWS; r++) {
+      if (!this.draftCellHero(c, r)) return { col: c as 0 | 1 | 2, row: r };
+    }
+    return { col: 0, row: 0 };
+  }
+
+  /** Place / swap the held hero onto a cell, or pick up the hero already there. */
+  private draftPlaceAt(col: number, row: number): void {
+    const d = this.draftEdit!;
+    const occupant = this.draftCellHero(col, row);
+    if (this.draftPick) {
+      const moving = this.draftPick;
+      const from = d.formation.placements[moving];
+      if (occupant && occupant !== moving) {
+        if (from) d.formation.placements[occupant] = { ...from }; // swap
+        else delete d.formation.placements[occupant];             // bump to the bench strip
+      }
+      d.formation.placements[moving] = { col: col as 0 | 1 | 2, row };
+      this.draftPick = null;
+    } else if (occupant) {
+      this.draftPick = occupant; // pick up
+    }
+    this.renderDraftModal();
+  }
+
+  /** Toggle a pool hero: select if fielded, else field it (≤5) on a hinted free cell. */
+  private draftTogglePool(heroId: string): void {
+    const d = this.draftEdit!;
+    const fielded = d.heroes.some((h) => h.heroId === heroId);
+    if (fielded) {
+      this.draftPick = this.draftPick === heroId ? null : heroId;
+    } else if (d.heroes.length < BOARD_ROWS) {
+      d.heroes.push(this.game.draftHeroSetup(heroId));
+      const hint = placementHint(REG.hero(heroId));
+      d.formation.placements[heroId] = this.draftFreeCell(hint.col);
+      this.draftPick = heroId;
+    }
+    this.renderDraftModal();
+  }
+
+  private draftRemoveHero(heroId: string): void {
+    const d = this.draftEdit!;
+    d.heroes = d.heroes.filter((h) => h.heroId !== heroId);
+    delete d.formation.placements[heroId];
+    if (this.draftPick === heroId) this.draftPick = null;
+    this.renderDraftModal();
+  }
+
+  private static readonly REACH_TAG_LABEL: Record<string, string> = {
+    'teamfight-ult': 'Teamfight ult', 'cluster-nuke': 'Cluster nuke', 'channel': 'Channel',
+    'skillshot-line': 'Skillshot', 'single-lockdown': 'Lockdown', 'zone-field': 'Zone',
+    'team-buff': 'Team buff', 'self-steroid': 'Self steroid'
+  };
+
+  /** §7 reach readout content for the hovered (or held) hero. */
+  private draftReachHtml(): string {
+    const id = this.draftHoverId && REG.heroes.has(this.draftHoverId) ? this.draftHoverId : this.draftPick;
+    if (!id || !REG.heroes.has(id)) return '<div class="bd-reach empty">Hover a hero to see its reach and footprint.</div>';
+    const def = REG.hero(id);
+    const rp = reachProfile(def);
+    const tagBits = rp.tags.length
+      ? rp.tags.map((t) => `<span class="bd-tag">${esc(Hud.REACH_TAG_LABEL[t] ?? t)}</span>`).join('')
+      : '<span class="dim">right-click bruiser</span>';
+    return `<div class="bd-reach">
+      <div class="bd-reach-h"><img src="${heroPortrait(def.palette, def.name[0], 26, def.silhouette)}" alt=""><b>${esc(def.name)}</b></div>
+      <div class="bd-reach-stats"><span>Reach <em>${rp.reach}</em></span><span>AoE <em>${rp.footprint || '—'}</em></span></div>
+      <div class="bd-reach-tags">${tagBits}</div>
+    </div>`;
+  }
+
+  /** Update only the reach slot on hover, so dragging and selection state survive. */
+  private refreshDraftReach(): void {
+    const slot = this.modal.querySelector<HTMLElement>('#bd-reach-slot');
+    if (slot) slot.innerHTML = this.draftReachHtml();
+  }
+
+  /** Drag-and-drop (§7): drop a dragged hero onto a cell — fielding it if needed, swapping occupants. */
+  private draftDropCell(col: number, row: number): void {
+    const id = this.draftDragId;
+    if (!id) return;
+    const d = this.draftEdit!;
+    if (!d.heroes.some((h) => h.heroId === id)) {
+      if (d.heroes.length >= BOARD_ROWS) { this.draftDragId = null; return; }
+      d.heroes.push(this.game.draftHeroSetup(id));
+    }
+    const occupant = this.draftCellHero(col, row);
+    const from = d.formation.placements[id];
+    if (occupant && occupant !== id) {
+      if (from) d.formation.placements[occupant] = { ...from };
+      else delete d.formation.placements[occupant];
+    }
+    d.formation.placements[id] = { col: col as 0 | 1 | 2, row };
+    this.draftPick = null;
+    this.draftDragId = null;
+    this.renderDraftModal();
+  }
+
+  /** Drag-and-drop: drop onto the bench strip — field if needed, then unseat from any cell. */
+  private draftDropBench(): void {
+    const id = this.draftDragId;
+    if (!id) return;
+    const d = this.draftEdit!;
+    if (!d.heroes.some((h) => h.heroId === id)) {
+      if (d.heroes.length >= BOARD_ROWS) { this.draftDragId = null; return; }
+      d.heroes.push(this.game.draftHeroSetup(id));
+    }
+    delete d.formation.placements[id];
+    this.draftPick = null;
+    this.draftDragId = null;
+    this.renderDraftModal();
+  }
+
+  private draftStampDoctrine(id: DoctrineId): void {
+    const d = this.draftEdit!;
+    const defs = d.heroes.map((h) => REG.hero(h.heroId));
+    d.formation = doctrineFormation(id, defs);
+    this.draftPick = null;
+    this.renderDraftModal();
+  }
+
+  private draftResetToParty(): void {
+    const heroes: MacroHeroSetup[] = this.game.gymPlayerTeam().map((h) => ({ heroId: h.heroId, level: h.level, items: h.items, gambits: h.gambits }));
+    this.draftEdit = { heroes, formation: defaultFormation(heroes.map((h) => REG.hero(h.heroId))) };
+    this.draftPick = null;
+    this.renderDraftModal();
+  }
+
+  private draftItemChoices(current: readonly string[] = []): string[] {
+    const ids = new Set<string>(current.filter((id) => REG.items.has(id)));
+    const armory = this.game.armoryView();
+    for (const item of armory.stash) if (REG.items.has(item.id)) ids.add(item.id);
+    for (const hero of armory.heroes) {
+      for (const item of hero.items) if (item && REG.items.has(item.id)) ids.add(item.id);
+    }
+    return [...ids].sort((a, b) => REG.item(a).cost - REG.item(b).cost || REG.item(a).name.localeCompare(REG.item(b).name));
+  }
+
+  private draftSetItem(heroId: string, slot: number, itemId: string): void {
+    const hero = this.draftEdit?.heroes.find((h) => h.heroId === heroId);
+    if (!hero || slot < 0 || slot >= 6) return;
+    const items = [...(hero.items ?? [])].slice(0, 6);
+    while (items.length <= slot) items.push('');
+    items[slot] = itemId;
+    hero.items = items.filter((id) => id && REG.items.has(id));
+    this.renderDraftModal();
+  }
+
+  private draftApplyGambitPreset(heroId: string, preset: 'default' | 'aggro' | 'safe'): void {
+    const hero = this.draftEdit?.heroes.find((h) => h.heroId === heroId);
+    if (!hero) return;
+    const def = REG.hero(heroId);
+    hero.gambits = preset === 'default' ? buildDefaultGambit(def.roles) : this.gambitPreset(preset, def.roles);
+    this.renderDraftModal();
+  }
+
+  private draftLoadoutsHtml(): string {
+    const d = this.draftEdit!;
+    if (d.heroes.length === 0) return '<p class="dim">Field heroes to edit their draft-only items and gambits.</p>';
+    return d.heroes.map((hero) => {
+      const def = REG.hero(hero.heroId);
+      const items = (hero.items ?? []).slice(0, 6);
+      const choices = this.draftItemChoices(items);
+      const slotHtml = Array.from({ length: 6 }, (_, slot) => {
+        const selected = items[slot] ?? '';
+        const opts = [
+          `<option value="" ${selected ? '' : 'selected'}>empty</option>`,
+          ...choices.map((id) => `<option value="${id}" ${id === selected ? 'selected' : ''}>${esc(REG.item(id).name)}</option>`)
+        ].join('');
+        return `<select class="bd-item-slot" data-draft-item="${hero.heroId}:${slot}" title="Draft item ${slot + 1}">${opts}</select>`;
+      }).join('');
+      const gambitLabel = hero.gambits && hero.gambits.length > 0 ? `${hero.gambits.length} rules` : 'default role gambit';
+      return `<div class="bd-loadout">
+        <div class="bd-loadout-head"><img src="${heroPortrait(def.palette, def.name[0], 28, def.silhouette)}" alt=""><b>${esc(def.name)}</b><em>Lv ${hero.level ?? 1}</em></div>
+        <div class="bd-items">${slotHtml}</div>
+        <div class="bd-gambits">Gambit: ${esc(gambitLabel)}
+          <button class="btn tiny" data-draft-gambit-preset="${hero.heroId}:default">Default</button>
+          <button class="btn tiny" data-draft-gambit-preset="${hero.heroId}:aggro">Aggro</button>
+          <button class="btn tiny" data-draft-gambit-preset="${hero.heroId}:safe">Safe</button>
+          <button class="btn tiny accent" data-draft-gambit-edit="${hero.heroId}">Edit rules</button>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  private renderDraftModal(): void {
+    const d = this.draftEdit!;
+    const gym = REG.gym(this.draftGymId!);
+    const fieldedIds = new Set(d.heroes.map((h) => h.heroId));
+    const pickDef = this.draftPick ? REG.hero(this.draftPick) : null;
+    const hintCol = pickDef ? placementHint(pickDef).col : -1;
+
+    // 3 columns × 5 rows; render Back→Front left to right. The Front column carries a
+    // faint "enemy contact" overlay (§7) — the edge the opposing front collapses onto.
+    const colName = ['Back', 'Mid', 'Front'];
+    let grid = '';
+    for (let col = 0; col < BOARD_COLS; col++) {
+      let cells = '';
+      for (let row = 0; row < BOARD_ROWS; row++) {
+        const id = this.draftCellHero(col, row);
+        const def = id ? REG.hero(id) : null;
+        const held = id && id === this.draftPick ? 'held' : '';
+        const hinted = col === hintCol ? 'hinted' : '';
+        const drag = def ? `draggable="true" data-drag="${id}"` : '';
+        cells += `<button class="bd-cell ${held} ${hinted}" data-cell="${col}:${row}" ${drag} title="${colName[col]} · row ${row + 1}">
+          ${def ? `<img src="${heroPortrait(def.palette, def.name[0], 40, def.silhouette)}" alt=""><span>${esc(def.name)}</span>` : ''}
+        </button>`;
+      }
+      const front = col === BOARD_COLS - 1 ? ' front-contact' : '';
+      const contact = col === BOARD_COLS - 1 ? '<div class="bd-contact">⚔ enemy contact</div>' : '';
+      grid += `<div class="bd-col${front}"><div class="bd-col-h">${colName[col]}</div>${cells}${contact}</div>`;
+    }
+
+    // bench strip: fielded heroes without a cell
+    const bench = d.heroes.filter((h) => !d.formation.placements[h.heroId]).map((h) => {
+      const def = REG.hero(h.heroId);
+      const sel = this.draftPick === h.heroId ? 'sel' : '';
+      return `<button class="bd-chip ${sel}" data-bench="${h.heroId}" draggable="true" data-drag="${h.heroId}"><img src="${heroPortrait(def.palette, def.name[0], 32, def.silhouette)}" alt="">${esc(def.name)}</button>`;
+    }).join('') || '<span class="dim">all placed</span>';
+
+    // recruited pool
+    const pool = this.game.draftPool().map((id) => {
+      const def = REG.hero(id);
+      const on = fieldedIds.has(id) ? 'on' : '';
+      const sel = this.draftPick === id ? 'sel' : '';
+      return `<button class="bd-pool ${on} ${sel}" data-pool="${id}" draggable="true" data-drag="${id}">
+        <img src="${heroPortrait(def.palette, def.name[0], 36, def.silhouette)}" alt="">
+        <span>${esc(def.name)}</span>
+        ${fieldedIds.has(id) ? `<i class="bd-x" data-remove="${id}">✕</i>` : ''}
+      </button>`;
+    }).join('');
+
+    // archetype placement hints for the fielded five
+    const hints = d.heroes.map((h) => {
+      const def = REG.hero(h.heroId);
+      const hint = placementHint(def);
+      return `<div class="bd-hint"><img src="${heroPortrait(def.palette, def.name[0], 24, def.silhouette)}" alt=""><b>${esc(def.name)}</b><em>${['Back', 'Mid', 'Front'][hint.col]}</em><span>${esc(hint.reason)}</span></div>`;
+    }).join('');
+
+    const doctrines = DOCTRINES.map((doc) =>
+      `<button class="btn tiny" data-doctrine="${doc.id}" title="${esc(doc.describe)}">${esc(doc.name)}</button>`
+    ).join('');
+
+
+    // Composition format (§5): live constraints the player must satisfy to commit.
+    const validation = validateDraft(gym.format, d.heroes);
+    const counterNote = gym.format?.counterDraft && gym.format.counterDraft !== 'none'
+      ? `<div class="bd-counter">⚠ ${esc(gym.leader)} counter-drafts (<b>${gym.format.counterDraft}</b>) — she answers what you commit.</div>`
+      : '';
+    const formatPanel = (gym.format && (gym.format.rules.length || counterNote))
+      ? `<h3>Format · ${esc(gym.leaderTitle)}</h3>
+         <div class="bd-format">
+           ${validation.statuses.map((s) => `<div class="bd-rule ${s.ok ? 'ok' : 'bad'}"><span>${esc(s.label)}</span><em>${esc(s.detail)}</em></div>`).join('')}
+           ${counterNote}
+         </div>`
+      : '';
+
+    const placed = d.heroes.length === BOARD_ROWS && d.heroes.every((h) => d.formation.placements[h.heroId]);
+    const ready = placed && validation.ok;
+    const commitHint = !validation.ok && d.heroes.length >= BOARD_ROWS
+      ? `<div class="bd-illegal">Illegal under ${esc(gym.name)}'s format — fix the flagged rules to commit.</div>`
+      : '';
+
+    this.modalShell(
+      `Draft &amp; Deploy — ${gym.name}`,
+      `<div class="draft">
+        <p class="dim">Build a five from your recruited roster and place them on the board. Front bodies soak the engage; AoE casters want the middle; channels and skillshots want a protected back edge. ${this.draftPick ? `<b>Holding ${esc(REG.hero(this.draftPick).name)} — click a cell.</b>` : 'Drag a hero onto a cell, or click a hero then a cell.'}</p>
+        <div class="draft-main">
+          <div class="bd-board">${grid}</div>
+          <div class="draft-side">
+            ${formatPanel}
+            <h3>Reach &amp; footprint</h3>
+            <div id="bd-reach-slot">${this.draftReachHtml()}</div>
+            <h3>Placement hints</h3>
+            <div class="bd-hints">${hints}</div>
+            <h3>Doctrines</h3>
+            <div class="bd-doctrines">${doctrines}</div>
+          </div>
+        </div>
+        <h3>To place</h3>
+        <div class="bd-bench">${bench}</div>
+        <h3>Draft loadouts</h3>
+        <div class="bd-loadouts">${this.draftLoadoutsHtml()}</div>
+        <h3>Recruited (${d.heroes.length}/5 fielded)</h3>
+        <div class="bd-poolwrap">${pool}</div>
+        ${commitHint}
+        <div class="pf-foot">
+          <button class="btn accent" data-draft="commit" ${ready ? '' : 'disabled'}>Commit draft</button>
+          <button class="btn" data-draft="reset">Reset to party</button>
+          <button class="btn" data-draft="clear">Clear draft</button>
+          <button class="btn" data-draft="back">Back</button>
+        </div>
+      </div>`
+    );
+
+    this.modal.querySelectorAll<HTMLElement>('[data-cell]').forEach((el) => {
+      el.addEventListener('click', () => {
+        const [c, r] = el.dataset.cell!.split(':').map(Number);
+        this.draftPlaceAt(c, r);
+      });
+      el.addEventListener('dragover', (e) => e.preventDefault());
+      el.addEventListener('drop', (e) => {
+        e.preventDefault();
+        const [c, r] = el.dataset.cell!.split(':').map(Number);
+        this.draftDropCell(c, r);
+      });
+    });
+    this.modal.querySelectorAll<HTMLElement>('[data-bench]').forEach((el) => el.addEventListener('click', () => {
+      this.draftPick = this.draftPick === el.dataset.bench ? null : el.dataset.bench!;
+      this.renderDraftModal();
+    }));
+    // drag-and-drop (§7): any [data-drag] hero can be dragged onto a cell or the bench strip
+    this.modal.querySelectorAll<HTMLElement>('[data-drag]').forEach((el) => {
+      el.addEventListener('dragstart', (e) => {
+        this.draftDragId = el.dataset.drag!;
+        (e as DragEvent).dataTransfer?.setData('text/plain', el.dataset.drag!);
+      });
+      el.addEventListener('dragend', () => { this.draftDragId = null; });
+    });
+    const benchZone = this.modal.querySelector<HTMLElement>('.bd-bench');
+    benchZone?.addEventListener('dragover', (e) => e.preventDefault());
+    benchZone?.addEventListener('drop', (e) => { e.preventDefault(); this.draftDropBench(); });
+    // §7 reach readout: hovering any hero (cell / bench / pool) shows its reach + footprint
+    this.modal.querySelectorAll<HTMLElement>('[data-drag]').forEach((el) => {
+      el.addEventListener('mouseenter', () => {
+        const id = el.dataset.drag!;
+        if (this.draftHoverId !== id) { this.draftHoverId = id; this.refreshDraftReach(); }
+      });
+    });
+    this.modal.querySelectorAll<HTMLElement>('[data-pool]').forEach((el) => el.addEventListener('click', (e) => {
+      if ((e.target as HTMLElement).dataset.remove) return; // handled below
+      this.draftTogglePool(el.dataset.pool!);
+    }));
+    this.modal.querySelectorAll<HTMLElement>('[data-remove]').forEach((el) => el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.draftRemoveHero(el.dataset.remove!);
+    }));
+    this.modal.querySelectorAll<HTMLElement>('[data-doctrine]').forEach((el) => el.addEventListener('click', () => this.draftStampDoctrine(el.dataset.doctrine as DoctrineId)));
+    this.modal.querySelectorAll<HTMLSelectElement>('[data-draft-item]').forEach((el) => el.addEventListener('change', () => {
+      const [heroId, slotRaw] = el.dataset.draftItem!.split(':');
+      this.draftSetItem(heroId, Number(slotRaw), el.value);
+    }));
+    this.modal.querySelectorAll<HTMLElement>('[data-draft-gambit-preset]').forEach((el) => el.addEventListener('click', () => {
+      const [heroId, preset] = el.dataset.draftGambitPreset!.split(':');
+      this.draftApplyGambitPreset(heroId, preset as 'default' | 'aggro' | 'safe');
+    }));
+    this.modal.querySelectorAll<HTMLElement>('[data-draft-gambit-edit]').forEach((el) => el.addEventListener('click', () => this.openDraftGambitEditor(el.dataset.draftGambitEdit!, 'draft')));
+    this.modal.querySelectorAll<HTMLElement>('[data-draft]').forEach((el) => el.addEventListener('click', () => {
+      const act = el.dataset.draft;
+      const gymId = this.draftGymId!;
+      if (act === 'commit') {
+        if (!this.game.validateGymDraft(gymId, this.draftEdit!.heroes).ok) {
+          this.game.msg(`That five is illegal under ${REG.gym(gymId).name}'s format`, 'bad');
+          return;
+        }
+        this.game.commitGymDraft(gymId, this.draftEdit!);
+        this.draftEdit = null;
+        this.openGymPrefight(gymId);
+      } else if (act === 'reset') {
+        this.draftResetToParty();
+      } else if (act === 'clear') {
+        this.game.commitGymDraft(gymId, { heroes: [], formation: { placements: {} } });
+        this.draftEdit = null;
+        this.openGymPrefight(gymId);
+      } else {
+        this.draftEdit = null;
+        this.openGymPrefight(gymId);
+      }
+    }));
   }
 
   // --- town services (§3.6–3.8): boss reruns, Tinker's Bench, gold sinks ---
@@ -3075,6 +3706,7 @@ export class Hud {
         <div class="svc-main"><b>${REG.hero(rec.heroId).name}</b> <em>Lv ${rec.unit ? rec.unit.level : rec.level}</em></div>
         <div class="svc-actions">
           <button class="btn small" data-tome="${i}">Tome +XP</button>
+          <button class="btn small" data-mastery-respec="${i}">Refund Masteries</button>
           <button class="btn small" data-respec="${i}">Respec ${TUNING.respecCost}g</button>
         </div>
       </div>`
@@ -3137,7 +3769,9 @@ export class Hud {
       this.closeModal();
       g.startLiveRaid(id, tier as 'normal' | 'nightmare' | 'hell');
     }));
-    this.modal.querySelector<HTMLElement>('[data-elite]')?.addEventListener('click', () => { g.runEliteMatch(); rerender(); });
+    this.modal.querySelector<HTMLElement>('[data-elite]')?.addEventListener('click', () => {
+      if (g.beginEliteDraft()) this.openEliteDraft();
+    });
     this.modal.querySelector<HTMLElement>('[data-champion]')?.addEventListener('click', () => { g.runChampion(); rerender(); });
     this.modal.querySelectorAll<HTMLElement>('[data-festival]').forEach((el) => el.addEventListener('click', () => { g.runSeasonalEvent(el.dataset.festival!); rerender(); }));
     this.modal.querySelectorAll<HTMLElement>('[data-neq]').forEach((el) => el.addEventListener('click', () => { g.equipNeutral(g.activeIdx, el.dataset.neq!); rerender(); }));
@@ -3238,6 +3872,7 @@ export class Hud {
       rerender();
     }));
     this.modal.querySelectorAll<HTMLElement>('[data-tome]').forEach((el) => el.addEventListener('click', () => { g.buyTome(Number(el.dataset.tome)); rerender(); }));
+    this.modal.querySelectorAll<HTMLElement>('[data-mastery-respec]').forEach((el) => el.addEventListener('click', () => { g.respecMasteries(Number(el.dataset.masteryRespec)); rerender(); }));
     this.modal.querySelectorAll<HTMLElement>('[data-respec]').forEach((el) => el.addEventListener('click', () => { g.respec(Number(el.dataset.respec)); rerender(); }));
     this.modal.querySelector<HTMLElement>('[data-heal]')?.addEventListener('click', () => { g.healParty(); rerender(); });
     this.modal.querySelectorAll<HTMLElement>('[data-cook]').forEach((el) => el.addEventListener('click', () => { g.cookDish(el.dataset.cook!); rerender(); }));
@@ -3269,7 +3904,8 @@ export class Hud {
       r.tagChain ? `${r.tagChain.count}:${Math.round(r.tagChain.pct * 12)}:${r.tagChain.ampPct}` : '',
       `${r.offField.count}:${r.offField.names.join('+')}`,
       r.nextLink ? `${r.nextLink.slot}:${r.nextLink.heroId}` : '',
-      r.swapCharges ? `sc${Math.floor(r.swapCharges.current)}/${r.swapCharges.max}` : ''
+      r.swapCharges ? `sc${Math.floor(r.swapCharges.current)}/${r.swapCharges.max}` : '',
+      r.formation ? `f${r.formation.posture}:${r.formation.protect ? `${r.formation.protect.peeler}>${r.formation.protect.ward}` : '-'}:${r.formation.flankTargetName ?? '-'}` : ''
     ].join('|');
     if (key === this.lastCombatReadoutKey) return;
     this.lastCombatReadoutKey = key;
@@ -3292,22 +3928,59 @@ export class Hud {
       ? `<div class="ult-line">Ult ready: ${r.ultReady.map((u) => esc(u.name)).join(', ')}${r.live && !this.game.controlledUnit() ? ' — click a portrait to seize' : ''}</div>`
       : '';
     const tagHtml = r.tagChain
-      ? `<div class="tag-chain-line">Tag chain ×${r.tagChain.count} <span>+${Math.round(r.tagChain.ampPct)}%</span><i><em style="width:${Math.round(r.tagChain.pct * 100)}%"></em></i></div>`
+      ? `<div class="tag-chain-line ${r.tagChain.count >= 3 ? 'wombo' : ''}">${r.tagChain.count >= 3 ? 'WOMBO' : 'Tag chain'} ×${r.tagChain.count} <span>+${Math.round(r.tagChain.ampPct)}%</span><i><em style="width:${Math.round(r.tagChain.pct * 100)}%"></em></i></div>`
       : '';
     const offFieldHtml = r.offField.count
       ? `<div class="off-field-line">Off-field: ${r.offField.names.map(esc).join(', ')}</div>`
       : '';
     const nextLinkHtml = r.nextLink
-      ? `<div class="next-link-line">${r.tagChain ? 'Chain' : 'Next'} ▸ <kbd>${esc(glyphForAction(this.game.settings, `swap-${r.nextLink.slot + 1}` as InputAction))}</kbd> <span>${esc(r.nextLink.name)}</span> <em>${esc(r.nextLink.archetype)}</em></div>`
+      ? `<div class="next-link-line ${esc(r.nextLink.role)}">${r.tagChain ? 'Chain' : 'Next'} ▸ <kbd>${esc(glyphForAction(this.game.settings, `swap-${r.nextLink.slot + 1}` as InputAction))}</kbd> <span>${esc(r.nextLink.name)}</span> <em>${esc(r.nextLink.role)} · ${esc(r.nextLink.archetype)}</em></div>`
       : '';
     const swapChargeHtml = r.swapCharges
       ? `<div class="swap-charge-line">Swap ${Array.from({ length: r.swapCharges.max }, (_, i) => `<i class="${i < Math.floor(r.swapCharges!.current) ? 'on' : ''}"></i>`).join('')}</div>`
+      : '';
+    // §6.5 formation posture — holding the anchor vs committed, the lead peel, the flank.
+    const formationHtml = r.formation
+      ? `<div class="formation-line ${r.formation.posture}">
+          <b>${r.formation.posture === 'committed' ? '⚔ Committed' : '🛡 Holding formation'}</b>
+          ${r.formation.protect ? `<span>${esc(r.formation.protect.peeler)} peels for ${esc(r.formation.protect.ward)}</span>` : ''}
+          ${r.formation.flankTargetName ? `<em>flank ▸ ${esc(r.formation.flankTargetName)}</em>` : ''}
+        </div>`
       : '';
 
     this.combatReadout.classList.remove('hidden');
     this.combatReadout.innerHTML = `
       <div class="readout-casts">${castHtml}</div>
-      <div class="readout-status">${threatHtml}${focusHtml}${ultHtml}${tagHtml}${offFieldHtml}${nextLinkHtml}${swapChargeHtml}</div>`;
+      <div class="readout-status">${threatHtml}${focusHtml}${ultHtml}${tagHtml}${offFieldHtml}${nextLinkHtml}${swapChargeHtml}${formationHtml}</div>`;
+  }
+
+  // §6.5 counter-draft reveal: when a last-pick gym answers the committed five, drop a
+  // brief animated beat naming the leader's swap. Keyed off game.lastCounterDraft so it
+  // fires once per counter and auto-dismisses.
+  private renderCounterReveal(): void {
+    const cd = this.game.lastCounterDraft;
+    const key = cd ? `${cd.gymId}:${cd.swappedIn.join(',')}` : '';
+    if (key && key !== this.counterRevealKey) {
+      this.counterRevealKey = key;
+      const leader = REG.gym(cd!.gymId).leader;
+      const esc = (s: string) => s.replace(/[&<>]/g, (c) => (c === '&' ? '&amp;' : c === '<' ? '&lt;' : '&gt;'));
+      const inNames = cd!.swappedIn.map((id) => REG.hero(id).name).join(', ');
+      const outNames = cd!.swappedOut.map((id) => REG.hero(id).name).join(', ');
+      this.counterReveal.innerHTML = `
+        <div class="cr-card">
+          <div class="cr-leader">${esc(leader)} counter-drafts</div>
+          <div class="cr-reason">${esc(cd!.reason || 'answers your composition')}</div>
+          <div class="cr-swap">${outNames ? `<s>${esc(outNames)}</s> ▸ ` : ''}<b>${esc(inNames)}</b></div>
+        </div>`;
+      this.counterReveal.classList.remove('hidden');
+      this.counterReveal.classList.add('show');
+      this.counterRevealHideAt = performance.now() + 4500;
+      this.playUi('open');
+    }
+    if (!this.counterReveal.classList.contains('hidden') && performance.now() >= this.counterRevealHideAt) {
+      this.counterReveal.classList.remove('show');
+      this.counterReveal.classList.add('hidden');
+    }
   }
 
   private renderLiveGym(): void {
@@ -3810,6 +4483,9 @@ export class Hud {
       const heroCard = buildHeroCard(heroDef, { level: h.owned ? h.level : null });
       const blurb = heroCard.blurb ? `<p class="hero-blurb">${esc(heroCard.blurb)}</p>` : '';
       const baseStats = `<div class="hero-base-stats">${heroCard.stats.map((s) => `<span>${esc(s)}</span>`).join('')}</div>`;
+      const masteryPreview = deriveMasteryTrees(heroDef)
+        .map((branch) => `<div class="codex-mastery-branch"><b>${esc(branch.name)}</b>${branch.nodes.map((node) => `<span title="${esc(node.description)}">${node.tier}. ${esc(node.name)}</span>`).join('')}</div>`)
+        .join('');
       return `
         <div class="codex-card hero-codex">
           <img src="${heroPortrait(heroDef.palette, h.name[0], 48, heroDef.silhouette)}" alt="">
@@ -3819,7 +4495,8 @@ export class Hud {
             ${blurb}
             ${baseStats}
             <h4>Abilities</h4><ul class="codex-list">${abilities}</ul>
-            <h4>Talent Tree</h4>${talents}
+            <h4>Mastery Tree</h4><div class="codex-mastery-grid">${masteryPreview}</div>
+            <details class="legacy-talents"><summary>Legacy talents</summary>${talents}</details>
             <h4>Facets</h4><ul class="codex-list">${facets}</ul>
             ${aghs}
           </div>

@@ -647,11 +647,24 @@ describe('swap overhaul §3.3: aim-cursor tag-ins', () => {
 });
 
 describe('swap overhaul §9: next-link hint and the dull beat', () => {
-  it('the readout suggests the highest team-value ready benched hero', () => {
-    const game = Game.headless(partySave([{ id: 'juggernaut' }, { id: 'sniper' }, { id: 'omniknight' }]));
+  it('the readout routes an explicit setup before another payoff', () => {
+    const game = Game.headless(partySave([{ id: 'lina' }, { id: 'kunkka' }, { id: 'sniper' }]));
     game.activeUnit()!.lastEnemyDamageAt = game.sim.time;
     const link = game.combatReadout().nextLink;
-    expect(link?.heroId).toBe('omniknight'); // a team heal out-values Sniper's selfish crumb
+    expect(link?.heroId).toBe('kunkka'); // Lina's payoff wants a Soak/setup link before another selfish payoff
+    expect(link?.role).toBe('setup');
+  });
+
+  it('the readout routes a payoff when a setup aura is already live', () => {
+    const game = Game.headless(partySave([{ id: 'kunkka' }, { id: 'lina' }, { id: 'omniknight' }]));
+    const active = game.activeUnit()!;
+    active.lastEnemyDamageAt = game.sim.time;
+    const enemy = enemyAt(game, active.pos.x + 120, active.pos.y);
+    game.sim.teamMind(active.team).focusUid = enemy.uid;
+    enemy.elementAuras.hydro = { gauge: 1, until: game.sim.time + 3, sourceUid: active.uid };
+    const link = game.combatReadout().nextLink;
+    expect(link?.heroId).toBe('lina'); // hydro setup asks for the Pyro payoff/reaction
+    expect(link?.role).toBe('payoff');
   });
 
   it('a gauge-down swap in combat emits the dull swap-flat beat; a ready swap does not', () => {

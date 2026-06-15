@@ -4,6 +4,7 @@ import { runRaidEncounter, setupRaidSim } from '../core/macro';
 import { LiveRaid } from '../systems/raid-session';
 import { raidSetupFromDef } from '../core/phase3';
 import { chooseUtilityOrder, enemyBossEnraged, raidPeelTarget } from '../core/utility';
+import { planUnitCombo } from '../core/combo-planner';
 import { combatProfile } from '../core/combat-profile';
 import { ALL_RAIDS } from '../data/raids';
 import { TUNING } from '../data/tuning';
@@ -219,6 +220,28 @@ describe('raid-aware considerations', () => {
       const after = Math.hypot(order.point.x - center.x, order.point.y - center.y);
       expect(after).toBeGreaterThan(before);
     }
+  });
+
+  it('raid ai-depth tightens combo chains from two steps to three', () => {
+    const build = (aiDepth: number) => {
+      const sim = setupRaidSim({
+        seed: 66,
+        party: [{ heroId: 'zeus', level: 24, items: ['rod-of-atos', 'veil-of-discord', 'dagon'] }],
+        boss: { heroId: 'sven', level: 26, hpScale: 4, damageScale: 1, aiDepth },
+        maxSec: 60
+      });
+      const zeus = sim.unitsArr.find((u) => u.team === 0 && u.heroId === 'zeus')!;
+      const boss = sim.unitsArr.find((u) => u.team === 1 && u.ctrl.kind === 'boss')!;
+      zeus.abilities.forEach((a) => (a.level = 0));
+      zeus.pos = { x: 2000, y: 2000 };
+      boss.pos = { x: 2350, y: 2000 };
+      zeus.mana = zeus.stats.maxMana;
+      sim.rebuildSpatial();
+      return planUnitCombo(sim, zeus, boss);
+    };
+
+    expect(build(TUNING.bossTierAiDepth.normal)?.steps.map((s) => s.role)).toEqual(['amplifier', 'payoff']);
+    expect(build(TUNING.bossTierAiDepth.hell)?.steps.map((s) => s.role)).toEqual(['enabler', 'amplifier', 'payoff']);
   });
 });
 

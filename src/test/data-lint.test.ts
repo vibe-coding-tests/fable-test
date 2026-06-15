@@ -26,6 +26,7 @@ import { BUILT_WORLD_SIZES, CHEST_COLLISION, DRESSING_PROP_COLLISION, GROUND_LOO
 import { readFileSync, writeFileSync } from 'node:fs';
 import type { AbilityDef, AnimGesture, AttackVisualKind, DropSource, EffectNode, ItemAppearancePart, ItemWeaponVisualKind, SoundArchetype, SummonSpec, ValueRef, VfxArchetype } from '../core/types';
 import { abilityMaxLevel } from '../core/values';
+import { canBuyMasteryNode, deriveMasteryTrees, masteryNodeIndex, masteryPointsForLevel } from '../core/mastery';
 import { gestureForAbility, soundForAbility } from '../core/gestures';
 import { collisionBodyPushOut, resolveUnitBodies } from '../core/collision';
 import { DUNGEON_PACK_RING_RADIUS, dungeonPackSpawnPositions } from '../core/dungeon-spawn';
@@ -309,6 +310,36 @@ describe('data lint: heroes', () => {
         for (const id of exoticIds) {
           expect(REG.exotics.has(id), `exotic ${id} not registered`).toBe(true);
         }
+      });
+
+      it('mastery tree derives as four gated branches with mechanical hooks', () => {
+        const trees = deriveMasteryTrees(hero);
+        expect(trees.length).toBe(4);
+        expect(masteryPointsForLevel(TUNING.levelCap), 'mastery budget at cap').toBe(14);
+        expect(TUNING.mastery.pointLevels.at(-1), 'last mastery point level').toBe(28);
+        trees.forEach((branch, branchIdx) => {
+          expect(branch.abilityId).toBe(hero.abilities[branchIdx].id);
+          expect(branch.nodes.length).toBe(4);
+          expect(branch.nodes.map((node) => node.kind)).toEqual(['growth', 'keystone', 'growth', 'capstone']);
+          branch.nodes.forEach((node, tierIdx) => {
+            expect(node.tier).toBe(tierIdx + 1);
+            expect(node.id).toBeTruthy();
+            expect(node.description.length).toBeGreaterThan(10);
+            if (node.kind === 'keystone' || node.kind === 'capstone') expect(node.mechanic, `${hero.id}/${node.id}: mechanic`).toBeTruthy();
+            const legalPrefix = Array(16).fill(0);
+            for (let tier = 1; tier < node.tier; tier++) legalPrefix[masteryNodeIndex(branchIdx, tier)] = 1;
+            expect(canBuyMasteryNode(hero, TUNING.levelCap, hero.abilities.map((ability) => abilityMaxLevel(ability)), legalPrefix, masteryNodeIndex(branchIdx, node.tier)), `${hero.id}/${node.id}: reachable`).toBe(true);
+            if (node.abilityOverride) {
+              const ab = hero.abilities.find((a) => a.id === node.abilityOverride!.abilityId);
+              expect(ab?.values?.[node.abilityOverride.valueKey], `${hero.id}/${node.id}: key ${node.abilityOverride.valueKey}`).toBeDefined();
+            }
+            if (node.cooldownAdd) {
+              const ab = hero.abilities.find((a) => a.id === node.cooldownAdd!.abilityId);
+              expect(ab?.cooldown, `${hero.id}/${node.id}: cooldownAdd target`).toBeDefined();
+            }
+            if (node.grantsExotic) expect(REG.exotics.has(node.grantsExotic), `${hero.id}/${node.id}: exotic ${node.grantsExotic}`).toBe(true);
+          });
+        });
       });
     });
   }

@@ -7,6 +7,7 @@ import { autoPicksForLevel, buildHero } from './hero-setup';
 import { makeItemState } from './items';
 import { raidSetupFromDef } from './phase3';
 import { applyElementAura } from './combat';
+import { slotToWorld, type Formation } from './board';
 import type { EffectCtx } from './effects';
 import type { ActiveElement, BossDef, DifficultyTier, HeroDef, MacroHeroSetup, RaidBossSetup, RaidDef, StatModMap, Vec2, ZoneSpec } from './types';
 import type { Unit } from './unit';
@@ -28,6 +29,9 @@ export interface MacroSetup {
   seed: number;
   teamA: MacroHeroSetup[];
   teamB: MacroHeroSetup[];
+  /** Optional board placement per side (§3). A hero with no cell falls back to formationDepth. */
+  formationA?: Formation;
+  formationB?: Formation;
   maxSec?: number;
 }
 
@@ -101,7 +105,7 @@ export function setupMacroSim(setup: MacroSetup): Sim {
     seed: setup.seed,
     bounds: { w: TUNING.arenaWidth, h: TUNING.arenaHeight }
   });
-  const placeTeam = (team: 0 | 1, list: MacroHeroSetup[]) => {
+  const placeTeam = (team: 0 | 1, list: MacroHeroSetup[], formation?: Formation) => {
     const dir = team === 0 ? 1 : -1;
     const baseX = team === 0 ? TUNING.macroTeamXInset : TUNING.arenaWidth - TUNING.macroTeamXInset;
     const spacing = Math.min(420, TUNING.arenaHeight / (list.length + 1));
@@ -109,20 +113,26 @@ export function setupMacroSim(setup: MacroSetup): Sim {
     list.forEach((h, i) => {
       const level = h.level ?? 10;
       const build = buildHero(REG.hero(h.heroId), autoPicksForLevel(level), 0);
-      const homePos = {
-        x: baseX + dir * formationDepth(build.def.roles, build.def.baseStats.attackRange),
-        y: centerY + (i - (list.length - 1) / 2) * spacing
-      };
+      // If the board authored a cell for this hero, spawn + anchor on it (§3.4);
+      // otherwise fall back to the role heuristic (byte-identical to before, Goal 6).
+      const slot = formation?.placements[h.heroId];
+      const placed = slot ? slotToWorld(team, slot) : null;
+      const homePos = placed
+        ? { ...placed.pos }
+        : {
+            x: baseX + dir * formationDepth(build.def.roles, build.def.baseStats.attackRange),
+            y: centerY + (i - (list.length - 1) / 2) * spacing
+          };
       const u = spawnConfiguredHero(sim, h, team, homePos, {
         kind: 'gambit',
         rules: h.gambits ?? buildDefaultGambit(build.def.roles),
         homePos
       }, level, build);
-      u.facing = team === 0 ? 0 : Math.PI;
+      u.facing = placed ? placed.facing : team === 0 ? 0 : Math.PI;
     });
   };
-  placeTeam(0, setup.teamA);
-  placeTeam(1, setup.teamB);
+  placeTeam(0, setup.teamA, setup.formationA);
+  placeTeam(1, setup.teamB, setup.formationB);
   return sim;
 }
 

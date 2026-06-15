@@ -160,7 +160,7 @@ export function registerAllContent(): void {
   for (const d of ALL_DUNGEONS) REG.registerDungeon(d);
   for (const d of ALL_DRAFTS) REG.registerDraft(d);
   for (const t of ALL_TRAINERS) REG.registerTrainer(t);
-  for (const id of ['invoke', 'chronosphere', 'stone-gaze', 'reincarnation', 'rearm', 'roshan-respawn', 'terror-fear', 'defile-growth', 'swarm-spread', 'refresh-cooldowns', 'spell-steal', 'divided-we-stand', 'tempest-double', 'morph-shift', 'primal-split', 'remote-mines']) {
+  for (const id of ['invoke', 'chronosphere', 'stone-gaze', 'reincarnation', 'rearm', 'roshan-respawn', 'terror-fear', 'defile-growth', 'swarm-spread', 'refresh-cooldowns', 'spell-steal', 'divided-we-stand', 'tempest-double', 'morph-shift', 'primal-split', 'remote-mines', 'mastery-mechanic']) {
     REG.registerExotic(id, (ctx) => EXOTIC_IMPLS[id]?.(ctx as ExoticContext));
   }
 }

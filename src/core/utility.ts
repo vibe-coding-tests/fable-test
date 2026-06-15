@@ -1,8 +1,9 @@
 import { TUNING } from '../data/tuning';
 import { add, dist, dist2, norm, pointSegDist, scale, sub, v2 } from './math2d';
-import { combatProfile, type CombatProfile } from './combat-profile';
+import { combatProfile, type CombatProfile, type CombatRole } from './combat-profile';
 import { itemArchetypes, type ItemArchetype } from './item-archetype';
-import { comboStepMatchesOrder, orderForComboStep, planTeamCombos, planUnitCombo, type ComboPlan, type ComboStep } from './combo-planner';
+import { abilityArchetypes, type AbilityArchetype } from './ability-archetype';
+import { comboStepMatchesOrder, orderForComboStep, planSaveChain, planTeamCombos, planUnitCombo, type ComboPlan, type ComboStep } from './combo-planner';
 import { bossArchetypeBias } from './boss-brain';
 import { abilityVal } from './values';
 import { itemReady } from './items';
@@ -396,6 +397,34 @@ function woundedAlliesNear(sim: Sim, u: Unit, range: number, pct: number): numbe
   return n;
 }
 
+/** Allies (and self) grouped within radius — the cluster a team-mitigation guard covers. */
+function clusteredAllies(sim: Sim, u: Unit, radius: number): number {
+  let n = 0;
+  sim.forEachNearbyUnit(u.pos, radius + 80, (o) => {
+    if (!o.alive || o.team !== u.team) return;
+    if (o.kind !== 'hero' && o.kind !== 'creep') return;
+    if (dist2(o.pos, u.pos) <= radius * radius) n++;
+  });
+  return n;
+}
+
+/** The disabled ally most worth a dispel (Lotus Echo Shell): lowest HP, ties by uid. */
+function mostDisabledAllyInRange(sim: Sim, u: Unit, range: number): Unit | null {
+  let best: Unit | null = null;
+  let bestPct = Infinity;
+  sim.forEachNearbyUnit(u.pos, range + 80, (o) => {
+    if (!o.alive || o.team !== u.team || o.kind === 'npc') return;
+    if (dist2(o.pos, u.pos) > range * range) return;
+    if (!isDisabled(o.summary)) return;
+    const pct = o.hp / Math.max(1, o.stats.maxHp);
+    if (pct < bestPct || (pct === bestPct && (best === null || o.uid < best.uid))) {
+      bestPct = pct;
+      best = o;
+    }
+  });
+  return best;
+}
+
 function enemyChannelingInRange(sim: Sim, u: Unit, range: number): Unit | null {
   let best: Unit | null = null;
   sim.forEachNearbyUnit(u.pos, range + 80, (o) => {
@@ -407,7 +436,7 @@ function enemyChannelingInRange(sim: Sim, u: Unit, range: number): Unit | null {
   return best;
 }
 
-function bestOffensiveTarget(sim: Sim, u: Unit, focus: Unit | null, range: number): Unit | null {
+function bestOffensiveTarget(sim: Sim, u: Unit, focus: Unit | null, range: number, aimAt?: CombatRole): Unit | null {
   // prefer the focus when it is a valid enemy in range, so casts reinforce the team's commit
   if (focus && enemyCandidate(sim, u, focus) && dist2(u.pos, focus.pos) <= range * range) return focus;
   let best: Unit | null = null;
@@ -415,7 +444,10 @@ function bestOffensiveTarget(sim: Sim, u: Unit, focus: Unit | null, range: numbe
   sim.forEachNearbyUnit(u.pos, range + 80, (o) => {
     if (!enemyCandidate(sim, u, o)) return;
     if (dist2(o.pos, u.pos) > range * range) return;
-    const score = targetValue(o);
+    // §3 playbook lean: with no shared focus to converge on, tilt the scan toward
+    // the role this unit is built to aim at (a disabler leads onto the enemy carry).
+    const lean = aimAt && o.kind === 'hero' && combatProfile(o).role === aimAt ? TUNING.ai.aimAtBonus : 0;
+    const score = targetValue(o) + lean;
     if (score > bestScore || (score === bestScore && (best === null || o.uid < best.uid))) {
       bestScore = score;
       best = o;
@@ -438,6 +470,46 @@ function bestCluster(sim: Sim, u: Unit, range: number, radius: number): { point:
     if (count > bestCount) { bestCount = count; bestPoint = { ...c.pos }; }
   }
   return bestPoint ? { point: bestPoint, count: bestCount } : null;
+}
+
+/**
+ * Best aim direction for a `skillshot-line` (AUTOBATTLER_OVERHAUL §6.3): the ray from
+ * the caster that rakes the most enemies within `width`. Returns the far endpoint as the
+ * cast point so the line is angled down the densest row. Deterministic: ties break by uid.
+ */
+function bestLine(sim: Sim, u: Unit, range: number, width: number): { point: Vec2; count: number } | null {
+  const inRange = sim.unitsInRadius(u.pos, range, (o) => enemyCandidate(sim, u, o));
+  if (inRange.length === 0) return null;
+  let bestPoint: Vec2 | null = null;
+  let bestCount = 0;
+  let bestUid = Infinity;
+  const half = width / 2;
+  for (const aim of inRange) {
+    const dir = norm(sub(aim.pos, u.pos));
+    if (dir.x === 0 && dir.y === 0) continue;
+    const end = add(u.pos, scale(dir, range));
+    let count = 0;
+    for (const o of inRange) {
+      if (pointSegDist(o.pos, u.pos, end) <= half + o.radius * 0.5) count++;
+    }
+    if (count > bestCount || (count === bestCount && aim.uid < bestUid)) {
+      bestCount = count;
+      bestPoint = end;
+      bestUid = aim.uid;
+    }
+  }
+  return bestPoint ? { point: bestPoint, count: bestCount } : null;
+}
+
+/** Nearest-uid enemy mid-channel within range: the interrupt target for a single-lockdown. */
+function enemyMidChannelInRange(sim: Sim, u: Unit, range: number): Unit | null {
+  let best: Unit | null = null;
+  sim.forEachNearbyUnit(u.pos, range + 80, (o) => {
+    if (!enemyCandidate(sim, u, o)) return;
+    if (dist2(o.pos, u.pos) > range * range) return;
+    if (o.channel != null && o.channel.until > sim.time && (best === null || o.uid < best.uid)) best = o;
+  });
+  return best;
 }
 
 function enemiesNear(sim: Sim, u: Unit, radius: number): number {
@@ -567,7 +639,15 @@ function manaAdjustedScore(u: Unit, score: number, manaCost: number): number {
   return score * Math.max(0.25, 1 - pressure * weight);
 }
 
-function finalAbilityScore(u: Unit, score: number, intent: AbilityIntent, order: Order, focus: Unit | null, manaCost = 0, clusterCount = Infinity, isUlt = false): number {
+/**
+ * AUTOBATTLER_OVERHAUL §6.3: archetype-driven hold discipline. A `teamfight-ult`
+ * or `cluster-nuke` is held below the cluster threshold so it is never spent on a
+ * lone body — generalized from the boss's `partyClusterCount` to every unit, at all
+ * depths (deeper AI holds harder). null = no hold (single-target / utility).
+ */
+type HoldKind = 'teamfight-ult' | 'cluster-nuke' | null;
+
+function finalAbilityScore(u: Unit, score: number, intent: AbilityIntent, order: Order, focus: Unit | null, manaCost = 0, clusterCount = Infinity, hold: HoldKind = null): number {
   let out = score;
   if (focus && ((order.kind === 'cast' && order.uid === focus.uid) || (order.kind === 'attack-unit' && order.uid === focus.uid))) {
     out *= 0.75 + combatProfile(u).weights.focusFollow * 0.25;
@@ -583,11 +663,21 @@ function finalAbilityScore(u: Unit, score: number, intent: AbilityIntent, order:
     if (boss.phase === 'desperation' && (intent.hardControl || intent.escape || intent.buff)) out *= m.desperation;
   }
 
-  if (isUlt && intent.aoe && clusterCount < TUNING.ai.holdClusterMin) {
+  if (hold && intent.aoe && clusterCount < TUNING.ai.holdClusterMin) {
     const depth = u.ctrl.aiDepth ?? TUNING.ai.bossAiDepth;
-    if (depth >= TUNING.bossTierAiDepth.nightmare) out *= Math.max(TUNING.ai.ultHoldFloor, 1 - TUNING.ai.ultHoldDiscount * depth);
+    const aa = TUNING.ai.abilityArchetype;
+    const floor = hold === 'teamfight-ult' ? aa.teamfightUltFloor : aa.clusterNukeFloor;
+    out *= Math.max(floor, 1 - aa.holdSlope * depth);
   }
   return manaAdjustedScore(u, out, manaCost);
+}
+
+/** The hold discipline an aoe ability is subject to (teamfight-ult ranks above cluster-nuke). */
+function holdKindOf(def: AbilityDef): HoldKind {
+  const arch = abilityArchetypes(def);
+  if (arch.has('teamfight-ult')) return 'teamfight-ult';
+  if (arch.has('cluster-nuke')) return 'cluster-nuke';
+  return null;
 }
 
 function comboAdjustedScore(u: Unit, def: AbilityDef, now: number, score: number): number {
@@ -668,8 +758,10 @@ function scoreAbility(sim: Sim, u: Unit, slot: number, focus: Unit | null, profi
   if (!u.abilityReady(slot, sim.time).ok) return null;
   const manaCost = u.manaCostOf(slot);
   const intent = intentOf(a.def, a.level);
-  const finish = (score: number, order: Order, clusterCount = Infinity, isUlt = false): Scored => ({
-    score: comboAdjustedScore(u, a.def, sim.time, finalAbilityScore(u, score, intent, order, focus, manaCost, clusterCount, isUlt)),
+  const archetypes = abilityArchetypes(a.def);
+  const holdKind = holdKindOf(a.def);
+  const finish = (score: number, order: Order, clusterCount = Infinity, hold: HoldKind = null): Scored => ({
+    score: comboAdjustedScore(u, a.def, sim.time, finalAbilityScore(u, score, intent, order, focus, manaCost, clusterCount, hold)),
     order,
     slot
   });
@@ -707,6 +799,18 @@ function scoreAbility(sim: Sim, u: Unit, slot: number, focus: Unit | null, profi
 
   const controlW = intent.hardControl ? w.control : intent.softControl ? w.control * 0.6 : 0;
 
+  // §6.3: a skillshot-line angles down a row — pick the aim direction that rakes the
+  // most enemies, instead of clipping the single nearest body.
+  if (archetypes.has('skillshot-line') && (t === 'skillshot' || t === 'point-target')) {
+    const width = intent.radius || TUNING.ai.abilityArchetype.skillshotWidth;
+    const line = bestLine(sim, u, range, width);
+    if (line && line.count > 0) {
+      const s = (w.aoe * (0.4 + line.count)) + controlW * 0.4 * line.count + (intent.offensive ? w.burst * 0.4 : 0);
+      const order: Order = { kind: 'cast', slot, point: line.point };
+      return finish(s, order, line.count, holdKind);
+    }
+  }
+
   // area effect: value the cluster it catches
   if (intent.aoe || t === 'ground-aoe') {
     if (t === 'no-target') {
@@ -714,7 +818,7 @@ function scoreAbility(sim: Sim, u: Unit, slot: number, focus: Unit | null, profi
       if (count === 0) return null;
       const s = (w.aoe * (0.4 + count)) + controlW * 0.4 * count;
       const order: Order = { kind: 'cast', slot };
-      return finish(s, order, count, !!a.def.ult);
+      return finish(s, order, count, holdKind);
     }
     const cluster = bestCluster(sim, u, range, intent.radius || 300);
     if (!cluster || cluster.count === 0) return null;
@@ -723,20 +827,42 @@ function scoreAbility(sim: Sim, u: Unit, slot: number, focus: Unit | null, profi
       const tgt = bestOffensiveTarget(sim, u, focus, range);
       if (!tgt) return null;
       const order: Order = { kind: 'cast', slot, uid: tgt.uid };
-      return finish(s, order, cluster.count, !!a.def.ult);
+      return finish(s, order, cluster.count, holdKind);
     }
     const order: Order = { kind: 'cast', slot, point: cluster.point };
-    return finish(s, order, cluster.count, !!a.def.ult);
+    return finish(s, order, cluster.count, holdKind);
   }
 
   // single-target nuke / disable
-  const target = bestOffensiveTarget(sim, u, focus, range);
+  let target = bestOffensiveTarget(sim, u, focus, range, profile.playbook.aimAt);
+  // §6.3: a single-lockdown spends on the enemy whose death most collapses their
+  // formation — the team-mind's flank target (their exposed backline) — not the
+  // nearest body, when that collapse target is reachable.
+  let collapseTarget = false;
+  if (archetypes.has('single-lockdown')) {
+    const tm = sim.teamMind(u.team);
+    const collapse = tm.flankTargetUid !== null ? sim.unit(tm.flankTargetUid) : undefined;
+    if (collapse && collapse.alive && collapse.team !== u.team && !collapse.summary.untargetable &&
+        collapse.isVisibleTo(u.team, sim.time) && dist(u.pos, collapse.pos) <= range) {
+      target = collapse;
+      collapseTarget = true;
+    }
+  }
+  // §6.3: a single-lockdown / hard disable interrupts an enemy mid-channel — redirect
+  // the lockdown onto the channeler whose pay-over-time we want to break.
+  let channelInterrupt = false;
+  if (intent.hardControl || a.def.piercesImmunity) {
+    const aa = TUNING.ai.abilityArchetype;
+    const channeler = enemyMidChannelInRange(sim, u, Math.min(range, aa.channelInterruptRange));
+    if (channeler) { target = channeler; channelInterrupt = true; }
+  }
   if (!target) return null;
   const value = targetValue(target);
   let s = (intent.offensive ? w.burst * value : 0) + controlW * (0.6 + dangerNorm(target));
   // interrupting a channel or mid-cast is high value
-  const interrupting = (intent.hardControl || a.def.piercesImmunity) && (target.castingUntil > sim.time || (target.channel && target.channel.until > sim.time));
-  if (interrupting) s += 0.8;
+  const interrupting = channelInterrupt || ((intent.hardControl || a.def.piercesImmunity) && (target.castingUntil > sim.time || (target.channel && target.channel.until > sim.time)));
+  if (interrupting) s += channelInterrupt ? TUNING.ai.abilityArchetype.channelInterruptBonus : 0.8;
+  if (collapseTarget && !channelInterrupt) s += TUNING.ai.abilityArchetype.collapseTargetBonus;
   if (t === 'unit-target') {
     const order: Order = { kind: 'cast', slot, uid: target.uid };
     return finish(s, order);
@@ -762,8 +888,8 @@ function scoreItemByIntent(sim: Sim, u: Unit, slot: number, focus: Unit | null, 
   const ITEM = 1000 + slot;
   const range = castRangeOf(active, u, 1) * 1.1;
   const manaCost = active.manaCost?.[0] ?? 0;
-  const finish = (score: number, order: Order, clusterCount = Infinity, isUlt = false): Scored => ({
-    score: finalAbilityScore(u, bossBias * score * itemArchetypeBias(profile, def), intent, order, focus, manaCost, clusterCount, isUlt),
+  const finish = (score: number, order: Order, clusterCount = Infinity, hold: HoldKind = null): Scored => ({
+    score: finalAbilityScore(u, bossBias * score * itemArchetypeBias(profile, def), intent, order, focus, manaCost, clusterCount, hold),
     order,
     slot: ITEM
   });
@@ -804,22 +930,22 @@ function scoreItemByIntent(sim: Sim, u: Unit, slot: number, focus: Unit | null, 
       if (count === 0) return null;
       const order: Order = { kind: 'item', invSlot: slot };
       const s = (w.aoe * (0.35 + count)) + controlW * 0.35 * count + amplifyW * (0.35 + count * 0.2);
-      return finish(s, order, count, !!active.ult);
+      return finish(s, order, count, active.ult ? 'teamfight-ult' : null);
     }
     const cluster = bestCluster(sim, u, range, intent.radius || 300);
     if (!cluster || cluster.count === 0) return null;
     const s = (w.aoe * (0.35 + cluster.count)) + controlW * 0.35 * cluster.count + amplifyW * (0.35 + cluster.count * 0.2);
     if (t === 'unit-target') {
-      const target = bestOffensiveTarget(sim, u, focus, range);
+      const target = bestOffensiveTarget(sim, u, focus, range, profile.playbook.aimAt);
       if (!target) return null;
       const order: Order = { kind: 'item', invSlot: slot, uid: target.uid };
-      return finish(s, order, cluster.count, !!active.ult);
+      return finish(s, order, cluster.count, active.ult ? 'teamfight-ult' : null);
     }
     const order: Order = { kind: 'item', invSlot: slot, point: cluster.point };
-    return finish(s, order, cluster.count, !!active.ult);
+    return finish(s, order, cluster.count, active.ult ? 'teamfight-ult' : null);
   }
 
-  const target = bestOffensiveTarget(sim, u, focus, range);
+  const target = bestOffensiveTarget(sim, u, focus, range, profile.playbook.aimAt);
   if (!target) return null;
   const value = targetValue(target);
   let s = ((intent.offensive || archetypes.has('nuke')) ? w.burst * value : 0) + controlW * (0.6 + dangerNorm(target)) + amplifyW * (0.7 + dangerNorm(target));
@@ -874,11 +1000,29 @@ function scoreItemActive(sim: Sim, u: Unit, slot: number, focus: Unit | null, pr
     case 'euls-scepter': {
       const range = ir.euls + u.stats.castRangeBonus;
       const channeling = enemyChannelingInRange(sim, u, range);
-      const target = channeling ?? bestOffensiveTarget(sim, u, focus, range);
+      const target = channeling ?? bestOffensiveTarget(sim, u, focus, range, profile.playbook.aimAt);
       if (!target) return null;
       let s = w.control * (is.eulsBase + dangerNorm(target));
       if (channeling) s += is.interruptBonus; // interrupt
       return finish(s, { kind: 'item', invSlot: slot, uid: target.uid });
+    }
+    // §2 signature considers: area-mitigation guards pop for a clustered group that
+    // is actually taking (or about to take) area damage, not on any lone body.
+    case 'crimson-guard':
+    case 'pipe-of-insight': {
+      const grouped = clusteredAllies(sim, u, ir.teamGuardRadius);
+      if (grouped < is.teamGuardMinAllies) return null;
+      const threatened = sim.teamMind(u.team).spread || enemyCastSeen(sim, u, 'ult', 1100) || enemiesNear(sim, u, u.stats.attackRange + 360) >= 2;
+      if (!threatened) return null;
+      const base = it.defId === 'crimson-guard' ? is.crimson : is.pipe;
+      return finish(base * Math.max(0.8, w.saveAllies) * (0.6 + grouped * 0.2), { kind: 'item', invSlot: slot });
+    }
+    // §2 Lotus Orb: spend Echo Shell to dispel-and-shield a disabled ally, not as a
+    // generic heal on whoever is lowest — the dispel is the whole point of the timing.
+    case 'lotus-orb': {
+      const ally = mostDisabledAllyInRange(sim, u, ir.lotusRange + u.stats.castRangeBonus);
+      if (!ally) return null;
+      return finish(w.saveAllies * is.lotus * (1 + (1 - ally.hp / Math.max(1, ally.stats.maxHp)) * 0.5), { kind: 'item', invSlot: slot, uid: ally.uid });
     }
   }
   return scoreItemByIntent(sim, u, slot, focus, profile);
@@ -950,13 +1094,33 @@ export function chooseUtilityOrder(sim: Sim, u: Unit, focus: Unit | null): Order
     const stack = raidStackForHealOrder(sim, u);
     if (stack) return stack;
 
+    // §4 save chain: the team's save-holder sequences a reposition save (Force Staff)
+    // then a shield save (Glimmer) on the most-dived ally — one per tick, never both
+    // at once. The per-item considers still cover the lone-save case.
+    if (tm.saveHolderUid === null || tm.saveHolderUid === u.uid) {
+      const savePlan = planSaveChain(sim, u);
+      if (savePlan) return { kind: 'item', invSlot: savePlan.nextStep.slot, uid: savePlan.allyUid };
+    }
+
     if (focus && !tm.engaged && shouldHoldBackForEngage(sim, u, focus, profile) && !urgentSupportAvailable(sim, u, profile)) {
-      return { kind: 'hold' };
+      // §6.2 anchor gravity: a unit that would hold pre-engage instead drifts back
+      // to its authored cell when displaced, so the formation re-forms. It never
+      // preempts a cast (the hold branch is already the do-nothing path).
+      return anchorReformOrder(sim, u, profile) ?? { kind: 'hold' };
     }
 
     // raid peel (AI_OVERHAUL §6): a frontliner redirects to an add threatening the backline
     const peel = raidPeelTarget(sim, u, profile);
     if (peel) focus = peel;
+
+    // §6.1 formation peel: an assigned peeler intercepts the threat on its
+    // protected backliner; else a committed diver routes onto the enemy flank.
+    const protect = protectPeelTarget(sim, u, tm);
+    if (protect) focus = protect;
+    else {
+      const flankT = flankFocus(sim, u, tm);
+      if (flankT) focus = flankT;
+    }
   }
 
   const comboPlan = teamPlan ?? (focus && (u.ctrl.kind === 'gambit' || u.ctrl.kind === 'boss') ? planUnitCombo(sim, u, focus) : null);
@@ -977,6 +1141,10 @@ export function chooseUtilityOrder(sim: Sim, u: Unit, focus: Unit | null): Order
         ? scoreBossItemActive(sim, u, slot, focus, profile)
         : scoreItemActive(sim, u, slot, focus, profile);
       if (raw && teamMind && teamMind.saveHolderUid !== null && teamMind.saveHolderUid !== u.uid && itemOrderUsesAssignedSave(u, raw.order)) continue;
+      // §5 role assignments: a unit that is neither the team's designated initiator
+      // nor lockdown source — and is not part of a committed cross-unit chain —
+      // holds its engage/lockdown item so two units never blow two on the same jump.
+      if (raw && teamMind && teamPlan === null && itemOrderViolatesRole(u, raw.order, teamMind)) continue;
       const cand = raw ? plannedComboScore(u, raw, comboPlan) : null;
       if (!cand) continue;
       if (comboPlan && comboStepMatchesOrder(comboPlan.nextStep, cand.order)) plannedStepCovered = true;
@@ -1007,12 +1175,82 @@ export function chooseUtilityOrder(sim: Sim, u: Unit, focus: Unit | null): Order
   return { kind: 'attack-unit', uid: focus.uid };
 }
 
+// §6.2: pull a displaced gambit unit back toward its board cell when no fight is
+// on it, so the authored formation re-forms. Narrow by design — it never fires
+// while an enemy is in reach or the unit is hurt, so it can't override combat.
+function anchorReformOrder(sim: Sim, u: Unit, profile: CombatProfile): Order | null {
+  const home = u.ctrl.homePos;
+  if (!home) return null;
+  const aa = TUNING.ai.abilityArchetype;
+  if (dist(u.pos, home) <= aa.anchorReformRadius) return null;
+  if (enemiesNear(sim, u, u.stats.attackRange + 200) > 0) return null;
+  if (u.hp / Math.max(1, u.stats.maxHp) < profile.retreatHpPct) return null;
+  return { kind: 'move', point: { ...home } };
+}
+
+// §6.1: an assigned peeler focuses the enemy most threatening its protected
+// backliner (the channeling/ exposed caster), so it peels instead of chasing.
+function protectPeelTarget(sim: Sim, u: Unit, tm: TeamMind): Unit | null {
+  const protectedUid = tm.protectAssignments[u.uid];
+  if (protectedUid === undefined) return null;
+  const ally = sim.unit(protectedUid);
+  if (!ally || !ally.alive) return null;
+  const radius = TUNING.ai.formation.peelRadius;
+  let best: Unit | null = null;
+  let bestD = Infinity;
+  for (const e of sim.unitsArr) {
+    if (!e.alive || e.team === u.team || e.kind === 'npc' || e.kind === 'ward') continue;
+    if (e.summary.untargetable || !e.isVisibleTo(u.team, sim.time)) continue;
+    const d = dist(e.pos, ally.pos);
+    if (d > radius) continue;
+    if (d < bestD || (d === bestD && (best === null || e.uid < best.uid))) {
+      best = e;
+      bestD = d;
+    }
+  }
+  return best;
+}
+
+// §6.1: a committed diver (initiator/escape) routes onto the enemy's exposed
+// backliner — the flank target the team-mind named — instead of the front body.
+function flankFocus(sim: Sim, u: Unit, tm: TeamMind): Unit | null {
+  if (tm.flankTargetUid === null || !tm.engaged) return null;
+  const roles = u.heroId ? (REG.heroes.get(u.heroId)?.roles ?? []) : [];
+  if (!roles.includes('initiator') && !roles.includes('escape')) return null;
+  const t = sim.unit(tm.flankTargetUid);
+  if (!t || !t.alive || t.team === u.team || t.summary.untargetable) return null;
+  if (!t.isVisibleTo(u.team, sim.time)) return null;
+  if (dist(u.pos, t.pos) > TUNING.ai.formation.flankRange) return null;
+  return t;
+}
+
 function itemOrderUsesAssignedSave(u: Unit, order: Order): boolean {
   if (order.kind !== 'item') return false;
   const def = REG.items.get(u.items[order.invSlot]?.defId ?? '');
   if (!def) return false;
   const arch = itemArchetypes(def);
   return arch.has('save') || arch.has('sustain') || arch.has('cleanse');
+}
+
+/**
+ * §5 duplicate-role suppression. An engage item (initiation) used by a non-initiator,
+ * or a pure-lockdown item used by a non-lockdown-source, is held — so the team commits
+ * one Blink and one chain stun on a jump, not five. Items that double as a save/escape
+ * or a nuke keep their other uses (Eul's still self-escapes; Gleipnir still nukes).
+ */
+function itemOrderViolatesRole(u: Unit, order: Order, tm: TeamMind): boolean {
+  if (order.kind !== 'item') return false;
+  const def = REG.items.get(u.items[order.invSlot]?.defId ?? '');
+  if (!def) return false;
+  const arch = itemArchetypes(def);
+  if (arch.has('initiation') && !arch.has('save') && tm.initiatorUid !== null && tm.initiatorUid !== u.uid) {
+    return true;
+  }
+  if (arch.has('lockdown') && !arch.has('save') && !arch.has('escape') && !arch.has('nuke') && !arch.has('cleanse') &&
+      tm.lockdownUid !== null && tm.lockdownUid !== u.uid) {
+    return true;
+  }
+  return false;
 }
 
 function raidFriendlyFieldOrder(sim: Sim, u: Unit): Order | null {
@@ -1233,6 +1471,7 @@ export function computeTeamMind(sim: Sim, team: Team, prev: TeamMind | null): Te
   }
 
   const teamCombo = planTeamCombos(sim, team, best);
+  const formation = computeFormation(sim, team, allies, enemies);
   return {
     focusUid: best ? best.uid : null,
     focusScore: best ? bestScore : -Infinity,
@@ -1242,7 +1481,126 @@ export function computeTeamMind(sim: Sim, team: Team, prev: TeamMind | null): Te
     initiatorUid: teamCombo.initiatorUid,
     lockdownUid: teamCombo.lockdownUid,
     chains: teamCombo.chains,
+    frontLineUids: formation.frontLineUids,
+    backlineUids: formation.backlineUids,
+    protectAssignments: formation.protectAssignments,
+    flankTargetUid: formation.flankTargetUid,
     computedTick: sim.tickCount
+  };
+}
+
+// ============================================================
+// Formation posture (AUTOBATTLER_OVERHAUL §6.1). Pure reads over positions,
+// roles, and ability archetypes — no board object needed at read time, since
+// homePos already seated the five. Splits each side into a front line and a
+// backline, ties a peeler to the most-exposed (channeling) backliner, and
+// names the enemy's softest backliner as the flank target.
+// ============================================================
+
+const BACK_ARCHETYPES: ReadonlySet<AbilityArchetype> = new Set<AbilityArchetype>([
+  'channel', 'cluster-nuke', 'team-buff', 'skillshot-line'
+]);
+
+function heroArchetypeSet(u: Unit): Set<AbilityArchetype> {
+  const out = new Set<AbilityArchetype>();
+  if (!u.heroId) return out;
+  const def = REG.heroes.get(u.heroId);
+  if (!def) return out;
+  for (const a of def.abilities) for (const x of abilityArchetypes(a)) out.add(x);
+  return out;
+}
+
+function isFrontliner(u: Unit): boolean {
+  const roles = u.heroId ? (REG.heroes.get(u.heroId)?.roles ?? []) : [];
+  if (roles.includes('durable') || roles.includes('initiator')) return true;
+  return u.stats.attackRange <= 150 && roles.length === 0; // melee creep bodies hold the front
+}
+
+function isBackliner(u: Unit): boolean {
+  if (isFrontliner(u)) return false;
+  const roles = u.heroId ? (REG.heroes.get(u.heroId)?.roles ?? []) : [];
+  if (roles.includes('support') || roles.includes('nuker') || roles.includes('carry')) return true;
+  if (u.stats.attackRange >= 550) return true;
+  const arch = heroArchetypeSet(u);
+  for (const a of BACK_ARCHETYPES) if (arch.has(a)) return true;
+  return false;
+}
+
+function isChanneling(sim: Sim, u: Unit): boolean {
+  return u.channel != null && u.channel.until > sim.time;
+}
+
+function nearestEnemyDist(u: Unit, enemies: Unit[]): number {
+  let best = Infinity;
+  for (const e of enemies) best = Math.min(best, dist(u.pos, e.pos));
+  return best;
+}
+
+interface FormationRead {
+  frontLineUids: number[];
+  backlineUids: number[];
+  protectAssignments: Record<number, number>;
+  flankTargetUid: number | null;
+}
+
+function computeFormation(sim: Sim, team: Team, allies: Unit[], enemies: Unit[]): FormationRead {
+  const heroAllies = allies.filter((a) => a.kind === 'hero' || a.kind === 'creep');
+  const front = heroAllies.filter(isFrontliner);
+  const back = heroAllies.filter(isBackliner);
+
+  // most-exposed backliner first; a channeling ally gets the authored save bonus
+  // from tuning so the "protect the channel" priority is visible and tunable.
+  const saveBonus = TUNING.ai.abilityArchetype.friendlyChannelSaveBonus;
+  const needy = [...back].sort((a, b) => {
+    const ca = isChanneling(sim, a) ? saveBonus : 0;
+    const cb = isChanneling(sim, b) ? saveBonus : 0;
+    if (ca !== cb) return cb - ca;
+    const da = nearestEnemyDist(a, enemies);
+    const db = nearestEnemyDist(b, enemies);
+    if (da !== db) return da - db; // closer to the enemy = more exposed
+    return a.uid - b.uid;
+  });
+
+  // tie each free peeler (a frontliner) to the most-exposed uncovered backliner.
+  const protectAssignments: Record<number, number> = {};
+  const usedPeelers = new Set<number>();
+  for (const b of needy) {
+    let bestPeeler: Unit | null = null;
+    let bestD = Infinity;
+    for (const p of front) {
+      if (usedPeelers.has(p.uid)) continue;
+      const d = dist(p.pos, b.pos);
+      if (d < bestD || (d === bestD && (bestPeeler === null || p.uid < bestPeeler.uid))) {
+        bestD = d;
+        bestPeeler = p;
+      }
+    }
+    if (!bestPeeler) break;
+    usedPeelers.add(bestPeeler.uid);
+    protectAssignments[bestPeeler.uid] = b.uid;
+  }
+
+  // the enemy's softest backliner is the flank target (the assassin read).
+  const enemyBack = enemies.filter((e) => isBackliner(e) && e.isVisibleTo(team, sim.time));
+  let flank: Unit | null = null;
+  let flankScore = -Infinity;
+  for (const e of enemyBack) {
+    const arch = heroArchetypeSet(e);
+    const value =
+      (arch.has('team-buff') ? 2 : 0) +
+      (arch.has('cluster-nuke') || arch.has('channel') ? 1.5 : 0) +
+      (1 - e.hp / Math.max(1, e.stats.maxHp));
+    if (value > flankScore || (value === flankScore && (flank === null || e.uid < flank.uid))) {
+      flankScore = value;
+      flank = e;
+    }
+  }
+
+  return {
+    frontLineUids: front.map((u) => u.uid),
+    backlineUids: back.map((u) => u.uid),
+    protectAssignments,
+    flankTargetUid: flank ? flank.uid : null
   };
 }
 

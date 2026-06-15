@@ -1,5 +1,6 @@
 import type { HeroDef } from '../../core/types';
 import { loopTurnLabel } from './loop-note';
+import { authoredMasteryTrees } from './mastery-authoring';
 
 export const AXE: HeroDef = {
   id: 'axe',
@@ -178,6 +179,40 @@ export const AXE: HeroDef = {
       ]
     }
   },
+  masteryTrees: authoredMasteryTrees([
+    {
+      abilityId: 'axe-berserkers-call',
+      name: 'Provocation',
+      t1: { name: 'Iron Stance', description: "Berserker's Call gains a strength-scaling armor bump.", mods: { str: 2 }, override: { valueKey: 'armor' } },
+      t2: { name: 'Marked Prey', description: 'Taunted enemies are marked for Counter Helix.', mechanic: 'mark', override: { valueKey: 'armor' } },
+      t3: { name: 'Long Roar', description: "Berserker's Call growth node extends its taunt duration.", override: { valueKey: 'duration' } },
+      t4: { name: 'Reel In', description: "Berserker's Call drags marked enemies inward instead of only forcing attacks.", mechanic: 'follow' }
+    },
+    {
+      abilityId: 'axe-battle-hunger',
+      name: 'Bloodlust',
+      t1: { name: 'Gnawing Wound', description: 'Battle Hunger gains a strength-scaling damage-per-second bump.', mods: { str: 2 }, override: { valueKey: 'dps' } },
+      t2: { name: 'Panic', description: 'Battle Hunger marks enemies as panicked when they fail to fight back.', mechanic: 'mark', override: { valueKey: 'dps' } },
+      t3: { name: 'Hobbling Hunger', description: "Battle Hunger's growth node deepens its slow.", override: { valueKey: 'slow' } },
+      t4: { name: 'Contagion', description: 'Battle Hunger spreads from executed or panicked enemies.', mechanic: 'chain' }
+    },
+    {
+      abilityId: 'axe-counter-helix',
+      name: 'Whirlwind',
+      t1: { name: 'Sharper Spin', description: 'Counter Helix gains a strength-scaling damage bump.', mods: { str: 2 }, override: { valueKey: 'damage' } },
+      t2: { name: 'Guaranteed Spin', description: 'Counter Helix consumes taunt marks for a guaranteed spin.', mechanic: 'consume', override: { valueKey: 'damage' } },
+      t3: { name: 'Wide Spin', description: "Counter Helix's growth node widens its spin radius.", override: { valueKey: 'radius' } },
+      t4: { name: 'Spell Helix', description: "Counter Helix can trigger from spell hits while Berserker's Call is active.", mechanic: 'echo' }
+    },
+    {
+      abilityId: 'axe-culling-blade',
+      name: 'Execution',
+      t1: { name: 'Keen Cleaver', description: 'Culling Blade gains a strength-scaling damage bump.', mods: { str: 2 }, override: { valueKey: 'damage' } },
+      t2: { name: 'Bloodcall', description: "Culling Blade primes Berserker's Call on execute.", mechanic: 'prime', override: { valueKey: 'damage' } },
+      t3: { name: 'Wide Wake', description: "Culling Blade's growth node widens its rally radius.", override: { valueKey: 'radius' } },
+      t4: { name: 'War Charge', description: 'An execute turns the next Call into a team charge instead of a solo taunt.', mechanic: 'recast' }
+    }
+  ]),
   silhouette: { build: 'brute', scale: 1.12, bodyShape: 'bulky', head: 'horned', weapon: 'cleaver', extras: ['shoulderpads', 'belt', 'horns'] },
   palette: ['#b32621', '#5b2a22', '#ffb34d'],
   barks: [

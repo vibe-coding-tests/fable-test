@@ -1,5 +1,6 @@
 import type { HeroDef } from '../../core/types';
 import { loopTurnLabel } from './loop-note';
+import { authoredMasteryTrees } from './mastery-authoring';
 
 export const LICH: HeroDef = {
   id: 'lich',
@@ -103,6 +104,7 @@ export const LICH: HeroDef = {
       cooldown: [30, 26, 22, 18],
       channel: {
         duration: 'duration',
+        offField: true,
         tick: {
           interval: 0.25,
           effects: [
@@ -223,6 +225,40 @@ export const LICH: HeroDef = {
       ]
     }
   },
+  masteryTrees: authoredMasteryTrees([
+    {
+      abilityId: 'lich-frost-blast',
+      name: 'Rime',
+      t1: { name: 'Bitter Cold', description: 'Frost Blast gains an intelligence-scaling damage bump.', mods: { int: 2 }, override: { valueKey: 'damage' } },
+      t2: { name: 'Frost Shard', description: 'Frost Blast creates a frost shard on hit.', mechanic: 'summon', override: { valueKey: 'damage' } },
+      t3: { name: 'Hard Splash', description: "Frost Blast's growth node sharpens its splash damage.", override: { valueKey: 'splash' } },
+      t4: { name: 'Shardbound', description: 'Frost shards make future Frost Blasts bounce through them.', mechanic: 'chain' }
+    },
+    {
+      abilityId: 'lich-frost-shield',
+      name: 'Aegis',
+      t1: { name: 'Cold Ward', description: 'Frost Shield gains an intelligence-scaling pulse-damage bump.', mods: { int: 2 }, override: { valueKey: 'pulse' } },
+      t2: { name: 'Brittle Touch', description: 'Attackers of the shielded ally are marked brittle.', mechanic: 'mark', override: { valueKey: 'pulse' } },
+      t3: { name: 'Thick Frost', description: "Frost Shield's growth node deepens its damage reduction.", override: { valueKey: 'reduction' } },
+      t4: { name: 'Shatterpulse', description: 'Frost Shield pulses consume brittle marks for crowd control.', mechanic: 'consume' }
+    },
+    {
+      abilityId: 'lich-sinister-gaze',
+      name: 'Mesmer',
+      t1: { name: 'Draining Stare', description: 'Sinister Gaze gains an intelligence-scaling mana-burn bump.', mods: { int: 2 }, override: { valueKey: 'manaTick' } },
+      t2: { name: 'Stored Shard', description: 'Sinister Gaze drains mana into a stored frost shard.', mechanic: 'store', override: { valueKey: 'manaTick' } },
+      t3: { name: 'Long Gaze', description: "Sinister Gaze's growth node holds the target longer.", override: { valueKey: 'duration' } },
+      t4: { name: 'Frozen Snare', description: 'Breaking Sinister Gaze early leaves the shard behind as a trap.', mechanic: 'persist' }
+    },
+    {
+      abilityId: 'lich-chain-frost',
+      name: 'Cascade',
+      t1: { name: 'Heavy Bounce', description: 'Chain Frost gains an intelligence-scaling damage bump.', mods: { int: 2 }, override: { valueKey: 'damage' } },
+      t2: { name: 'Cold Hunt', description: 'Chain Frost prefers brittle or shard-marked enemies.', mechanic: 'retarget', override: { valueKey: 'damage' } },
+      t3: { name: 'Wide Arc', description: "Chain Frost's growth node widens its bounce radius.", override: { valueKey: 'bounceRadius' } },
+      t4: { name: 'Endless Winter', description: 'Chain Frost gains new bounces by revisiting the same hero through shards.', mechanic: 'chain' }
+    }
+  ]),
   silhouette: { build: 'biped', scale: 1.05, bodyShape: 'robed', head: 'skull', weapon: 'staff', extras: ['cape', 'crown'] },
   palette: ['#7ec8f2', '#2c4a78', '#d8f4ff'],
   barks: [

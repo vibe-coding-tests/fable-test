@@ -225,6 +225,97 @@ function swarmSpread(ctx: ExoticContext): void {
   ctx.sim.events.emit({ t: 'aoe-burst', pos: { ...c }, radius: V(ctx.ctx, 'radius', 650), vfx: ctx.ctx.vfx });
 }
 
+function masteryTargets(ctx: ExoticContext, radius = 650): Unit[] {
+  if (ctx.primary.target && ctx.primary.target.alive && ctx.primary.target.team !== ctx.caster.team && !ctx.primary.target.summary.invulnerable) return [ctx.primary.target];
+  return enemiesAround(ctx, radius);
+}
+
+function masteryDamage(ctx: ExoticContext, mult = 1): number {
+  return Math.max(24, V(ctx.ctx, 'damage', 0) * 0.22 + ctx.caster.stats.damage * 0.18) * mult;
+}
+
+function nearestEnemy(ctx: ExoticContext, origin: Vec2, excludeUid?: number, radius = 650): Unit | undefined {
+  return ctx.sim.unitsInRadius(origin, radius, (u) => u.team !== ctx.caster.team && u.uid !== excludeUid && !u.summary.untargetable && !u.summary.invulnerable)
+    .sort((a, b) => {
+      const ahp = a.hp / Math.max(1, a.stats.maxHp);
+      const bhp = b.hp / Math.max(1, b.stats.maxHp);
+      return ahp - bhp;
+    })[0];
+}
+
+function reduceCurrentAbilityCooldown(ctx: ExoticContext, pct: number, floorSec = 0): void {
+  const ability = ctx.caster.abilities.find((a) => a.def.id === ctx.ctx.defId);
+  if (!ability || ability.cooldownUntil <= ctx.sim.time) return;
+  const remaining = ability.cooldownUntil - ctx.sim.time;
+  ability.cooldownUntil = ctx.sim.time + Math.max(floorSec, remaining * (1 - pct));
+}
+
+function masteryMechanic(ctx: ExoticContext): void {
+  const mechanic = String(ctx.params?.mechanic ?? '');
+  const tier = Number(ctx.params?.tier ?? 2);
+  const power = tier >= 4 ? 1.45 : 1;
+  const targets = masteryTargets(ctx);
+  const target = targets[0];
+  const tag = `mastery:${mechanic}:${ctx.params?.abilityId ?? ctx.ctx.defId}`;
+
+  switch (mechanic) {
+    case 'mark':
+      for (const enemy of targets) applyStatus(ctx.sim, ctx.caster, enemy, 'buff', 4 * power, { tag, mods: { magicResistPct: -4 * power, armor: -1 * power } } as StatusParams, ctx.ctx);
+      break;
+    case 'consume': {
+      if (!target) break;
+      const marked = target.statuses.find((s) => s.tag.startsWith('mastery:mark:'));
+      if (marked) marked.until = ctx.sim.time;
+      applyDamage(ctx.sim, ctx.caster, target, masteryDamage(ctx, marked ? 1.25 * power : 0.65 * power), 'magical', { element: ctx.ctx.element, piercesImmunity: ctx.ctx.piercesImmunity });
+      break;
+    }
+    case 'chain': {
+      if (!target) break;
+      const next = nearestEnemy(ctx, target.pos, target.uid);
+      if (next) applyDamage(ctx.sim, ctx.caster, next, masteryDamage(ctx, 0.55 * power), 'magical', { element: ctx.ctx.element, piercesImmunity: ctx.ctx.piercesImmunity });
+      break;
+    }
+    case 'echo':
+      buff(ctx, ctx.caster, tag, 4 * power, { spellAmpPct: 5 * power, manaRegen: 1.5 * power });
+      break;
+    case 'split':
+      for (const enemy of enemiesAround(ctx, 520).slice(0, tier >= 4 ? 3 : 2)) applyDamage(ctx.sim, ctx.caster, enemy, masteryDamage(ctx, 0.35 * power), 'magical', { element: ctx.ctx.element, piercesImmunity: ctx.ctx.piercesImmunity });
+      break;
+    case 'follow':
+      ctx.sim.addZone({ caster: ctx.caster, ctx: ctx.ctx, spec: { shape: 'circle', radius: 260, duration: 4 * power, tick: { interval: 0.75, affects: 'enemies', effects: [{ kind: 'status', status: 'slow', duration: 0.9, target: 'target', params: { tag, moveSlowPct: 18 * power } }] } }, duration: 4 * power, pos: { ...ctx.caster.pos }, radius: 260, followUid: ctx.caster.uid });
+      break;
+    case 'persist':
+      ctx.sim.addZone({ caster: ctx.caster, ctx: ctx.ctx, spec: { shape: 'circle', radius: 280, duration: 3.5 * power, tick: { interval: 0.75, affects: 'enemies', effects: [{ kind: 'status', status: 'slow', duration: 0.9, target: 'target', params: { tag, moveSlowPct: 16 * power } }] } }, duration: 3.5 * power, pos: { ...center(ctx.caster, ctx.primary) }, radius: 280 });
+      break;
+    case 'convert':
+      ctx.caster.mana = Math.min(ctx.caster.stats.maxMana, ctx.caster.mana + 18 * power + V(ctx.ctx, 'mana', 0) * 0.1);
+      if (target) applyDamage(ctx.sim, ctx.caster, target, masteryDamage(ctx, 0.35 * power), 'pure', { piercesImmunity: ctx.ctx.piercesImmunity });
+      break;
+    case 'summon':
+    case 'copy':
+    case 'mirror':
+      buff(ctx, ctx.caster, tag, 5 * power, { damage: 8 * power, attackSpeed: 12 * power, spellAmpPct: 3 * power });
+      break;
+    case 'refund':
+      reduceCurrentAbilityCooldown(ctx, 0.22 * power, 0.5);
+      ctx.caster.mana = Math.min(ctx.caster.stats.maxMana, ctx.caster.mana + 12 * power);
+      break;
+    case 'recast':
+      reduceCurrentAbilityCooldown(ctx, 0.36 * power, 1);
+      break;
+    case 'retarget': {
+      const next = nearestEnemy(ctx, center(ctx.caster, ctx.primary), target?.uid, 800);
+      if (next) applyDamage(ctx.sim, ctx.caster, next, masteryDamage(ctx, 0.5 * power), 'magical', { element: ctx.ctx.element, piercesImmunity: ctx.ctx.piercesImmunity });
+      break;
+    }
+    case 'store':
+    case 'prime':
+      buff(ctx, ctx.caster, tag, 6 * power, { spellAmpPct: 6 * power, damage: 6 * power });
+      break;
+  }
+  if (['split', 'follow', 'persist', 'chain'].includes(mechanic)) ctx.sim.events.emit({ t: 'aoe-burst', pos: { ...center(ctx.caster, ctx.primary) }, radius: V(ctx.ctx, 'radius', 420), vfx: ctx.ctx.vfx });
+}
+
 export const EXOTIC_IMPLS: Record<string, ExoticHandler> = {
   invoke,
   chronosphere,
@@ -241,5 +332,6 @@ export const EXOTIC_IMPLS: Record<string, ExoticHandler> = {
   'terror-fear': terrorFear,
   'defile-growth': defileGrowth,
   'swarm-spread': swarmSpread,
+  'mastery-mechanic': masteryMechanic,
   'roshan-respawn': () => {}
 };

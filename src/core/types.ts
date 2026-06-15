@@ -472,6 +472,42 @@ export interface TalentTier {
   level: number; // 10 | 15 | 20 | 25
   options: [TalentDef, TalentDef];
 }
+export type MasteryNodeKind = 'growth' | 'keystone' | 'capstone';
+export type MasteryMechanicVerb =
+  | 'mark'
+  | 'consume'
+  | 'chain'
+  | 'echo'
+  | 'split'
+  | 'follow'
+  | 'convert'
+  | 'summon'
+  | 'refund'
+  | 'recast'
+  | 'retarget'
+  | 'copy'
+  | 'store'
+  | 'prime'
+  | 'mirror'
+  | 'persist';
+export interface MasteryNode {
+  id: string;
+  name: string;
+  tier: 1 | 2 | 3 | 4;
+  kind: MasteryNodeKind;
+  description: string;
+  mechanic?: MasteryMechanicVerb;
+  mods?: StatModMap;
+  abilityOverride?: { abilityId: string; valueKey: string; mode: 'add' | 'mul' | 'set'; amount: number };
+  cooldownAdd?: { abilityId: string; amount: number };
+  abilityPatch?: HeroAbilityPatch;
+  grantsExotic?: string;
+}
+export interface MasteryBranch {
+  abilityId: string;
+  name: string;
+  nodes: [MasteryNode, MasteryNode, MasteryNode, MasteryNode];
+}
 export interface FacetDef {
   id: string;
   name: string;
@@ -691,6 +727,7 @@ export interface HeroDef {
   abilities: AbilityDef[];     // exactly 4 for roster heroes
   skillOrder?: number[];       // ability slot leveling priority, default [0,1,2]
   talents: TalentTier[];       // exactly 4 tiers x 2 options
+  masteryTrees?: [MasteryBranch, MasteryBranch, MasteryBranch, MasteryBranch];
   facets: FacetDef[];          // >= 1
   aghanim?: AghanimDef;
   combo?: HeroComboRule[];
@@ -1507,6 +1544,28 @@ export interface GymDef {
   enemyTeam: MacroHeroSetup[];
   enemyBonusCaptainCalls?: number;
   dialogue: string[];          // in-character leader lines (§3.13), original
+  /** Composition format (AUTOBATTLER_OVERHAUL §5): bans/caps/budgets + counter-draft. */
+  format?: DraftFormat;
+}
+
+// ---------- Composition formats (AUTOBATTLER_OVERHAUL §5) ----------
+// A closed, data-driven constraint vocabulary the draft screen validates and the
+// enemy AI reads. All rules reuse role/attribute/level/item-tier tags already on
+// existing defs — no new hero data.
+export type DraftRule =
+  | { kind: 'ban-hero'; heroIds: string[] }
+  | { kind: 'ban-role'; roles: string[] }
+  | { kind: 'require-role'; role: string; min: number }
+  | { kind: 'cap-role'; role: string; max: number }
+  | { kind: 'cap-attribute'; attribute: Attribute; max: number }
+  | { kind: 'unique-attribute' }
+  | { kind: 'level-cap'; max: number }
+  | { kind: 'item-tier-cap'; max: number }
+  | { kind: 'point-budget'; total: number; costByRole?: Record<string, number> };
+
+export interface DraftFormat {
+  rules: DraftRule[];
+  counterDraft?: 'none' | 'last-pick' | 'mirror-shape';
 }
 
 // ---------- Gambits (SPEC §7) ----------
@@ -1542,7 +1601,15 @@ export type GambitCondition =
   | { k: 'combo-ready' }
   | { k: 'save-assigned' }
   | { k: 'in-friendly-field' }
-  | { k: 'enemy-in-hostile-field' };
+  | { k: 'enemy-in-hostile-field' }
+  // formation reads (AUTOBATTLER_OVERHAUL §6.5): author against the board posture
+  // the team-mind derives — hold the anchor, peel the backline, flank, channels.
+  | { k: 'in-formation' }
+  | { k: 'backline-threatened' }
+  | { k: 'enemy-clustered'; radius: number; count: number }
+  | { k: 'flank-open' }
+  | { k: 'ally-channeling' }
+  | { k: 'enemy-channeling' };
 
 export type GambitTargetMode =
   | 'lowest-hp-enemy'
@@ -1558,6 +1625,7 @@ export type GambitTargetMode =
 export type GambitAction =
   | { k: 'cast'; slot: number; targetMode: GambitTargetMode }
   | { k: 'use-item'; itemId: string; targetMode: GambitTargetMode }
+  | { k: 'combo-route' }
   | { k: 'attack-focus' }
   | { k: 'focus-fire'; targetMode?: GambitTargetMode }
   | { k: 'kite'; distance?: number }
@@ -1578,6 +1646,22 @@ export interface MacroHeroSetup {
   items?: string[];
   itemOverrides?: Record<string, ItemActiveOverride>;
   gambits?: GambitRule[];
+}
+
+// ---------- Board / draft (AUTOBATTLER_OVERHAUL §3/§4) ----------
+/** A deployment cell. col 0 = back (own edge), 2 = front (toward center); row 0..4. */
+export interface BoardSlot {
+  col: 0 | 1 | 2;
+  row: number;
+}
+/** A team's placement: heroId -> cell. Heroes with no entry fall back to formationDepth. */
+export interface Formation {
+  placements: Record<string, BoardSlot>;
+}
+/** A committed draft (§4.1): up to five heroes plus where they stand. */
+export interface DraftTeam {
+  heroes: MacroHeroSetup[];   // up to 5 (heroId, level, items, gambits)
+  formation: Formation;       // §3 placement
 }
 
 export interface RaidBossSetup extends MacroHeroSetup {
@@ -1621,7 +1705,7 @@ export type SimEvent =
   | { t: 'status-expire'; uid: number; status: StatusId }
   | { t: 'element-apply'; uid: number; from: number; element: Exclude<ElementId, 'neutral'>; gauge: number }
   | { t: 'reaction'; uid: number; from: number; reaction: string; elements: [Exclude<ElementId, 'neutral'>, Exclude<ElementId, 'neutral'>] }
-  | { t: 'tag-boon'; uid: number; heroId: string; when: 'tag-in' | 'tag-out'; chain: number; ampPct: number }
+  | { t: 'tag-boon'; uid: number; heroId: string; when: 'tag-in' | 'tag-out'; archetype: TagArchetype; chain: number; ampPct: number }
   | { t: 'swap-flat'; uid: number }   // a swap that paid no boon (gauge down): the dull arrival beat (§9)
   | { t: 'tag-chain'; uid: number; count: number; expiresAt: number; ampPct: number }
   | { t: 'off-field'; uid: number; heroId: string; until: number }
@@ -1631,7 +1715,7 @@ export type SimEvent =
   | { t: 'movement-blocked'; uid: number; pos: Vec2; reason: 'blocked' | 'no-path' | 'out-of-range'; obstacleId?: string; feedback?: CollisionFeedbackHint }
   | { t: 'blink'; uid: number; from: Vec2; to: Vec2 }
   | { t: 'levelup'; uid: number; level: number }
-  | { t: 'skill-spend'; uid: number; kind: 'ability' | 'talent' | 'attribute' }
+  | { t: 'skill-spend'; uid: number; kind: 'ability' | 'talent' | 'attribute' | 'mastery' }
   | { t: 'capture-start'; uid: number; target: number; duration: number }
   | { t: 'capture-progress'; target: number; pct: number }
   | { t: 'capture-complete'; target: number; creepId: string }
@@ -1701,6 +1785,7 @@ export interface HeroSave {
   abilityLevels?: number[];       // learned ability ranks by slot; absent legacy saves auto-fill
   attributePoints?: number;       // Dota-style +2 all attributes picks
   talentPicks: (0 | 1 | null)[]; // 4 tiers
+  masteryRanks?: number[];        // 16 mastery nodes, branch-major, values 0/1
   echo?: EchoProgress;
   facetIdx: number;
   hpPct: number;
@@ -1781,6 +1866,8 @@ export interface GameSave {
   questProgress: Record<string, QuestProgress>;
   quests: Record<string, QuestSave>;     // bounty/chapter quest state (QUEST.md)
   defeatedGyms: string[];
+  /** Per-gym committed draft (AUTOBATTLER_OVERHAUL §4). Absent => the walking party. */
+  gymDrafts?: Record<string, DraftTeam>;
   echoRespawn: Record<string, number>; // echo spawn id -> seconds remaining
   campRespawn: Record<string, number>; // camp id -> seconds remaining
   difficulty: Record<string, { tier: DifficultyTier; dryClears: number }>;

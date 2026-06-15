@@ -1,5 +1,6 @@
 import type { HeroDef } from '../../core/types';
 import { loopTurnLabel } from './loop-note';
+import { authoredMasteryTrees } from './mastery-authoring';
 
 export const SVEN: HeroDef = {
   id: 'sven',
@@ -177,6 +178,40 @@ export const SVEN: HeroDef = {
       cooldownAdds: [{ abilityId: 'sven-warcry', amount: -3 }]
     }
   },
+  masteryTrees: authoredMasteryTrees([
+    {
+      abilityId: 'sven-storm-hammer',
+      name: 'Thunderclap',
+      t1: { name: 'Heavy Throw', description: 'Storm Hammer gains a strength-scaling damage bump.', mods: { str: 2 }, override: { valueKey: 'damage' } },
+      t2: { name: 'Stormbound', description: 'Hammered enemies become stormbound for Great Cleave.', mechanic: 'mark', override: { valueKey: 'damage' } },
+      t3: { name: 'Wide Impact', description: "Storm Hammer's growth node widens its stun radius.", override: { valueKey: 'radius' } },
+      t4: { name: 'Forked Hammer', description: 'Storm Hammer splits through stormbound targets.', mechanic: 'split' }
+    },
+    {
+      abilityId: 'sven-great-cleave',
+      name: 'Cleaver',
+      t1: { name: 'Wide Swing', description: 'Great Cleave gains a strength-scaling cleave bump.', mods: { str: 2 }, override: { valueKey: 'cleave' } },
+      t2: { name: 'Storm Spread', description: 'Great Cleave applies stormbound to secondary targets.', mechanic: 'mark', override: { valueKey: 'cleave' } },
+      t3: { name: 'Long Reach', description: "Great Cleave's growth node widens its cleave arc.", override: { valueKey: 'radius' } },
+      t4: { name: 'Shockwave', description: "Great Cleave consumes stormbound marks to become an armor-agnostic shockwave during God's Strength.", mechanic: 'consume' }
+    },
+    {
+      abilityId: 'sven-warcry',
+      name: 'Rally',
+      t1: { name: 'Iron Will', description: 'Warcry gains a strength-scaling armor bump.', mods: { str: 2 }, override: { valueKey: 'armor' } },
+      t2: { name: 'Bulwark', description: 'Warcry gives allies a block shield that scales with nearby stormbound enemies.', mechanic: 'store', override: { valueKey: 'armor' } },
+      t3: { name: 'Long Rally', description: "Warcry's growth node extends its duration.", override: { valueKey: 'duration' } },
+      t4: { name: 'War Command', description: "Warcry also commands allied summons to charge Sven's target.", mechanic: 'summon' }
+    },
+    {
+      abilityId: 'sven-gods-strength',
+      name: 'Godhood',
+      t1: { name: 'Borrowed Weight', description: "God's Strength gains a strength-scaling damage bump.", mods: { str: 2 }, override: { valueKey: 'damagePct' } },
+      t2: { name: 'Storm Reaper', description: "God's Strength consumes stormbound marks for extra cleave events.", mechanic: 'consume', override: { valueKey: 'damagePct' } },
+      t3: { name: 'Lasting Oath', description: "God's Strength growth node extends its duration.", override: { valueKey: 'duration' } },
+      t4: { name: 'Ring of Ruin', description: "Great Cleave becomes a full-ring shockwave while God's Strength is active.", mechanic: 'split' }
+    }
+  ]),
   silhouette: { build: 'biped', scale: 1.15, bodyShape: 'bulky', head: 'helm', weapon: 'sword', extras: ['cape', 'shoulderpads', 'belt'] },
   palette: ['#3c5f94', '#d9dde6', '#ff8a3d'],
   barks: [

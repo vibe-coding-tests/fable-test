@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { boot, clearCinematics, state, watchPageErrors, expectNoPageErrors } from './helpers';
+import { boot, clearCinematics, skipActiveCinematic, state, watchPageErrors, expectNoPageErrors } from './helpers';
 
 // Gyms and raids had zero e2e coverage despite the item rehaul routing loot,
 // stingers, codex unlocks, and autosave through Game.challengeGym / Game.runRaid.
@@ -7,6 +7,70 @@ import { boot, clearCinematics, state, watchPageErrors, expectNoPageErrors } fro
 // integration path (loot delivery, badge/clear state, no crashes). Both need a
 // full party of 5, so the new fillParty() checkpoint pads + levels the roster.
 test.describe('macro sessions (gym & raid)', () => {
+  test('drafts, places, and fights a gym through the HUD', async ({ page }) => {
+    const errors = watchPageErrors(page);
+    await boot(page, { hero: 'juggernaut', seed: 53, hud: true });
+    await clearCinematics(page);
+
+    await page.evaluate(() => {
+      const t = (window as any).__test;
+      const g = (window as any).__game;
+      t.fillParty({ heroIds: ['sven', 'sniper', 'lich', 'lina'], level: 30 });
+      const loadouts: Record<string, string[]> = {
+        juggernaut: ['battlefury', 'blink-dagger'],
+        sven: ['crystalys'],
+        sniper: ['dragon-lance'],
+        lich: ['glimmer-cape'],
+        lina: ['kaya']
+      };
+      for (const rec of g.party) {
+        rec.items = [0, 1, 2, 3, 4, 5].map((idx) => loadouts[rec.heroId]?.[idx] ? { id: loadouts[rec.heroId][idx] } : null);
+      }
+      (window as any).__hud.openGymPrefight('lunar-gym');
+      t.step();
+    });
+    await skipActiveCinematic(page);
+
+    await expect(page.locator('#modal-root:not(.hidden)')).toContainText('Lunar Gym');
+    await page.locator('[data-pf="draft"]').click();
+    await expect(page.locator('#modal-root:not(.hidden)')).toContainText('Draft & Deploy');
+
+    await page.locator('select[data-draft-item="juggernaut:0"]').selectOption('blink-dagger');
+    await page.locator('[data-draft-gambit-preset="juggernaut:aggro"]').click();
+    await page.locator('[data-pool="juggernaut"]').click();
+    await page.locator('[data-cell="0:4"]').click();
+    await page.locator('[data-draft="commit"]').click();
+
+    await expect(page.locator('#modal-root:not(.hidden)')).toContainText('Drafted five');
+    await expect(page.locator('[data-pf-edit-draft="juggernaut"]')).toBeVisible();
+    await page.locator('[data-pf="live"]').click();
+    await page.evaluate(() => (window as any).__test.step());
+    await expect(page.locator('#live-gym-bar')).toBeVisible();
+
+    const result = await page.evaluate(() => {
+      const g = (window as any).__game;
+      const draft = g.gymDraft('lunar-gym');
+      const saved = draft.heroes.find((h: any) => h.heroId === 'juggernaut');
+      const live = g.liveGym.playerHeroes().find((u: any) => u.heroId === 'juggernaut');
+      return {
+        draftItem: saved.items[0],
+        draftRules: saved.gambits?.length ?? 0,
+        placed: draft.formation.placements.juggernaut,
+        liveHasBlink: live.items.some((it: any) => it?.defId === 'blink-dagger'),
+        liveRules: live.ctrl.kind === 'gambit' ? live.ctrl.rules.length : 0
+      };
+    });
+
+    expect(result).toMatchObject({
+      draftItem: 'blink-dagger',
+      placed: { col: 0, row: 4 },
+      liveHasBlink: true
+    });
+    expect(result.draftRules).toBeGreaterThan(0);
+    expect(result.liveRules).toBeGreaterThan(0);
+    expectNoPageErrors(errors);
+  });
+
   test('a full party clears a gym and earns a badge', async ({ page }) => {
     const errors = watchPageErrors(page);
     await boot(page, { hero: 'juggernaut', seed: 51 });

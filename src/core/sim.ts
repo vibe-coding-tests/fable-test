@@ -121,6 +121,11 @@ export interface TeamMind {
   initiatorUid: number | null;
   lockdownUid: number | null;
   chains: ComboPlan[];
+  // Formation posture (AUTOBATTLER_OVERHAUL §6.1): read off the authored board.
+  frontLineUids: number[];                      // bodies that hold/collapse the front
+  backlineUids: number[];                       // casters/carries to protect
+  protectAssignments: Record<number, number>;   // peelerUid -> protected backliner uid
+  flankTargetUid: number | null;                // exposed enemy backliner to dive
   computedTick: number;
 }
 
@@ -372,6 +377,8 @@ export class Sim {
       vfx: active.vfx,
       chargeCount: chargesConsumed
     };
+    u.lastItemActiveId = def.id;
+    u.lastItemActiveAt = this.time;
     this.events.emit({ t: 'item-used', uid: u.uid, itemId: def.id });
     this.events.emit({ t: 'cast', uid: u.uid, abilityId: `item:${def.id}`, vfx: active.vfx, target: target?.uid, point, sound: soundForAbility(active), timbre: u.animProfile?.voiceTimbre });
     if (active.channel) {
@@ -1037,7 +1044,16 @@ export class Sim {
       if (!u.alive) continue;
       const s = u.stats;
       u.hp = Math.min(s.maxHp, u.hp + (s.hpRegen + (s.maxHp * s.hpRegenPctMax) / 100) * this.dt);
-      u.mana = Math.min(s.maxMana, u.mana + (s.manaRegen + (s.maxMana * s.manaRegenPctMax) / 100) * this.dt);
+      u.mana = Math.max(0, Math.min(s.maxMana, u.mana + (s.manaRegen + (s.maxMana * s.manaRegenPctMax) / 100) * this.dt));
+      // Net-negative regen (Heartstopper aura, Spirit Vessel burn, etc.) can
+      // drain a unit past zero. This tick runs after every combat death check,
+      // so floor hp and treat a drain-to-zero as a kill — never leave a living
+      // unit holding negative hp.
+      if (u.hp <= 0) {
+        u.hp = 0;
+        this.killUnit(u, null, true);
+        continue;
+      }
       if (u.lifetimeUntil !== undefined && this.time >= u.lifetimeUntil) {
         this.killUnit(u, null, true);
       }

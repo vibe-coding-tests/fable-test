@@ -406,7 +406,7 @@ describe('manual hero skill points', () => {
     expect(hero.abilities[1].level).toBe(1);
   });
 
-  it('gates ultimate ranks at Dota levels and allows attributes as a spend target', () => {
+  it('gates ultimate ranks at Dota levels and exposes masteries as the flex spend target', () => {
     const lockedSave = newGameSave('juggernaut');
     lockedSave.roster[0].level = 5;
     lockedSave.roster[0].xp = xpForLevel(5);
@@ -423,15 +423,14 @@ describe('manual hero skill points', () => {
     expect(open.pendingSkillPoints(open.party[0])).toBe(1);
     expect(open.canLevelAbility(0, 3)).toBe(true);
 
-    const attrSave = newGameSave('juggernaut');
-    attrSave.roster[0].level = 2;
-    attrSave.roster[0].xp = xpForLevel(2);
-    attrSave.roster[0].abilityLevels = [1, 0, 0, 0];
-    const attr = Game.headless(attrSave);
-    const strBefore = attr.activeUnit()!.stats.str;
-    expect(attr.applyAttributePoint(0)).toBe(true);
-    expect(attr.pendingSkillPoints(attr.party[0])).toBe(0);
-    expect(attr.activeUnit()!.stats.str).toBe(strBefore + 2);
+    const masterySave = newGameSave('juggernaut');
+    masterySave.roster[0].level = 2;
+    masterySave.roster[0].xp = xpForLevel(2);
+    masterySave.roster[0].abilityLevels = [1, 0, 0, 0];
+    const mastery = Game.headless(masterySave);
+    expect(mastery.pendingMasteryPoints(mastery.party[0])).toBe(1);
+    expect(mastery.buyMasteryNode(0, 0)).toBe(true);
+    expect(mastery.pendingMasteryPoints(mastery.party[0])).toBe(0);
   });
 });
 

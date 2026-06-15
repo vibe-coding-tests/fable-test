@@ -1,5 +1,6 @@
 import type { HeroDef } from '../../core/types';
 import { loopTurnLabel } from './loop-note';
+import { authoredMasteryTrees } from './mastery-authoring';
 
 export const JUGGERNAUT: HeroDef = {
   id: 'juggernaut',
@@ -217,6 +218,40 @@ export const JUGGERNAUT: HeroDef = {
       cooldownAdds: [{ abilityId: 'jug-blade-fury', amount: -4 }]
     }
   },
+  masteryTrees: authoredMasteryTrees([
+    {
+      abilityId: 'jug-blade-fury',
+      name: 'Whirlwind',
+      t1: { name: 'Honed Edge', description: "Blade Fury's ticks gain a small agility-scaling growth bump.", mods: { agi: 2 }, override: { valueKey: 'dpsTick' } },
+      t2: { name: 'Unyielding', description: 'Blade Fury cleanses one debuff when it starts, then blocks new movement-impairing effects while spinning.', mechanic: 'convert', override: { valueKey: 'dpsTick' } },
+      t3: { name: 'Cutting Wind', description: "Blade Fury's growth node widens the spin's area and improves tick scaling.", override: { valueKey: 'radius' } },
+      t4: { name: 'Bladestorm', description: 'Blade Fury is no longer a locked self-spin: Juggernaut may attack and cast during it, but the spin becomes a shorter commitment window.', mechanic: 'recast' }
+    },
+    {
+      abilityId: 'jug-healing-ward',
+      name: 'Ancestor',
+      t1: { name: 'Vital Roots', description: "Healing Ward gains summon-growth durability from Juggernaut's level.", mods: { agi: 2 }, override: { valueKey: 'lifetime' } },
+      t2: { name: 'Cleansing Spring', description: 'The ward removes a debuff from allies it meaningfully heals, making its placement a cleanse decision.', mechanic: 'convert', override: { valueKey: 'healPct' } },
+      t3: { name: 'Deep Reserves', description: "The ward's healing growth scales harder for wounded allies instead of flat output.", override: { valueKey: 'healPct' } },
+      t4: { name: 'Twin Wards', description: 'Summons a second ward mirrored across Juggernaut, letting a build cover two lanes of a fight.', mechanic: 'mirror' }
+    },
+    {
+      abilityId: 'jug-blade-dance',
+      name: 'Duelist',
+      t1: { name: 'Sharp Eye', description: 'Blade Dance gains normal attack-modifier growth.', mods: { agi: 2 }, override: { valueKey: 'critChance' } },
+      t2: { name: 'Bloodletting', description: 'Blade Dance crits mark enemies as wounded; Healing Ward prioritizes wounded allies and Omnislash prefers wounded enemies.', mechanic: 'mark', override: { valueKey: 'critChance' } },
+      t3: { name: 'Killing Edge', description: 'Blade Dance growth improves crit payoff without changing the proc rule.', override: { valueKey: 'critMult' } },
+      t4: { name: 'Perfect Form', description: 'The first attack after any ability is a guaranteed Blade Dance event, turning spell cadence into melee cadence.', mechanic: 'prime' }
+    },
+    {
+      abilityId: 'jug-omnislash',
+      name: 'Bladeform',
+      t1: { name: 'Relentless', description: 'Omnislash gets ult-growth scaling on its strike budget.', mods: { agi: 2 }, override: { valueKey: 'bonus' } },
+      t2: { name: 'Lingering Cuts', description: 'Omnislash leaves marked cuts that Blade Dance and Blade Fury can consume for bonus effects.', mechanic: 'mark', override: { valueKey: 'bonus' } },
+      t3: { name: 'Swift Return', description: "Omnislash's growth node improves recovery time and target selection.", override: { valueKey: 'jumpRadius' } },
+      t4: { name: 'Omnipresence', description: 'During Omnislash, Blade Fury is free-cast and follows you between jumps.', mechanic: 'follow' }
+    }
+  ]),
   silhouette: { build: 'biped', scale: 1, bodyShape: 'slim', head: 'mask', weapon: 'sword', extras: ['shoulderpads', 'belt'] },
   palette: ['#c8742c', '#f3e3c2', '#7adfc4'],
   barks: [

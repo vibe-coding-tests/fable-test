@@ -1,5 +1,6 @@
 import { activeTalentOptionsForTier } from './echo';
-import type { AghanimPayload, EchoProgress, HeroAugments, HeroDef, HeroAbilityPatch, TalentDef } from './types';
+import { deriveMasteryTrees, MASTERY_TIERS_PER_BRANCH } from './mastery';
+import type { AghanimPayload, EchoProgress, HeroAugments, HeroDef, HeroAbilityPatch, MasteryNode, TalentDef } from './types';
 
 // ------------------------------------------------------------------
 // Talents & facets are data (SPEC §5): stat mods merge into the
@@ -44,6 +45,33 @@ function applyAghanimPayload(def: HeroDef, payload: AghanimPayload | undefined, 
   for (const patch of payload.abilityPatches ?? []) mergeAbilityPatch(def, patch);
 }
 
+function applyMasteryNode(def: HeroDef, node: MasteryNode, branchAbilityId: string, addMods: (mods?: Record<string, number>) => void): void {
+  addMods(node.mods as Record<string, number> | undefined);
+  if (node.abilityOverride) applyOverride(def, node.abilityOverride);
+  if (node.cooldownAdd) applyCooldownAdd(def, node.cooldownAdd);
+  if (node.abilityPatch) mergeAbilityPatch(def, node.abilityPatch);
+  if (node.grantsExotic) {
+    const abilityId = node.abilityOverride?.abilityId ?? node.abilityPatch?.abilityId ?? branchAbilityId;
+    const ab = def.abilities.find((a) => a.id === abilityId);
+    const effect = { kind: 'exotic' as const, id: node.grantsExotic, params: { nodeId: node.id, tier: node.tier, mechanic: node.mechanic, abilityId } };
+    if (ab && !['passive', 'aura', 'attack-modifier'].includes(ab.targeting)) {
+      ab.effects = [
+        ...(ab.effects ?? []),
+        effect
+      ];
+    } else if (ab) {
+      ab.triggers = [
+        ...(ab.triggers ?? []),
+        {
+          on: ab.targeting === 'attack-modifier' ? 'on-attack-land' : 'on-cast',
+          cooldown: node.tier >= 4 ? 3 : 5,
+          effects: [effect]
+        }
+      ];
+    }
+  }
+}
+
 /**
  * Produce a patched hero def + stat mods for a given talent/facet selection.
  * picks[i] selects option 0/1 of talent tier i (null = unpicked);
@@ -54,7 +82,8 @@ export function buildHero(
   picks: (0 | 1 | null)[] = [null, null, null, null],
   facetIdx = 0,
   echo?: EchoProgress,
-  augments?: HeroAugments
+  augments?: HeroAugments,
+  masteryRanks?: number[]
 ): HeroBuild {
   const def: HeroDef = structuredClone(base);
   const externalMods: Record<string, number> = {};
@@ -70,6 +99,16 @@ export function buildHero(
       if (t.abilityOverride) applyOverride(def, t.abilityOverride);
       if (t.cooldownAdd) applyCooldownAdd(def, t.cooldownAdd);
     }
+  });
+
+  const branches = deriveMasteryTrees(base);
+  (masteryRanks ?? []).forEach((rank, nodeIdx) => {
+    if (rank <= 0) return;
+    const branchIdx = Math.floor(nodeIdx / MASTERY_TIERS_PER_BRANCH);
+    const tierIdx = nodeIdx % MASTERY_TIERS_PER_BRANCH;
+    const branch = branches[branchIdx];
+    const node = branch?.nodes[tierIdx];
+    if (node) applyMasteryNode(def, node, branch.abilityId, addMods);
   });
 
   const facet = base.facets[facetIdx] ?? base.facets[0];

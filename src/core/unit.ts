@@ -34,6 +34,7 @@ import type {
   SilhouetteSpec,
   StatModMap,
   StatusId,
+  TagArchetype,
   SummonSpec,
   Team,
   TriggerSpec,
@@ -164,6 +165,9 @@ export class Unit {
   lifetimeUntil?: number;    // summons
   offFieldUntil?: number;    // overworld Resonance swap persistence
   tagGaugeReadyAt?: number;  // mirror of RosterEntry.tagGaugeReadyAt so core gambits can read 'tag-in-ready'
+  lastTagSetupAt = -999;     // latest setup-flavored tag boon that touched this unit
+  lastTagSetupArchetype?: TagArchetype;
+  lastTagSetupElement?: ActiveElement;
   capturable = false;
   tier?: CreepTier;
   aggroRadius?: number;
@@ -248,6 +252,8 @@ export class Unit {
   recentDamagers: { uid: number; at: number }[] = [];
   lastAbilityCastId: string | null = null;
   lastAbilityCastAt = -999;
+  lastItemActiveId: string | null = null;
+  lastItemActiveAt = -999;
 
   // caches (recomputed each tick)
   summary: StatusSummary;

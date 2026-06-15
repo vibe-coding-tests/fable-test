@@ -95,6 +95,26 @@ describe('swap × channels', () => {
     expect(enemy.hp).toBeLessThan(hpAtSwap);
   });
 
+  it("Pugna's Life Drain is an offField beam channel, not just a Witch Doctor special-case", () => {
+    const game = Game.headless(bench('pugna', 'juggernaut'));
+    engage(game);
+    const enemy = spawnDummy(game, 200);
+    const { hero: pugna } = startChannel(game, 'pugna-life-drain', enemy);
+    pugna.hp = Math.max(1, pugna.hp - 220);
+    advance(game, 0.3); // through the cast point
+    expect(pugna.channel, 'life drain channel should be live').not.toBeNull();
+    const hpAtSwap = enemy.hp;
+    const pugnaHpAtSwap = pugna.hp;
+
+    expect(game.trySwap(1)).toBe(true);
+    game.update(0);
+    expect(game.party[0].unit?.channel, 'offField life drain survives the swap-out').not.toBeNull();
+
+    advance(game, 1.1);
+    expect(enemy.hp).toBeLessThan(hpAtSwap);
+    expect(game.party[0].unit!.hp).toBeGreaterThan(pugnaHpAtSwap);
+  });
+
   it('swapping BACK into a hero whose offField channel is still live restores player control', () => {
     const game = Game.headless(bench('drow-ranger', 'juggernaut'));
     engage(game);

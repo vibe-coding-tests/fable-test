@@ -3,6 +3,7 @@ import { xpForLevel } from '../core/stats';
 import { getAssetCacheStats, type AssetCacheStats } from '../engine/asset-loaders';
 import { newGameSave } from './game';
 import type { Game } from './game';
+import type { TargetingState } from './input';
 import type { DifficultyTier, GameSave, GraphicsQuality } from '../core/types';
 import type { GraphicsRenderStats } from '../engine/scene';
 
@@ -135,6 +136,12 @@ export interface TestPerfStats {
   assets: AssetCacheStats;
 }
 
+export interface TestInputState {
+  hoverUid: number;
+  hoverGround: { x: number; y: number } | null;
+  targeting: TargetingState;
+}
+
 export interface TestApi {
   /** True once a Game instance is live. */
   ready(): boolean;
@@ -183,12 +190,17 @@ export interface TestApi {
   perfStats(): TestPerfStats;
   /** Clear the rolling frame window before a sampled perf interval. */
   resetGraphicsStats(): void;
+  /** Seed pointer-derived hover for headless input tests that dispatch real key/mouse events. */
+  setInputHover(hover: { uid?: number; ground?: { x: number; y: number } | null }): boolean;
+  /** Snapshot the live InputController state when HUD/input is mounted. */
+  inputState(): TestInputState | null;
   /** JSON snapshot for Playwright assertions. */
   state(): TestState;
 }
 
 export interface HarnessDeps {
   getGame: () => Game | null;
+  getInput?: () => { hoverUid: number; hoverGround: { x: number; y: number } | null; targeting: TargetingState } | null;
   start: (save: GameSave, opts?: { headless?: boolean; hud?: boolean }) => void;
   load: (save: GameSave) => void;
   shutdown?: () => void;
@@ -355,6 +367,23 @@ export function makeTestApi(deps: HarnessDeps): TestApi {
     resetGraphicsStats: () => {
       const scene = deps.getGame()?.scene as unknown as { resetGraphicsStats?: () => void } | undefined;
       scene?.resetGraphicsStats?.();
+    },
+    setInputHover: (hover) => {
+      const input = deps.getInput?.();
+      if (!input) return false;
+      input.hoverUid = hover.uid ?? -1;
+      input.hoverGround = hover.ground ? { ...hover.ground } : null;
+      return true;
+    },
+    inputState: () => {
+      const input = deps.getInput?.();
+      return input
+        ? {
+            hoverUid: input.hoverUid,
+            hoverGround: input.hoverGround ? { ...input.hoverGround } : null,
+            targeting: { ...input.targeting } as TargetingState
+          }
+        : null;
     },
     state: () => snapshot(deps.getGame(), deps.headless ? 'headless' : 'webgl')
   };

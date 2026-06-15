@@ -21,6 +21,15 @@ export const TUNING = {
   cooldownScale: 0.8,        // action-RPG pacing: slightly faster cds than Dota
   manaCostScale: 0.9,
 
+  // --- mastery trees ---
+  mastery: {
+    pointLevels: [2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22, 24, 26, 28],
+    growthValueMult: { tier1: 1.08, tier3: 1.14 },
+    mechanicValueMult: { keystone: 1.06, capstone: 1.12 },
+    fallbackStatBonus: { tier1: 2, tier3: 4 },
+    utilityStatBonus: { tier1: 1, tier3: 2 }
+  },
+
   // --- attributes (Dota-flavored) ---
   hpPerStr: 22,
   hpRegenPerStr: 0.1,
@@ -133,6 +142,10 @@ export const TUNING = {
     depthRefAiDepth: 0.45,      // baseline (normal-tier) depth for depth-scaled behaviors
     // §5.7: how strongly extra ai-depth past the baseline sharpens mana discipline and combos.
     depthDisciplineGain: 0.6,
+    // GAMBIT_AI_OVERHAUL §3: the playbook's target lean. When the team has no shared
+    // focus in range, an offensive cast/item tilts its scan toward an enemy of the
+    // role the playbook aims at (a disabler leads its lockdown onto the enemy carry).
+    aimAtBonus: 0.7,
     // Boss-posture score multipliers applied in finalAbilityScore (was inline).
     bossScore: { cluster: 1.28, kill: 1.22, healer: 1.18, enrage: 1.12, desperation: 1.12 },
     // Hand-tuned item-active score weights + the intent-fallback biases.
@@ -143,7 +156,10 @@ export const TUNING = {
       mekBase: 0.5, mekPer: 0.5,
       eulsBase: 0.6, bossEuls: 1.8,
       interruptBonus: 0.8,
-      intentEscape: 1.15, bossIntentBias: 1.2
+      intentEscape: 1.15, bossIntentBias: 1.2,
+      // §2 signature considers: area-mitigation guards (Crimson/Pipe) pop for a
+      // clustered group under area threat; Lotus dispels a disabled ally.
+      crimson: 1.25, pipe: 1.2, lotus: 1.1, teamGuardMinAllies: 2
     },
     // Role-by-item vocabulary from GAMBIT_AI_OVERHAUL Phase 1. These are only
     // positive nudges; the underlying save, threat, range, and mana checks still
@@ -162,7 +178,9 @@ export const TUNING = {
     // Item-active leash/heal radii and HP gates (was inline cast-range constants).
     itemRange: {
       glimmerAlly: 800, mekWounded: 750, mekWoundedPct: 0.7, mekMinWounded: 2, euls: 575,
-      bkbFight: 360, forceFight: 360, bossGlimmerHpPct: 0.45, bossForceHpPct: 0.35
+      bkbFight: 360, forceFight: 360, bossGlimmerHpPct: 0.45, bossForceHpPct: 0.35,
+      // §2 signature considers + §4 save chain ranges/gates.
+      teamGuardRadius: 900, lotusRange: 900, saveAllyRange: 800, saveCrushRadius: 360
     },
     // Raid-aware behaviors, with per-depth scaling (AI_OVERHAUL §6 / 2.0 §5.7).
     raid: {

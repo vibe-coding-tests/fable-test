@@ -1,9 +1,19 @@
 import { TUNING } from '../data/tuning';
 import { heroesAlive, setupMacroSim, type MacroResult } from '../core/macro';
+import { counterFormation, defaultFormation } from '../core/board';
+import { REG } from '../core/registry';
 import type { ControllerRef } from '../core/unit';
 import type { Unit } from '../core/unit';
-import type { GambitRule, GymDef, MacroHeroSetup } from '../core/types';
+import type { Formation, GambitRule, GymDef, MacroHeroSetup } from '../core/types';
 import type { Sim } from '../core/sim';
+
+/** An authored board for a lineup (§6.4): the same archetype-aware default the
+ *  player gets, so both sides deploy on a real board, not the role heuristic.
+ *  Pure over the setups; heroes missing from the registry are skipped. */
+export function defaultBoardFor(team: MacroHeroSetup[], opponent?: Formation): Formation {
+  const defs = team.map((h) => REG.heroes.get(h.heroId)).filter((d): d is NonNullable<typeof d> => !!d);
+  return opponent ? counterFormation(defs, opponent) : defaultFormation(defs);
+}
 
 export interface GymMatchHero {
   heroId: string;
@@ -81,6 +91,8 @@ export class LiveGymFight {
   private readonly seed: number;
   private readonly autoPlayer: boolean;
   private readonly bestTo: number;
+  private readonly formationA?: Formation;
+  private readonly formationB: Formation;
 
   round = 1;
   playerWins = 0;
@@ -94,11 +106,13 @@ export class LiveGymFight {
   private maxTicks = 0;
   private readonly rounds: GymRoundResult[] = [];
 
-  constructor(gym: GymDef, teamA: GymMatchHero[], seed: number, opts?: { autoPlayer?: boolean }) {
+  constructor(gym: GymDef, teamA: GymMatchHero[], seed: number, opts?: { autoPlayer?: boolean; formationA?: Formation }) {
     this.gym = gym;
     this.teamA = toSetups(teamA);
     this.seed = seed;
     this.autoPlayer = opts?.autoPlayer ?? false;
+    this.formationA = opts?.formationA;
+    this.formationB = defaultBoardFor(gym.enemyTeam, this.formationA);
     this.bestTo = Math.ceil(gym.bestOf / 2);
     this.startRound();
   }
@@ -108,7 +122,9 @@ export class LiveGymFight {
       seed: this.seed + this.round * 17,
       teamA: this.teamA,
       teamB: this.gym.enemyTeam,
-      maxSec: TUNING.macroMaxSec
+      maxSec: TUNING.macroMaxSec,
+      formationA: this.formationA,
+      formationB: this.formationB
     });
     this.playerCaptain = new CaptainCallController(0, TUNING.captainCallsPerFight);
     this.enemyCaptain = new CaptainCallController(1, TUNING.captainCallsPerFight + (this.gym.enemyBonusCaptainCalls ?? 0));
@@ -249,8 +265,8 @@ export class LiveGymFight {
   }
 }
 
-export function runGymMatch(gym: GymDef, team: GymMatchHero[], seed: number): GymMatchResult {
-  return new LiveGymFight(gym, team, seed, { autoPlayer: true }).runHeadless();
+export function runGymMatch(gym: GymDef, team: GymMatchHero[], seed: number, formationA?: Formation): GymMatchResult {
+  return new LiveGymFight(gym, team, seed, { autoPlayer: true, formationA }).runHeadless();
 }
 
 export function setupCaptainCallSmoke(gym: GymDef, team: GymMatchHero[], seed: number): { sim: Sim; captain: CaptainCallController } {

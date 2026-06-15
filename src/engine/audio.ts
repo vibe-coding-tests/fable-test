@@ -614,15 +614,18 @@ export class ProceduralAudio {
     }
   }
 
-  private skillSpend(kind: 'ability' | 'talent' | 'attribute'): void {
+  private skillSpend(kind: 'ability' | 'talent' | 'attribute' | 'mastery'): void {
     const shape = kind === 'attribute'
       ? [392, 494, 659]
       : kind === 'talent'
         ? [523, 659, 988]
-        : [440, 660, 880];
-    this.arp(shape, 0.045, kind === 'talent' ? 0.12 : 0.1);
+        : kind === 'mastery'
+          ? [392, 587, 784, 1175]
+          : [440, 660, 880];
+    this.arp(shape, 0.045, kind === 'talent' || kind === 'mastery' ? 0.12 : 0.1);
     if (kind === 'ability') this.sweep(760, 1220, 0.08, 'triangle', 0.08, 'stinger');
     if (kind === 'attribute') this.tone(220, 0.08, 'sine', 0.08, 'stinger');
+    if (kind === 'mastery') this.sweep(420, 980, 0.12, 'triangle', 0.08, 'stinger');
   }
 
   private barkBlip(uid: number): void {

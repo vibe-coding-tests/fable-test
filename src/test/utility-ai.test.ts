@@ -56,6 +56,35 @@ const TEST_AOE_ULT: AbilityDef = {
   sound: 'void'
 };
 
+const TEST_AOE_NUKE: AbilityDef = {
+  id: 'test-aoe-nuke',
+  name: 'AoE Nuke',
+  targeting: 'ground-aoe',
+  castRange: 800,
+  manaCost: [120],
+  cooldown: [8],
+  values: { damage: [220], radius: [420] },
+  effects: [{ kind: 'damage', dtype: 'magical', amount: 'damage', target: 'enemies-in-radius', radius: 'radius' }],
+  vfx: { archetype: 'ground-aoe', color: '#b89fff', scale: 1.1 },
+  anim: 'staff-cast',
+  sound: 'void'
+};
+
+const TEST_HEX: AbilityDef = {
+  id: 'test-hex',
+  name: 'Test Hex',
+  targeting: 'unit-target',
+  affects: 'enemy',
+  castRange: 800,
+  manaCost: [0],
+  cooldown: [1],
+  values: { dur: [2] },
+  effects: [{ kind: 'status', status: 'hex', duration: 'dur', target: 'target' }],
+  vfx: { archetype: 'stun-stars', color: '#70d8ff' },
+  anim: 'staff-cast',
+  sound: 'void'
+};
+
 function installAbilities(u: Unit, defs: AbilityDef[]): void {
   u.abilities = defs.map((def) => ({
     def,
@@ -221,6 +250,41 @@ describe('utility scorer picks actions by value, not slot order', () => {
     expect(cluster).toMatchObject({ kind: 'cast', slot: 1 });
   });
 
+  it('holds a non-ult cluster-nuke for a cluster (archetype hold generalized past ults)', () => {
+    // AUTOBATTLER_OVERHAUL §6.3: the cluster-hold discipline now keys off the `cluster-nuke`
+    // archetype, so even a non-ult AoE nuke is held for the count — the old gate held ults only.
+    const { sim, hero, enemies } = sim1v1('earthshaker', ['sniper', 'lich', 'crystal-maiden'], 30);
+    installAbilities(hero, [TEST_CHEAP_NUKE, TEST_AOE_NUKE]);
+    hero.ctrl.aiDepth = TUNING.bossTierAiDepth.hell;
+    hero.pos = { x: 2000, y: 2000 };
+    enemies[0].pos = { x: 2300, y: 2000 };
+    enemies[1].pos = { x: 3800, y: 2000 };
+    enemies[2].pos = { x: 3900, y: 2100 };
+    sim.rebuildSpatial();
+
+    expect(chooseUtilityOrder(sim, hero, enemies[0])).toMatchObject({ kind: 'cast', slot: 0 });
+
+    enemies[1].pos = { x: 2320, y: 2040 };
+    enemies[2].pos = { x: 2260, y: 2090 };
+    sim.rebuildSpatial();
+    expect(chooseUtilityOrder(sim, hero, enemies[0])).toMatchObject({ kind: 'cast', slot: 1 });
+  });
+
+  it('redirects a single-lockdown onto an enemy mid-channel to interrupt it', () => {
+    const { sim, hero, enemies } = sim1v1('lion', ['lich', 'crystal-maiden'], 18);
+    installAbilities(hero, [TEST_HEX]);
+    hero.pos = { x: 2000, y: 2000 };
+    const focus = enemies[0];
+    const channeler = enemies[1];
+    focus.pos = { x: 2300, y: 2000 };       // nearer, the default focus
+    channeler.pos = { x: 2600, y: 2000 };   // farther, but mid-channel
+    channeler.channel = { source: 'ability', slot: 0, until: sim.time + 2, nextTickAt: sim.time + 0.5, interval: 0.5 };
+    sim.rebuildSpatial();
+
+    const order = chooseUtilityOrder(sim, hero, focus);
+    expect(order).toMatchObject({ kind: 'cast', slot: 0, uid: channeler.uid });
+  });
+
   it('uses a nuker playbook to lead with amplify before burst items', () => {
     const sim = setupMacroSim({
       seed: 2026,
@@ -365,6 +429,135 @@ describe('team-mind flags influence decisions', () => {
 
     expect(sim.teamMind(0).spread).toBe(true);
     expect(chooseUtilityOrder(sim, sniper, enemy)?.kind).toBe('move');
+  });
+});
+
+describe('AUTOBATTLER §6.1 — formation posture on the team-mind', () => {
+  function fiveVsFive(seed = 555) {
+    const teamA: MacroHeroSetup[] = [
+      { heroId: 'axe', level: 18 }, { heroId: 'sven', level: 18 },
+      { heroId: 'sniper', level: 18 }, { heroId: 'lich', level: 18 },
+      { heroId: 'crystal-maiden', level: 18 }
+    ];
+    const teamB: MacroHeroSetup[] = [
+      { heroId: 'tidehunter', level: 18 }, { heroId: 'luna', level: 18 },
+      { heroId: 'jakiro', level: 18 }, { heroId: 'lina', level: 18 },
+      { heroId: 'crystal-maiden', level: 18 }
+    ];
+    return setupMacroSim({ seed, teamA, teamB, maxSec: 30 });
+  }
+
+  it('splits the team into a front line and a backline', () => {
+    const sim = fiveVsFive();
+    const tm = sim.teamMind(0);
+    const sniper = sim.unitsArr.find((u) => u.team === 0 && u.heroId === 'sniper')!;
+    const axe = sim.unitsArr.find((u) => u.team === 0 && u.heroId === 'axe')!;
+    expect(tm.frontLineUids.length).toBeGreaterThan(0);
+    expect(tm.backlineUids).toContain(sniper.uid);   // ranged carry holds the back
+    expect(tm.frontLineUids).toContain(axe.uid);     // durable initiator holds the front
+    expect(tm.backlineUids).not.toContain(axe.uid);
+  });
+
+  it('assigns a peeler to the channeling backliner first', () => {
+    const sim = setupMacroSim({
+      seed: 7,
+      teamA: [{ heroId: 'axe', level: 18 }, { heroId: 'sniper', level: 18 }, { heroId: 'lich', level: 18 }],
+      teamB: [{ heroId: 'sven', level: 18 }],
+      maxSec: 30
+    });
+    const axe = sim.unitsArr.find((u) => u.team === 0 && u.heroId === 'axe')!;
+    const sniper = sim.unitsArr.find((u) => u.team === 0 && u.heroId === 'sniper')!;
+    const lich = sim.unitsArr.find((u) => u.team === 0 && u.heroId === 'lich')!;
+    const enemy = sim.unitsArr.find((u) => u.team === 1)!;
+    axe.pos = { x: 2000, y: 2000 };
+    sniper.pos = { x: 2200, y: 2000 };
+    lich.pos = { x: 2000, y: 2400 };
+    enemy.pos = { x: 3000, y: 2000 };
+    sniper.channel = { source: 'ability', slot: 3, until: sim.time + 3, nextTickAt: sim.time + 0.5, interval: 0.5 };
+    sim.rebuildSpatial();
+
+    const tm = sim.teamMind(0);
+    expect(tm.protectAssignments[axe.uid]).toBe(sniper.uid); // the channeler outranks lich
+  });
+
+  it('names the enemy support as the flank target', () => {
+    const sim = setupMacroSim({
+      seed: 11,
+      teamA: [{ heroId: 'lion', level: 18 }],
+      teamB: [{ heroId: 'axe', level: 18 }, { heroId: 'crystal-maiden', level: 18 }, { heroId: 'sniper', level: 18 }],
+      maxSec: 30
+    });
+    const lion = sim.unitsArr.find((u) => u.team === 0)!;
+    const enemies = sim.unitsArr.filter((u) => u.team === 1);
+    const cm = enemies.find((u) => u.heroId === 'crystal-maiden')!;
+    lion.pos = { x: 2000, y: 2000 };
+    enemies.forEach((e, i) => (e.pos = { x: 2400 + i * 80, y: 2000 }));
+    sim.rebuildSpatial();
+
+    expect(sim.teamMind(0).flankTargetUid).toBe(cm.uid); // team-buff caster is the softest
+  });
+
+  it('is deterministic: identical sims yield identical posture', () => {
+    const a = sim1v1('axe', ['sven']);
+    const b = sim1v1('axe', ['sven']);
+    const ta = a.sim.teamMind(0);
+    const tb = b.sim.teamMind(0);
+    expect(ta.frontLineUids).toEqual(tb.frontLineUids);
+    expect(ta.backlineUids).toEqual(tb.backlineUids);
+    expect(ta.protectAssignments).toEqual(tb.protectAssignments);
+    expect(ta.flankTargetUid).toBe(tb.flankTargetUid);
+  });
+});
+
+describe('AUTOBATTLER §6.2/§6.3 — board-aware movement and casting', () => {
+  it('a displaced pre-engage unit drifts back to its anchor; seated, it holds', () => {
+    const sim = setupMacroSim({
+      seed: 31,
+      teamA: [{ heroId: 'sven', level: 18 }, { heroId: 'sniper', level: 18 }],
+      teamB: [{ heroId: 'lich', level: 18 }],
+      maxSec: 30
+    });
+    const sven = sim.unitsArr.find((u) => u.team === 0 && u.heroId === 'sven')!;
+    const sniper = sim.unitsArr.find((u) => u.team === 0 && u.heroId === 'sniper')!;
+    const enemy = sim.unitsArr.find((u) => u.team === 1)!;
+    enemy.pos = { x: 4150, y: 2800 };  // far corner: out of every range, not engaged
+    sven.pos = { x: 1500, y: 2000 };   // a frontliner closer to the enemy → backline holds
+    sniper.ctrl.homePos = { x: 800, y: 800 };
+    sniper.pos = { x: 800, y: 2000 };  // displaced from the anchor, still far from the enemy
+    sim.rebuildSpatial();
+    expect(sim.teamMind(0).engaged).toBe(false);
+
+    const reform = chooseUtilityOrder(sim, sniper, enemy);
+    expect(reform?.kind).toBe('move');
+    if (reform?.kind === 'move') {
+      expect(reform.point.x).toBeCloseTo(800, 3);
+      expect(reform.point.y).toBeCloseTo(800, 3);
+    }
+
+    sniper.pos = { x: 800, y: 800 }; // seated on the anchor
+    sim.rebuildSpatial();
+    expect(chooseUtilityOrder(sim, sniper, enemy)?.kind).toBe('hold');
+  });
+
+  it('a single-lockdown spends on the collapse target over the nearest body', () => {
+    const sim = setupMacroSim({
+      seed: 13,
+      teamA: [{ heroId: 'lion', level: 18 }],
+      teamB: [{ heroId: 'axe', level: 18 }, { heroId: 'crystal-maiden', level: 18 }],
+      maxSec: 30
+    });
+    const lion = sim.unitsArr.find((u) => u.team === 0)!;
+    const axe = sim.unitsArr.find((u) => u.team === 1 && u.heroId === 'axe')!;
+    const cm = sim.unitsArr.find((u) => u.team === 1 && u.heroId === 'crystal-maiden')!;
+    installAbilities(lion, [TEST_HEX]);
+    lion.pos = { x: 2000, y: 2000 };
+    axe.pos = { x: 2300, y: 2000 };   // nearest body
+    cm.pos = { x: 2600, y: 2000 };    // the soft collapse target, in range
+    sim.rebuildSpatial();
+
+    expect(sim.teamMind(0).flankTargetUid).toBe(cm.uid);
+    const order = chooseUtilityOrder(sim, lion, axe);
+    expect(order).toMatchObject({ kind: 'cast', slot: 0, uid: cm.uid });
   });
 });
 

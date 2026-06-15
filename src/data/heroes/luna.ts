@@ -1,5 +1,6 @@
 import type { HeroDef } from '../../core/types';
 import { loopTurnLabel } from './loop-note';
+import { authoredMasteryTrees } from './mastery-authoring';
 
 export const LUNA: HeroDef = {
   id: 'luna',
@@ -170,6 +171,40 @@ export const LUNA: HeroDef = {
       ]
     }
   },
+  masteryTrees: authoredMasteryTrees([
+    {
+      abilityId: 'luna-lucent-beam',
+      name: 'Moonbeam',
+      t1: { name: 'Bright Shaft', description: 'Lucent Beam gains an agility-scaling damage bump.', mods: { agi: 2 }, override: { valueKey: 'damage' } },
+      t2: { name: 'Glaive Spark', description: 'Lucent Beam also pops a small Moon Glaive bounce on hit.', mechanic: 'chain', override: { valueKey: 'damage' } },
+      t3: { name: 'Steady Aim', description: "Lucent Beam's growth node lengthens its mini-stun.", override: { valueKey: 'ministun' } },
+      t4: { name: 'Double Strike', description: 'Lucent Beam strikes twice when it kills, refunding half its cooldown.', mechanic: 'refund' }
+    },
+    {
+      abilityId: 'luna-moon-glaives',
+      name: 'Glaivework',
+      t1: { name: 'Keen Edge', description: 'Moon Glaives gains an agility-scaling bounce-damage bump.', mods: { agi: 2 }, override: { valueKey: 'bouncePct' } },
+      t2: { name: 'Moonlit', description: 'Moon Glaive bounces mark enemies as moonlit.', mechanic: 'mark', override: { valueKey: 'bouncePct' } },
+      t3: { name: 'Wide Arc', description: "Moon Glaives' growth node widens its bounce radius.", override: { valueKey: 'radius' } },
+      t4: { name: 'Hunting Glaive', description: 'Glaive bounces seek moonlit and low-HP targets first.', mechanic: 'retarget' }
+    },
+    {
+      abilityId: 'luna-lunar-blessing',
+      name: 'Blessing',
+      t1: { name: 'Silver Oath', description: 'Lunar Blessing gains an agility-scaling aura-damage bump.', mods: { agi: 2 }, override: { valueKey: 'damage' } },
+      t2: { name: 'Moonlight Charge', description: 'Lunar Blessing turns nearby allied attacks into moonlight charge.', mechanic: 'store', override: { valueKey: 'damage' } },
+      t3: { name: 'Night Vision', description: "Lunar Blessing's growth node sharpens its night sight.", override: { valueKey: 'nightSight' } },
+      t4: { name: 'Lunar Primer', description: "Stored moonlight changes Eclipse's beam budget and target preference.", mechanic: 'prime' }
+    },
+    {
+      abilityId: 'luna-eclipse',
+      name: 'Eclipse',
+      t1: { name: 'Cold Light', description: 'Eclipse gains an agility-scaling beam-damage bump.', mods: { agi: 2 }, override: { valueKey: 'damage' } },
+      t2: { name: 'Moon Hunt', description: 'Eclipse beams prefer moonlit heroes.', mechanic: 'retarget', override: { valueKey: 'damage' } },
+      t3: { name: 'Falling Light', description: "Eclipse's growth node adds beams to the barrage.", override: { valueKey: 'beams' } },
+      t4: { name: 'Wandering Moon', description: 'Eclipse follows Luna instead of striking a fixed area.', mechanic: 'follow' }
+    }
+  ]),
   silhouette: { build: 'quad', scale: 1.08, bodyShape: 'slim', head: 'helm', weapon: 'sword', extras: ['cape', 'crown'] },
   palette: ['#2e3f78', '#d8e5ff', '#b9b0ff'],
   barks: [

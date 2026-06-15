@@ -12,7 +12,10 @@ export default defineConfig({
   server: {
     open: true,
     // the embedded preview browser caches modules too aggressively
-    headers: { 'Cache-Control': 'no-store' }
+    headers: { 'Cache-Control': 'no-store' },
+    watch: {
+      ignored: ['**/test-results/**', '**/playwright-report/**', '**/blob-report/**']
+    }
   },
   build: {
     target: 'es2022',

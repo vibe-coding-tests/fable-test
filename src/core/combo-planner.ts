@@ -8,13 +8,15 @@ import { dist2, norm, scale, sub, add, v2 } from './math2d';
 import { REG } from './registry';
 import type { Sim } from './sim';
 import type { Unit } from './unit';
-import type { AbilityDef, EffectNode, GambitTargetMode, ItemDef, Order, StatusId, Vec2 } from './types';
+import type { AbilityDef, EffectNode, GambitTargetMode, ItemDef, Order, StatusId, TagArchetype, Vec2 } from './types';
+
+type ComboStepRole = 'enabler' | 'amplifier' | 'immunity' | 'payoff';
 
 export interface ComboStep {
   kind: 'cast' | 'item';
   slot: number;
   unitUid?: number;
-  role: 'enabler' | 'amplifier' | 'payoff';
+  role: ComboStepRole;
   targetMode: GambitTargetMode;
   windowSec: number;
 }
@@ -57,6 +59,7 @@ const HARD_DISABLES: ReadonlySet<StatusId> = new Set<StatusId>([
 const SOFT_DISABLES: ReadonlySet<StatusId> = new Set<StatusId>([
   'silence', 'slow', 'disarm', 'blind', 'break'
 ]);
+const SETUP_TAGS: ReadonlySet<TagArchetype> = new Set<TagArchetype>(['Lockdown', 'Gather', 'Soak']);
 
 export function planUnitCombo(sim: Sim, u: Unit, focus: Unit): ComboPlan | null {
   if (!validFocus(sim, u, focus)) return null;
@@ -75,11 +78,12 @@ export function planUnitCombo(sim: Sim, u: Unit, focus: Unit): ComboPlan | null 
   // on the focus whose element this payoff will react with (§4 element node).
   for (const payoff of payoffs) {
     if (!canReachStep(u, focus, payoff, 0)) continue;
-    if (!comboSetupActive(focus) && !focusReactsWith(sim, focus, payoff.element)) continue;
+    if (!comboSetupActive(sim, focus) && !focusReactsWith(sim, focus, payoff.element) && !(recentInitiationActive(sim, u) && u.summary.magicImmune)) continue;
     consider([payoff], payoff.score * reactionMult(sim, focus, [], payoff));
   }
 
   const baseSetups = candidates.filter((c) => c.role === 'enabler' || c.role === 'amplifier');
+  const immunities = candidates.filter((c) => c.role === 'immunity');
   for (const payoff of payoffs) {
     const setups = setupOptionsFor(baseSetups, candidates, payoff);
     for (const setup of setups) {
@@ -88,12 +92,27 @@ export function planUnitCombo(sim: Sim, u: Unit, focus: Unit): ComboPlan | null 
       if (!canReachStep(u, focus, setup, 0)) continue;
       if (!canReachStep(u, focus, payoff, reachBonus)) continue;
       if (!canPayPlan(u, [setup, payoff])) continue;
+      if (
+        comboChainLen(u) >= 3 &&
+        setup.role === 'enabler' &&
+        setup.initiationReach > 0 &&
+        enemyReplyLoaded(sim, u, focus) &&
+        immunities.some((immune) =>
+          !sameAction(setup, immune) &&
+          !sameAction(immune, payoff) &&
+          canReachStep(u, focus, immune, reachBonus) &&
+          canPayPlan(u, [setup, immune, payoff])
+        )
+      ) {
+        continue;
+      }
       consider([setup, payoff], chainScore([setup], payoff, reactionMult(sim, focus, [setup], payoff)));
     }
   }
 
   // §4 depth: deeper AI commits to the full enabler→amplifier→payoff chain,
-  // budgeting mana and reach across all three before spending the enabler.
+  // or an initiator's enabler→immunity→payoff chain, budgeting mana and reach
+  // across all three before spending the enabler.
   if (comboChainLen(u) >= 3) {
     for (const payoff of payoffs) {
       const setups = setupOptionsFor(baseSetups, candidates, payoff);
@@ -109,6 +128,33 @@ export function planUnitCombo(sim: Sim, u: Unit, focus: Unit): ComboPlan | null 
           if (!canPayPlan(u, [enabler, amp, payoff])) continue;
           consider([enabler, amp, payoff], chainScore([enabler, amp], payoff, reactionMult(sim, focus, [enabler, amp], payoff)));
         }
+      }
+      for (const enabler of enablers.filter((c) => c.initiationReach > 0)) {
+        if (!canReachStep(u, focus, enabler, 0)) continue;
+        const reachBonus = enabler.initiationReach;
+        for (const immune of immunities) {
+          if (sameAction(enabler, immune) || sameAction(enabler, payoff) || sameAction(immune, payoff)) continue;
+          if (!canReachStep(u, focus, immune, reachBonus)) continue;
+          if (!canReachStep(u, focus, payoff, reachBonus)) continue;
+          if (!enemyReplyLoaded(sim, u, focus)) continue;
+          if (!canPayPlan(u, [enabler, immune, payoff])) continue;
+          consider([enabler, immune, payoff], chainScore([enabler, immune], payoff, reactionMult(sim, focus, [enabler], payoff)));
+        }
+      }
+    }
+  }
+
+  // Rebuild-each-tick bridge for initiation items: Blink itself leaves no status
+  // on the focus, so the caster's recent initiation item is the live opening that
+  // lets BKB become the next step before the payoff.
+  if (recentInitiationActive(sim, u) && enemyReplyLoaded(sim, u, focus)) {
+    for (const payoff of payoffs) {
+      if (!canReachStep(u, focus, payoff, 0)) continue;
+      for (const immune of immunities) {
+        if (sameAction(immune, payoff)) continue;
+        if (!canReachStep(u, focus, immune, 0)) continue;
+        if (!canPayPlan(u, [immune, payoff])) continue;
+        consider([immune, payoff], chainScore([immune], payoff, reactionMult(sim, focus, [], payoff)));
       }
     }
   }
@@ -185,6 +231,105 @@ export function planTeamCombos(sim: Sim, team: number, focus: Unit | null): Team
   return out;
 }
 
+// ============================================================
+// Save chain (GAMBIT_AI_OVERHAUL §4 worked example): two saves on a dived ally,
+// sequenced rather than fired on the same tick. A reposition save (Force Staff)
+// breaks the crush first; once the ally is out, a shield save (Glimmer Cape)
+// covers the chase on a later tick. Rebuilt each tick, like the combo planner:
+// the ally's live state (still crushed? still under fire?) is the only memory.
+// ============================================================
+
+export interface SaveStep {
+  kind: 'item';
+  slot: number;
+  role: 'reposition' | 'shield';
+}
+
+export interface SavePlan {
+  allyUid: number;
+  steps: SaveStep[];
+  nextStep: SaveStep;
+}
+
+/** An item active that physically moves its target (Force Staff, Wind Waker). */
+function itemRepositions(def: ItemDef): boolean {
+  const visit = (nodes?: EffectNode[]): boolean => {
+    if (!nodes) return false;
+    return nodes.some((n) => (n.kind === 'displace') || (n.kind === 'repeat' && visit(n.effects)));
+  };
+  return !!def.active && visit(def.active.effects);
+}
+
+/**
+ * Plan a sequenced save on the most-dived ally. Only engages when the unit holds a
+ * reposition save (the case the per-item Glimmer/Mek considers do not sequence): the
+ * reposition fires while the ally is still in a melee crush, the shield follows after.
+ * Pure over sim state; deterministic (ally ties break by uid). Null when no chain applies.
+ */
+export function planSaveChain(sim: Sim, u: Unit): SavePlan | null {
+  const reposition: SaveStep[] = [];
+  const shield: SaveStep[] = [];
+  let ownsReposition = false;
+  let maxRange = 0;
+  for (let slot = 0; slot < u.items.length; slot++) {
+    const it = u.items[slot];
+    if (!it) continue;
+    const def = REG.items.get(it.defId);
+    if (!def?.active) continue;
+    if (def.active.affects !== 'ally' && def.active.affects !== 'any') continue;
+    if (!itemArchetypes(def).has('save')) continue;
+    const repositions = itemRepositions(def);
+    if (repositions) ownsReposition = true;
+    if (!itemReady(it, def, u, sim.time).ok) continue;
+    const range = (typeof def.active.castRange === 'number' ? def.active.castRange : 600) + u.stats.castRangeBonus;
+    maxRange = Math.max(maxRange, range);
+    if (repositions) reposition.push({ kind: 'item', slot, role: 'reposition' });
+    else shield.push({ kind: 'item', slot, role: 'shield' });
+  }
+  // The chain is the new behavior; a lone shield save is already covered per-item.
+  if (!ownsReposition) return null;
+  if (reposition.length === 0 && shield.length === 0) return null;
+
+  const range = Math.min(maxRange, TUNING.ai.itemRange.saveAllyRange + u.stats.castRangeBonus);
+  const ally = mostDivedAlly(sim, u, range);
+  if (!ally) return null;
+
+  const steps: SaveStep[] = [...(reposition[0] ? [reposition[0]] : []), ...(shield[0] ? [shield[0]] : [])];
+  // reposition first while the ally is still crushed; once the crush is broken the
+  // shield covers the retreat. With one order per tick, this never doubles up.
+  const crushed = enemiesNear(sim, ally, TUNING.ai.itemRange.saveCrushRadius) > 0;
+  const nextStep = crushed && reposition[0] ? reposition[0] : (shield[0] ?? reposition[0]);
+  if (!nextStep) return null;
+  return { allyUid: ally.uid, steps, nextStep };
+}
+
+/** The ally most in need of a save: lowest HP, under fire, with a crush on it. Ties by uid. */
+function mostDivedAlly(sim: Sim, u: Unit, range: number): Unit | null {
+  let best: Unit | null = null;
+  let bestPct = Infinity;
+  for (const a of sim.unitsArr) {
+    if (!a.alive || a.team !== u.team || (a.kind !== 'hero' && a.kind !== 'creep')) continue;
+    if (dist2(a.pos, u.pos) > range * range) continue;
+    const pct = a.hp / Math.max(1, a.stats.maxHp);
+    if (pct >= TUNING.ai.saveAllyHpPct) continue;
+    if (sim.time - a.lastEnemyDamageAt > 1.5) continue;
+    if (enemiesNear(sim, a, TUNING.ai.itemRange.saveCrushRadius) === 0) continue;
+    if (pct < bestPct || (pct === bestPct && (best === null || a.uid < best.uid))) {
+      bestPct = pct;
+      best = a;
+    }
+  }
+  return best;
+}
+
+function enemiesNear(sim: Sim, u: Unit, radius: number): number {
+  let n = 0;
+  sim.forEachNearbyUnit(u.pos, radius + 80, (o) => {
+    if (o.alive && o.team !== u.team && o.kind !== 'npc' && o.kind !== 'ward' && !o.summary.untargetable && dist2(o.pos, u.pos) <= radius * radius) n++;
+  });
+  return n;
+}
+
 /** Lowest unit uid among a set of candidate steps, or null when there are none. */
 function lowestOwner(steps: ComboCandidate[]): number | null {
   let best: number | null = null;
@@ -254,7 +399,8 @@ function comboCandidates(sim: Sim, u: Unit, focus: Unit): ComboCandidate[] {
     if (!it) continue;
     const def = REG.items.get(it.defId);
     if (!def?.active) continue;
-    if (!itemReady(it, def, u, sim.time).ok) continue;
+    const ready = itemReady(it, def, u, sim.time);
+    if (!ready.ok) continue;
     const role = itemComboRole(def);
     if (!role) continue;
     out.push({
@@ -321,6 +467,7 @@ function itemComboRole(def: ItemDef): ComboStep['role'] | null {
   if (arch.has('nuke')) return 'payoff';
   if (arch.has('amplify')) return 'amplifier';
   if (arch.has('initiation') || arch.has('lockdown')) return 'enabler';
+  if (arch.has('immunity') && def.active?.targeting === 'no-target') return 'immunity';
   return null;
 }
 
@@ -331,7 +478,7 @@ function abilityComboScore(u: Unit, focus: Unit, def: AbilityDef, level: number,
   const aoe = intent.aoe ? 0.35 : 0;
   const control = intent.hardControl ? 0.55 : intent.softControl ? 0.28 : 0;
   const reach = initiationReachOf(def, level) > 0 ? 0.25 : 0;
-  const roleBonus = role === 'payoff' ? 0.9 : role === 'amplifier' ? 0.55 : 0.45;
+  const roleBonus = role === 'payoff' ? 0.9 : role === 'amplifier' ? 0.55 : role === 'immunity' ? 0.5 : 0.45;
   const depth = Math.max(0, (u.ctrl.aiDepth ?? TUNING.ai.bossAiDepth) - TUNING.ai.depthRefAiDepth) * 0.1;
   return base + roleBonus + ult + aoe + control + reach + depth;
 }
@@ -339,7 +486,7 @@ function abilityComboScore(u: Unit, focus: Unit, def: AbilityDef, level: number,
 function itemComboScore(u: Unit, focus: Unit, def: ItemDef, role: ComboStep['role']): number {
   const arch = itemArchetypes(def);
   const base = targetValue(focus);
-  const roleBonus = role === 'payoff' ? 0.85 : role === 'amplifier' ? 0.7 : 0.5;
+  const roleBonus = role === 'payoff' ? 0.85 : role === 'amplifier' ? 0.7 : role === 'immunity' ? 0.62 : 0.5;
   const initiation = arch.has('initiation') ? 0.35 : 0;
   const lockdown = arch.has('lockdown') ? 0.35 : 0;
   const field = arch.has('field') ? 0.15 : 0;
@@ -373,11 +520,13 @@ function validFocus(sim: Sim, u: Unit, focus: Unit): boolean {
   return focus.alive && focus.team !== u.team && !focus.summary.untargetable && !focus.summary.magicImmune && focus.isVisibleTo(u.team, sim.time);
 }
 
-function comboSetupActive(focus: Unit): boolean {
+function comboSetupActive(sim: Sim, focus: Unit): boolean {
   const s = focus.summary;
   if (s.stunned || s.rooted || s.silenced || s.hexed || s.disarmed || s.frozen || s.sleeping || s.cycloned || s.feared !== null || s.taunted !== null) {
     return true;
   }
+  if (s.moveSlowFactor < 0.999 || s.attackSlowTotal > 0) return true;
+  if (recentSetupTagActive(sim, focus)) return true;
   return (s.mods.magicResistPct ?? 0) < 0 || (s.mods.damageTakenReductionPct ?? 0) < 0 || (s.mods.armor ?? 0) < 0;
 }
 
@@ -510,7 +659,7 @@ function sameAction(a: ComboCandidate, b: ComboCandidate): boolean {
 }
 
 function roleRank(role: ComboStep['role']): number {
-  return role === 'enabler' ? 0 : role === 'amplifier' ? 1 : 2;
+  return role === 'enabler' ? 0 : role === 'immunity' ? 1 : role === 'amplifier' ? 2 : 3;
 }
 
 function planTieKey(plan: ComboPlan): string {
@@ -568,6 +717,7 @@ function reactionMult(sim: Sim, focus: Unit, setups: ComboCandidate[], payoff: C
 /** The focus carries a live elemental aura that reacts with `el` (a soak ready to pop). */
 function focusReactsWith(sim: Sim, focus: Unit, el: ActiveElement | null): boolean {
   if (!el) return false;
+  if (recentSetupTagActive(sim, focus) && reacts(focus.lastTagSetupElement ?? null, el)) return true;
   for (const key of Object.keys(focus.elementAuras) as ActiveElement[]) {
     const aura = focus.elementAuras[key];
     if (aura && aura.until > sim.time && reacts(key, el)) return true;
@@ -585,6 +735,7 @@ function nextStepFor(sim: Sim, focus: Unit, steps: ComboCandidate[]): ComboCandi
     const s = steps[i];
     if (s.role === 'enabler' && !enablerSatisfied(sim, focus)) return s;
     if (s.role === 'amplifier' && !amplifierSatisfied(focus)) return s;
+    if (s.role === 'immunity' && !immunitySatisfied(s, sim)) return s;
   }
   return steps[steps.length - 1];
 }
@@ -594,6 +745,7 @@ function enablerSatisfied(sim: Sim, focus: Unit): boolean {
   const s = focus.summary;
   if (s.stunned || s.rooted || s.silenced || s.hexed || s.disarmed || s.frozen || s.sleeping || s.cycloned || s.feared !== null || s.taunted !== null) return true;
   if (s.moveSlowFactor < 0.999 || s.attackSlowTotal > 0) return true;
+  if (recentSetupTagActive(sim, focus)) return true;
   for (const key of Object.keys(focus.elementAuras) as ActiveElement[]) {
     const aura = focus.elementAuras[key];
     if (aura && aura.until > sim.time) return true;
@@ -605,6 +757,40 @@ function enablerSatisfied(sim: Sim, focus: Unit): boolean {
 function amplifierSatisfied(focus: Unit): boolean {
   const m = focus.summary.mods;
   return (m.magicResistPct ?? 0) < 0 || (m.damageTakenReductionPct ?? 0) < 0 || (m.armor ?? 0) < 0;
+}
+
+function immunitySatisfied(step: ComboCandidate, sim: Sim): boolean {
+  const owner = sim.unit(step.unitUid ?? -1);
+  return owner?.summary.magicImmune === true;
+}
+
+function recentSetupTagActive(sim: Sim, focus: Unit): boolean {
+  return focus.lastTagSetupAt > -900 &&
+    sim.time - focus.lastTagSetupAt <= TUNING.ai.comboWindowSec &&
+    focus.lastTagSetupArchetype !== undefined &&
+    SETUP_TAGS.has(focus.lastTagSetupArchetype);
+}
+
+function recentInitiationActive(sim: Sim, u: Unit): boolean {
+  if (!u.lastItemActiveId || sim.time - u.lastItemActiveAt > TUNING.ai.comboWindowSec) return false;
+  const def = REG.items.get(u.lastItemActiveId);
+  return !!def && itemArchetypes(def).has('initiation');
+}
+
+function enemyReplyLoaded(sim: Sim, u: Unit, focus: Unit): boolean {
+  let nearby = 0;
+  let disableReady = false;
+  sim.forEachNearbyUnit(focus.pos, 900, (enemy) => {
+    if (!enemy.alive || enemy.team === u.team || enemy.kind === 'npc' || enemy.kind === 'ward' || enemy.summary.untargetable) return;
+    nearby++;
+    for (let slot = 0; slot < enemy.abilities.length; slot++) {
+      const ability = enemy.abilities[slot];
+      if (!ability || ability.level <= 0 || !enemy.abilityReady(slot, sim.time).ok) continue;
+      const intent = scanAbility(ability.def);
+      if (intent.hardControl || intent.softControl || intent.aoe) disableReady = true;
+    }
+  });
+  return disableReady || nearby >= 2;
 }
 
 /**

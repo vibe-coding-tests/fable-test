@@ -1,5 +1,6 @@
 import type { HeroDef } from '../../core/types';
 import { loopTurnLabel } from './loop-note';
+import { authoredMasteryTrees } from './mastery-authoring';
 
 export const SNIPER: HeroDef = {
   id: 'sniper',
@@ -197,6 +198,40 @@ export const SNIPER: HeroDef = {
       ]
     }
   },
+  masteryTrees: authoredMasteryTrees([
+    {
+      abilityId: 'sniper-shrapnel',
+      name: 'Bombardment',
+      t1: { name: 'Dense Payload', description: 'Shrapnel gains an agility-scaling damage-per-second bump.', mods: { agi: 2 }, override: { valueKey: 'dps' } },
+      t2: { name: 'Spotted', description: 'Shrapnel reveals and tags enemies as spotted.', mechanic: 'mark', override: { valueKey: 'dps' } },
+      t3: { name: 'Wide Spread', description: "Shrapnel's growth node widens the fall radius.", override: { valueKey: 'radius' } },
+      t4: { name: 'Firing Nests', description: 'Overlapping Shrapnel zones become firing nests that can host Assassinate.', mechanic: 'persist' }
+    },
+    {
+      abilityId: 'sniper-headshot',
+      name: 'Marksman',
+      t1: { name: 'Steady Hands', description: 'Headshot gains an agility-scaling bonus-damage bump.', mods: { agi: 2 }, override: { valueKey: 'damage' } },
+      t2: { name: 'Range Tag', description: 'Headshot tags targets for Take Aim priority.', mechanic: 'mark', override: { valueKey: 'damage' } },
+      t3: { name: 'Practiced Eye', description: "Headshot's growth node improves its proc chance.", override: { valueKey: 'chance' } },
+      t4: { name: 'Called Shot', description: 'Headshot becomes guaranteed against spotted enemies, with reduced payoff.', mechanic: 'prime' }
+    },
+    {
+      abilityId: 'sniper-take-aim',
+      name: 'Vantage',
+      t1: { name: 'Long Sight', description: 'Take Aim gains an agility-scaling attack-range bump.', mods: { agi: 2 }, override: { valueKey: 'range' } },
+      t2: { name: 'Dug In', description: 'Take Aim turns standing still into a charged-shot rule.', mechanic: 'store', override: { valueKey: 'range' } },
+      t3: { name: 'Far Horizon', description: "Take Aim's growth node extends attack range further.", override: { valueKey: 'range' } },
+      t4: { name: 'Armor Piercer', description: 'Charged shots ignore defensive layers on spotted enemies.', mechanic: 'consume' }
+    },
+    {
+      abilityId: 'sniper-assassinate',
+      name: 'Killshot',
+      t1: { name: 'Bigger Round', description: 'Assassinate gains an agility-scaling damage bump.', mods: { agi: 2 }, override: { valueKey: 'damage' } },
+      t2: { name: 'Nest Shot', description: 'Assassinate can fire from the nearest active Shrapnel nest.', mechanic: 'retarget', override: { valueKey: 'damage' } },
+      t3: { name: 'Range Finder', description: "Assassinate's growth node extends its cast range.", override: { valueKey: 'castRangeVal' } },
+      t4: { name: 'Open Fire', description: 'A kill with Assassinate arms every Shrapnel nest to fire once.', mechanic: 'split' }
+    }
+  ]),
   silhouette: { build: 'biped', scale: 0.85, bodyShape: 'slim', head: 'helm', weapon: 'rifle', extras: ['belt'] },
   palette: ['#c8a05c', '#5c4a32', '#ffd27f'],
   barks: [

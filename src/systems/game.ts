@@ -28,7 +28,6 @@ import {
   creepCombatTier,
   dayNightMods,
   defaultPhase3SaveFields,
-  draftTeams,
   enchantNeutralItem,
   instantiateDroppedItem,
   migratePhase3Save,
@@ -55,9 +54,12 @@ import { ELITE_DRAFT } from '../data/drafts';
 import { isActiveElement, reactionFor, resonanceMods, elementForHero } from '../core/resonance';
 import { levelFromXp, xpForLevel } from '../core/stats';
 import { abilityMaxLevel, abilityRankRequiredHeroLevel, autoAbilityLevels, canLearnAbilityRank, normalizeAbilityLevels } from '../core/values';
+import { MASTERY_NODE_COUNT, MASTERY_TIERS_PER_BRANCH, canBuyMasteryNode, deriveMasteryTrees, masteryNodeIndex, masteryNodeUnlocked, masteryPointsForLevel, masterySpent, normalizeMasteryRanks } from '../core/mastery';
 import { dist, fromAngle, norm, sub } from '../core/math2d';
 import { circleBody, nearestPointOutsideCollisionBody, obstacleBlocksMovement } from '../core/collision';
-import type { ActiveElement, ArmoryLoadouts, BossDef, CollisionObstacleInput, CreepTier, CreepInstanceSave, CutsceneDef, DifficultyTier, DishDef, DomainDef, DraftDef, DropSource, DungeonDef, DungeonModifierDef, DungeonProgressSave, DungeonRoom, EchoProgress, EchoSpawnDef, EffectNode, GambitRule, GameSave, GraphicsSettings, GroundItemDrop, HeroAugments, HeroLoadoutSlots, HeroSave, ItemDef, ItemDropTable, ItemGrade, ItemQuality, ItemRarity, ItemSave, ItemTier, LootBand, LoreEntryDef, MacroHeroSetup, NeutralItemDef, NeutralStashEntry, Order, QuestDef, QuestGiverDef, QuestKind, QuestProgress, QuestReward, QuestSave, QuestStatus, RaidDef, RegionDef, RolledAffix, RoomTemplate, RoomType, SeasonalEventDef, SimEvent, StingerId, StatModMap, StatusParams, TagArchetype, ValueRef, Vec2, ZoneSpec } from '../core/types';
+import { defaultFormation } from '../core/board';
+import { chooseDraft, counterDraft, runPickBan, validateDraft, type CounterDraftResult, type DraftValidation } from '../core/draft';
+import type { ActiveElement, ArmoryLoadouts, BossDef, CollisionObstacleInput, CreepTier, CreepInstanceSave, CutsceneDef, DifficultyTier, DishDef, DomainDef, DraftFormat, DraftTeam, DropSource, DungeonDef, DungeonModifierDef, DungeonProgressSave, DungeonRoom, EchoProgress, EchoSpawnDef, EffectNode, GambitRule, GameSave, Formation, GraphicsSettings, GymDef, GroundItemDrop, HeroAugments, HeroLoadoutSlots, HeroSave, ItemDef, ItemDropTable, ItemGrade, ItemQuality, ItemRarity, ItemSave, ItemTier, LootBand, LoreEntryDef, MacroHeroSetup, NeutralItemDef, NeutralStashEntry, Order, QuestDef, QuestGiverDef, QuestKind, QuestProgress, QuestReward, QuestSave, QuestStatus, RaidDef, RegionDef, RolledAffix, RoomTemplate, RoomType, SeasonalEventDef, SimEvent, StingerId, StatModMap, StatusParams, TagArchetype, ValueRef, Vec2, ZoneSpec } from '../core/types';
 import { advance as questAdvance, chosenBranch as questChosenBranch, claim as questClaim, normalizeQuestSave, questGiverPos, refreshAvailability, type QuestContext, type QuestEvent } from '../core/quests';
 import { migratePhase7Save } from '../core/phase7';
 import { GROUND_LOOT_COLLISION } from '../data/world/props';
@@ -65,7 +67,7 @@ import { ProceduralAudio, type CinematicMixMode } from '../engine/audio';
 import { CinematicDirector, type CinematicView, type CutsceneContext } from '../engine/cinematic';
 import { StoryDetector, type StoryObserveCtx, type StoryTrigger } from '../engine/story-detectors';
 import { GameScene } from '../engine/scene';
-import { LiveGymFight, runGymMatch, type GymMatchHero, type GymMatchResult } from './macro-session';
+import { LiveGymFight, runGymMatch, defaultBoardFor, type GymMatchHero, type GymMatchResult } from './macro-session';
 import { LiveRaid } from './raid-session';
 import { DungeonSession } from './dungeon-session';
 import { isValidKeyBindings, normalizeKeyBindings } from './keybindings';
@@ -147,7 +149,7 @@ function bindIfNeeded(item: ItemSave): ItemSave {
 // camps, capture/entourage, shop, shrine, day clock, save/load.
 // ------------------------------------------------------------------
 
-export const SAVE_VERSION = 8;
+export const SAVE_VERSION = 9;
 const SLOT_KEYS = ['ancients.save.1', 'ancients.save.2', 'ancients.save.3'];
 const AUTO_KEY = 'ancients.save.auto';
 
@@ -158,6 +160,7 @@ export interface RosterEntry {
   abilityLevels: number[];
   attributePoints: number;
   talentPicks: (0 | 1 | null)[];
+  masteryRanks: number[];
   gambits: GambitRule[];
   echo: EchoProgress;
   facetIdx: number;
@@ -236,6 +239,51 @@ function normalizeAttributePoints(heroId: string, level: number, abilityLevels: 
   return Math.min(max, budget, Math.max(0, Math.floor(points ?? defaultAttributePoints(heroId, level, abilityLevels, talentPicks))));
 }
 
+function buyLegacyMasteryPath(heroId: string, level: number, abilityLevels: number[], out: number[], budget: number, branchIdx: number, targetTier: 2 | 4): number {
+  const hero = REG.hero(heroId);
+  const missing: number[] = [];
+  for (let tier = 1; tier <= targetTier; tier++) {
+    const idx = masteryNodeIndex(branchIdx, tier);
+    if (out[idx]) continue;
+    if (!masteryNodeUnlocked(hero, level, abilityLevels, idx)) return budget;
+    missing.push(idx);
+  }
+  if (missing.length > budget) return budget;
+  for (const idx of missing) out[idx] = 1;
+  return budget - missing.length;
+}
+
+function legacyMasteryRanks(heroId: string, level: number, abilityLevels: number[], talentPicks: (0 | 1 | null)[], attributePoints = 0): number[] {
+  const hero = REG.hero(heroId);
+  const out = Array(MASTERY_NODE_COUNT).fill(0);
+  let budget = Math.min(masteryPointsForLevel(level), Math.max(0, Math.floor(attributePoints)) + pickedTalentCount(talentPicks));
+
+  talentPicks.forEach((pick, talentIdx) => {
+    if (pick === null || budget <= 0) return;
+    const tier = hero.talents[talentIdx];
+    const talent = tier?.options[pick];
+    const abilityId = talent?.abilityOverride?.abilityId ?? talent?.cooldownAdd?.abilityId;
+    const branchIdx = abilityId ? hero.abilities.findIndex((ability) => ability.id === abilityId) : -1;
+    if (branchIdx < 0) return;
+    budget = buyLegacyMasteryPath(heroId, level, abilityLevels, out, budget, branchIdx, tier.level <= 15 ? 2 : 4);
+  });
+
+  for (let nodeIdx = 0; nodeIdx < out.length && budget > 0; nodeIdx++) {
+    if (out[nodeIdx]) continue;
+    if (!masteryNodeUnlocked(hero, level, abilityLevels, nodeIdx)) continue;
+    if (nodeIdx % MASTERY_TIERS_PER_BRANCH !== 0 && !out[nodeIdx - 1]) continue;
+    out[nodeIdx] = 1;
+    budget--;
+  }
+  return out;
+}
+
+function normalizeRosterMasteryRanks(heroId: string, level: number, abilityLevels: number[], ranks: number[] | undefined, talentPicks: (0 | 1 | null)[] = [null, null, null, null], attributePoints = 0): number[] {
+  const hero = REG.hero(heroId);
+  if (ranks) return normalizeMasteryRanks(hero, level, abilityLevels, ranks);
+  return normalizeMasteryRanks(hero, level, abilityLevels, legacyMasteryRanks(heroId, level, abilityLevels, talentPicks, attributePoints));
+}
+
 function cloneHeroSave(save: HeroSave): HeroSave {
   const talentPicks = [...save.talentPicks];
   const fallbackAbilityLevels = defaultAbilityLevels(save.heroId, save.level);
@@ -251,6 +299,7 @@ function cloneHeroSave(save: HeroSave): HeroSave {
     abilityLevels,
     attributePoints: normalizeAttributePoints(save.heroId, save.level, abilityLevels, talentPicks, save.attributePoints),
     talentPicks,
+    masteryRanks: normalizeRosterMasteryRanks(save.heroId, save.level, abilityLevels, save.masteryRanks, talentPicks, save.attributePoints ?? 0),
     echo: normalizeEchoProgress(save.echo),
     facetIdx: save.facetIdx,
     hpPct: save.hpPct,
@@ -273,6 +322,7 @@ function heroSaveFromRosterEntry(rec: RosterEntry, now: number): HeroSave {
     abilityLevels: [...rec.abilityLevels],
     attributePoints: rec.attributePoints,
     talentPicks: [...rec.talentPicks],
+    masteryRanks: [...rec.masteryRanks],
     echo: {
       kills: rec.echo.kills,
       facetSwapUnlocked: rec.echo.facetSwapUnlocked,
@@ -299,8 +349,9 @@ function freshHeroSave(heroId: string, level = 1): HeroSave {
     augments: {},
     gambits: [],
     abilityLevels,
-    attributePoints: defaultAttributePoints(heroId, level, abilityLevels, talentPicks),
+    attributePoints: 0,
     talentPicks,
+    masteryRanks: normalizeRosterMasteryRanks(heroId, level, abilityLevels, [], talentPicks, 0),
     echo: freshEchoProgress(),
     facetIdx: 0,
     hpPct: 1,
@@ -317,6 +368,20 @@ export interface Toast {
   color?: string;   // optional accent (LOOT L6: rarity-tinted loot toasts)
 }
 
+/** Elite Five interactive pick/ban session state (AUTOBATTLER_OVERHAUL §4.2). */
+export interface EliteDraftState {
+  memberIdx: number;
+  memberName: string;
+  seed: number;
+  order: ('pick' | 'ban')[];
+  step: number;
+  player: MacroHeroSetup[];
+  enemy: MacroHeroSetup[];
+  bans: string[];
+  playerPool: string[];
+  enemyPool: string[];
+}
+
 /** Combat readability snapshot (COMBAT_OVERHAUL §3.4, C4). */
 export interface CombatReadout {
   active: boolean;     // any combat readout is worth showing
@@ -327,11 +392,19 @@ export interface CombatReadout {
   ultReady: { uid: number; name: string }[];
   tagChain: { count: number; pct: number; ampPct: number } | null;
   offField: { count: number; names: string[] };
-  /** SWAP_COMBAT_OVERHAUL §9: the benched hero whose ready tag would best pay off
-   *  the current state — the "tag X next" hint that makes the chain legible. */
-  nextLink: { slot: number; heroId: string; name: string; archetype: TagArchetype } | null;
+  /** SWAP_COMBAT_OVERHAUL §9: the benched hero whose ready tag best routes the
+   *  current setup/payoff/save state — the "tag X next" hint that makes chains legible. */
+  nextLink: { slot: number; heroId: string; name: string; archetype: TagArchetype; role: 'setup' | 'payoff' | 'save' | 'support' } | null;
   /** SWAP_COMBAT_OVERHAUL §2.3: the swap charge meter, when the opt-in mode is on. */
   swapCharges: { current: number; max: number } | null;
+  /** AUTOBATTLER_OVERHAUL §6.5: the board posture so a coaching player reads intent —
+   *  whether the team is holding its anchors or has committed, the lead protect peel,
+   *  and the exposed enemy backliner the team is set to flank. Only in live macro fights. */
+  formation: {
+    posture: 'holding' | 'committed';
+    protect: { peeler: string; ward: string } | null;
+    flankTargetName: string | null;
+  } | null;
 }
 
 interface CampState {
@@ -437,6 +510,7 @@ export function newGameSave(starterHeroId: string): GameSave {
         abilityLevels: defaultAbilityLevels(starterHeroId, 1),
         attributePoints: 0,
         talentPicks: [null, null, null, null],
+        masteryRanks: normalizeRosterMasteryRanks(starterHeroId, 1, defaultAbilityLevels(starterHeroId, 1), [], [null, null, null, null], 0),
         gambits: [],
         echo: freshEchoProgress(),
         facetIdx: 0,
@@ -801,6 +875,10 @@ export class Game {
   /** Active live gym fight (§3.5): when set, update() steps + renders it instead of the overworld. */
   liveGym: LiveGymFight | null = null;
   private liveGymId: string | null = null;
+  /** Per-gym committed drafts (AUTOBATTLER_OVERHAUL §4). Empty => the walking party. */
+  gymDrafts = new Map<string, DraftTeam>();
+  /** The most recent counter-draft swap (§5.4/§6.5), for the reveal beat. Cleared on a no-op. */
+  lastCounterDraft: ({ gymId: string } & CounterDraftResult) | null = null;
   liveRaid: LiveRaid | null = null;
   private liveRaidId: string | null = null;
   private liveRaidTier: DifficultyTier = 'normal';
@@ -870,6 +948,7 @@ export class Game {
       if (REG.questDefs.has(id)) this.quests[id] = normalizeQuestSave(REG.questDef(id), q);
     }
     this.defeatedGyms = new Set(save.defeatedGyms);
+    this.gymDrafts = new Map(Object.entries(save.gymDrafts ?? {}).map(([id, d]) => [id, structuredClone(d)]));
     this.difficulty = structuredClone(save.difficulty);
     this.inventoryStash = save.inventoryStash.map((i) => cloneItemSave(i)!);
     this.groundItemDrops = (save.groundItemDrops ?? []).map(cloneGroundItemDrop);
@@ -925,13 +1004,15 @@ export class Game {
       const talentPicks = [...hs.talentPicks];
       const fallbackAbilityLevels = defaultAbilityLevels(heroId, hs.level);
       const abilityLevels = normalizeAbilityLevels(REG.hero(heroId), hs.abilityLevels ?? fallbackAbilityLevels, hs.level);
+      const attributePoints = normalizeAttributePoints(heroId, hs.level, abilityLevels, talentPicks, hs.attributePoints);
       return {
         heroId,
         level: hs.level,
         xp: hs.xp,
         abilityLevels,
-        attributePoints: normalizeAttributePoints(heroId, hs.level, abilityLevels, talentPicks, hs.attributePoints),
+        attributePoints,
         talentPicks,
+        masteryRanks: normalizeRosterMasteryRanks(heroId, hs.level, abilityLevels, hs.masteryRanks, talentPicks, hs.attributePoints ?? attributePoints),
         gambits: [...(hs.gambits ?? [])],
         echo: normalizeEchoProgress(hs.echo),
         facetIdx: hs.facetIdx,
@@ -1049,6 +1130,92 @@ export class Game {
     return null;
   }
 
+  private tagArchetypeRole(archetype: TagArchetype): 'setup' | 'payoff' | 'save' | 'support' {
+    switch (archetype) {
+      case 'Lockdown':
+      case 'Gather':
+      case 'Soak':
+      case 'Drop':
+      case 'Imprint':
+        return 'setup';
+      case 'Strike':
+      case 'Onslaught':
+      case 'Bloodrush':
+        return 'payoff';
+      case 'Mend':
+      case 'Cleanse':
+      case 'Vanguard':
+        return 'save';
+      case 'Warcry':
+      default:
+        return 'support';
+    }
+  }
+
+  private tagSetupActiveOn(u: Unit): boolean {
+    const s = u.summary;
+    if (
+      s.stunned || s.rooted || s.silenced || s.hexed || s.disarmed ||
+      s.frozen || s.sleeping || s.cycloned || s.feared !== null || s.taunted !== null
+    ) return true;
+    if ((s.mods.magicResistPct ?? 0) < 0 || (s.mods.damageTakenReductionPct ?? 0) < 0 || (s.mods.armor ?? 0) < 0) return true;
+    for (const aura of Object.values(u.elementAuras)) {
+      if (aura && aura.until > this.sim.time) return true;
+    }
+    return false;
+  }
+
+  private tagFocusForHint(sim: Sim, playerTeam: number): Unit | null {
+    const focusUid = sim.teamMind(playerTeam).focusUid;
+    const focus = focusUid !== null ? sim.unit(focusUid) : null;
+    if (focus?.alive && focus.team !== playerTeam && !focus.summary.untargetable) return focus;
+    const active = this.activeUnit();
+    if (!active) return null;
+    return sim.nearestUnit(active.pos, 900, (u) =>
+      u.alive && u.team !== playerTeam && u.kind !== 'npc' && !u.summary.untargetable && u.isVisibleTo(playerTeam, sim.time)
+    ) ?? null;
+  }
+
+  private tagReactionScore(focus: Unit | null, incoming: ActiveElement | undefined): number {
+    if (!focus || !this.settings.resonance || !isActiveElement(incoming)) return 0;
+    let score = 0;
+    for (const existing of Object.keys(focus.elementAuras) as ActiveElement[]) {
+      const aura = focus.elementAuras[existing];
+      if (!aura || aura.until <= this.sim.time || existing === incoming) continue;
+      const reaction = reactionFor(existing, incoming);
+      if (!reaction) continue;
+      score = Math.max(score, reaction.damageMultiplier ? 42 : reaction.extraDamagePct ? 32 : 24);
+    }
+    return score;
+  }
+
+  private tagNextLinkScore(slot: number, focus: Unit | null, setupActive: boolean, allySaveNeed: boolean): { score: number; role: NonNullable<CombatReadout['nextLink']>['role'] } | null {
+    const rec = this.party[slot];
+    if (!rec || rec.respawnAt > this.sim.time || rec.tagGaugeReadyAt > this.sim.time) return null;
+    const boon = REG.hero(rec.heroId).tagBoon;
+    if (!boon) return null;
+
+    let role = this.tagArchetypeRole(boon.archetype);
+    const activeRec = this.party[this.activeIdx];
+    const activeBoon = activeRec ? REG.hero(activeRec.heroId).tagBoon : undefined;
+    const activeRole = activeBoon ? this.tagArchetypeRole(activeBoon.archetype) : 'support';
+    const teamValue = tagBoonTeamValue(boon);
+    let score = teamValue * 0.05;
+
+    const candidateElement = isActiveElement(boon.element) ? boon.element : elementForHero(REG.hero(rec.heroId));
+    const reactionScore = this.tagReactionScore(focus, isActiveElement(candidateElement) ? candidateElement : undefined);
+    if (reactionScore > 0 && setupActive) role = 'payoff';
+
+    if (allySaveNeed && role === 'save') score += 90;
+    if (setupActive && (role === 'payoff' || role === 'support')) score += role === 'payoff' ? 80 : 45;
+    if (!setupActive && role === 'setup') score += 70;
+    if (activeRole === 'setup' && (role === 'payoff' || role === 'support')) score += role === 'payoff' ? 55 : 28;
+    if (activeRole === 'payoff' && role === 'setup') score += 45;
+    score += reactionScore;
+
+    return score > 0 ? { score, role } : null;
+  }
+
   /**
    * Combat readability snapshot (COMBAT_OVERHAUL §3.4, C4): the facts the HUD turns
    * into cast bars, a boss aggro/threat marker, the shared-focus indicator, and the
@@ -1120,24 +1287,49 @@ export class Game {
       .filter((u) => u.alive && u.team === playerTeam && u.kind === 'hero' && (u.offFieldUntil ?? 0) > now)
       .map((u) => u.name);
 
-    // §9 next-link hint: among benched, gauge-ready party members, suggest the one
-    // whose tag delivers the most team value (so pure-self carries are never the
-    // hint — you don't need to be told to press a selfish burst).
+    // §9 next-link hint: score the actual tag-chain grammar (setup → payoff, active
+    // aura → reaction, low ally → save) instead of a flat "best team value" pick.
     let nextLink: CombatReadout['nextLink'] = null;
     if (this.partyRecentlyInCombat()) {
+      const focus = this.tagFocusForHint(sim, playerTeam);
+      const setupActive = !!focus && this.tagSetupActiveOn(focus);
+      const allySaveNeed = sim.unitsArr.some((u) =>
+        u.alive && u.team === playerTeam && u.kind === 'hero' && u.hp / Math.max(1, u.stats.maxHp) < 0.45
+      );
       let bestValue = 0;
       for (let i = 0; i < this.party.length; i++) {
         if (i === this.activeIdx) continue;
+        const scored = this.tagNextLinkScore(i, focus, setupActive, allySaveNeed);
+        if (!scored) continue;
         const rec = this.party[i];
-        if (!rec || rec.respawnAt > now || rec.tagGaugeReadyAt > now) continue;
+        if (!rec) continue;
         const boon = REG.hero(rec.heroId).tagBoon;
         if (!boon) continue;
-        const value = tagBoonTeamValue(boon);
+        const value = scored.score;
         if (value > bestValue) {
           bestValue = value;
-          nextLink = { slot: i, heroId: rec.heroId, name: REG.hero(rec.heroId).name, archetype: boon.archetype };
+          nextLink = { slot: i, heroId: rec.heroId, name: REG.hero(rec.heroId).name, archetype: boon.archetype, role: scored.role };
         }
       }
+    }
+
+    // §6.5 formation cues — only meaningful in a live macro fight where the board posture exists.
+    let formation: CombatReadout['formation'] = null;
+    if (this.liveGym || this.liveRaid) {
+      const tm = sim.teamMind(playerTeam);
+      let protect: NonNullable<CombatReadout['formation']>['protect'] = null;
+      const peelers = Object.keys(tm.protectAssignments).map(Number).sort((a, b) => a - b);
+      for (const peelerUid of peelers) {
+        const peeler = sim.unit(peelerUid);
+        const ward = sim.unit(tm.protectAssignments[peelerUid]);
+        if (peeler?.alive && ward?.alive) { protect = { peeler: peeler.name, ward: ward.name }; break; }
+      }
+      const flankUnit = tm.flankTargetUid !== null ? sim.unit(tm.flankTargetUid) : null;
+      formation = {
+        posture: tm.engaged ? 'committed' : 'holding',
+        protect,
+        flankTargetName: flankUnit?.alive ? flankUnit.name : null
+      };
     }
 
     return {
@@ -1150,7 +1342,8 @@ export class Game {
       tagChain,
       offField: { count: offFieldNames.length, names: offFieldNames },
       nextLink,
-      swapCharges: this.swapChargeState()
+      swapCharges: this.swapChargeState(),
+      formation
     };
   }
 
@@ -2386,6 +2579,120 @@ export class Game {
     }));
   }
 
+  // --- draft engine (AUTOBATTLER_OVERHAUL §4) -------------------------------
+
+  /** The committed draft for a gym, or null when the player never authored one. */
+  gymDraft(gymId: string): DraftTeam | null {
+    return this.gymDrafts.get(gymId) ?? null;
+  }
+
+  /** The draft the editor opens on: a saved one, else the walking party + default board. */
+  defaultGymDraft(gymId: string): DraftTeam {
+    const saved = this.gymDrafts.get(gymId);
+    if (saved) return structuredClone(saved);
+    const heroes: MacroHeroSetup[] = this.gymPlayerTeam().map((h) => ({ ...h }));
+    const defs = heroes.map((h) => REG.hero(h.heroId));
+    return { heroes, formation: defaultFormation(defs) };
+  }
+
+  /** Recruited heroes available to draft from (§4), party first then bench, stable. */
+  draftPool(): string[] {
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const r of this.party) if (this.recruited.has(r.heroId) && !seen.has(r.heroId)) { seen.add(r.heroId); out.push(r.heroId); }
+    for (const id of [...this.recruited].sort()) if (!seen.has(id)) { seen.add(id); out.push(id); }
+    return out;
+  }
+
+  /** Build a draftable setup for any recruited hero: its party loadout, else bench, else fresh. */
+  draftHeroSetup(heroId: string): MacroHeroSetup {
+    const rec = this.party.find((r) => r.heroId === heroId);
+    if (rec) {
+      return {
+        heroId,
+        level: rec.unit ? rec.unit.level : rec.level,
+        items: rec.items.map((i) => i?.id).filter((id): id is string => !!id),
+        gambits: rec.gambits.length > 0 ? rec.gambits : undefined
+      };
+    }
+    const bench = this.benchRoster.get(heroId);
+    if (bench) {
+      return {
+        heroId,
+        level: bench.level,
+        items: bench.items.map((i) => i?.id).filter((id): id is string => !!id),
+        gambits: bench.gambits && bench.gambits.length > 0 ? bench.gambits : undefined
+      };
+    }
+    return { heroId, level: this.recruitLevelCap() };
+  }
+
+  /** Persist a draft for a gym (§4). Empty/short drafts clear back to the party. */
+  commitGymDraft(gymId: string, draft: DraftTeam): void {
+    if (draft.heroes.length === 0) this.gymDrafts.delete(gymId);
+    else this.gymDrafts.set(gymId, structuredClone(draft));
+  }
+
+  private serializeGymDrafts(): Record<string, DraftTeam> {
+    const out: Record<string, DraftTeam> = {};
+    for (const [id, d] of this.gymDrafts) out[id] = structuredClone(d);
+    return out;
+  }
+
+  /** The fielded five + formation for a gym: the committed draft, else the party. */
+  private gymTeamFor(gymId: string): { team: GymMatchHero[]; formation?: Formation } {
+    const draft = this.gymDrafts.get(gymId);
+    if (draft && draft.heroes.length >= 5) {
+      const team: GymMatchHero[] = draft.heroes.slice(0, 5).map((h) => ({
+        heroId: h.heroId,
+        level: h.level ?? 1,
+        items: h.items,
+        gambits: h.gambits
+      }));
+      return { team, formation: draft.formation };
+    }
+    return { team: this.gymPlayerTeam() };
+  }
+
+  /** A gym's composition format (§5), if any. */
+  gymFormat(gymId: string): DraftFormat | undefined {
+    return REG.gym(gymId).format;
+  }
+
+  /** Validate a drafted five against a gym's format (§5.1). No format => always legal. */
+  validateGymDraft(gymId: string, heroes: MacroHeroSetup[]): DraftValidation {
+    return validateDraft(this.gymFormat(gymId), heroes);
+  }
+
+  /**
+   * The enemy five for a gym, after any counter-draft (§5.4). `last-pick`/`mirror-shape`
+   * answer the player's committed shape deterministically; `none` returns the fixed team.
+   * Records the swap for the counter-draft reveal (§6.5). Pure over the inputs + seed.
+   */
+  private gymEnemyFor(gymId: string, playerTeam: GymMatchHero[], seed: number): MacroHeroSetup[] {
+    const gym = REG.gym(gymId);
+    const mode = gym.format?.counterDraft ?? 'none';
+    if (mode === 'none') {
+      this.lastCounterDraft = null;
+      return gym.enemyTeam;
+    }
+    const player: MacroHeroSetup[] = playerTeam.map((h) => ({ heroId: h.heroId, level: h.level, items: h.items }));
+    const result: CounterDraftResult = counterDraft(gym.format, player, gym.enemyTeam, [...REG.heroes.keys()], seed);
+    this.lastCounterDraft = result.swappedIn.length ? { gymId, ...result } : null;
+    if (this.lastCounterDraft && result.reason) {
+      const inName = result.swappedIn.map((id) => REG.hero(id).name).join(', ');
+      this.msg(`${gym.leader} ${result.reason} — drafts ${inName}.`, 'bark');
+    }
+    return result.enemy;
+  }
+
+  /** A gym fight definition with the (possibly counter-drafted) enemy spliced in. */
+  private gymForFight(gymId: string, playerTeam: GymMatchHero[], seed: number): GymDef {
+    const gym = REG.gym(gymId);
+    if (!gym.format?.counterDraft || gym.format.counterDraft === 'none') return gym;
+    return { ...gym, enemyTeam: this.gymEnemyFor(gymId, playerTeam, seed) };
+  }
+
   private gymStartGuard(gymId: string): boolean {
     const gym = REG.gym(gymId);
     if (this.defeatedGyms.has(gymId)) {
@@ -2402,8 +2709,10 @@ export class Game {
   /** Headless / auto-resolve path: simulate the best-of-3 to a result immediately. */
   challengeGym(gymId: string): boolean {
     if (!this.gymStartGuard(gymId)) return false;
-    const gym = REG.gym(gymId);
-    const result = runGymMatch(gym, this.gymPlayerTeam(), this.region.seed + Math.round(this.playtime));
+    const { team, formation } = this.gymTeamFor(gymId);
+    const seed = this.region.seed + Math.round(this.playtime);
+    const gym = this.gymForFight(gymId, team, seed);
+    const result = runGymMatch(gym, team, seed, formation);
     return this.applyGymResult(gymId, result);
   }
 
@@ -2411,8 +2720,10 @@ export class Game {
   startLiveGym(gymId: string): boolean {
     if (this.liveGym) return false;
     if (!this.gymStartGuard(gymId)) return false;
-    const gym = REG.gym(gymId);
-    this.liveGym = new LiveGymFight(gym, this.gymPlayerTeam(), this.region.seed + Math.round(this.playtime));
+    const { team, formation } = this.gymTeamFor(gymId);
+    const seed = this.region.seed + Math.round(this.playtime);
+    const gym = this.gymForFight(gymId, team, seed);
+    this.liveGym = new LiveGymFight(gym, team, seed, { formationA: formation });
     this.liveGymId = gymId;
     this.story.beginEncounter();
     this.queuedOrders = [];
@@ -3216,8 +3527,112 @@ export class Game {
 
   private eliteDraftFor(memberIdx: number, seed: number): { player: MacroHeroSetup[]; enemy: MacroHeroSetup[]; bans: string[] } {
     const member = ELITE_DRAFT.members[memberIdx];
-    const mini: DraftDef = { ...ELITE_DRAFT, id: `${ELITE_DRAFT.id}-m${memberIdx}`, members: [member] };
-    return draftTeams(mini, [...this.recruited], seed);
+    // The §4.2 pick/ban state machine over two pools: your recruited roster vs.
+    // the member's themed pool. Two bans then alternating picks; both teams come
+    // out legal and full. Deterministic for the seed.
+    return runPickBan({
+      playerPool: [...this.recruited],
+      enemyPool: [...new Set(member.pool)],
+      order: ['ban', 'ban', 'pick', 'pick', 'pick', 'pick', 'pick', 'pick', 'pick', 'pick'],
+      seed,
+      level: 30,
+      playerItems: () => ['black-king-bar', 'butterfly'],
+      enemyItems: () => ['black-king-bar', 'heart-of-tarrasque']
+    });
+  }
+
+  // --- Elite Five interactive pick/ban (AUTOBATTLER_OVERHAUL §4.2) ---
+  // A small deterministic state machine over two pools. Six steps a side: one ban
+  // then five picks, alternating. The player drives their own steps; the leader's
+  // steps auto-resolve with the legal-team heuristic. Commit feeds runEliteMatch.
+
+  eliteDraft: EliteDraftState | null = null;
+
+  /** Open the pick/ban for the next undefeated member. False if not draftable now. */
+  beginEliteDraft(): boolean {
+    const idx = this.eliteNextIndex();
+    if (idx >= ELITE_DRAFT.members.length) { this.msg('The Elite Five are beaten — challenge the Champion.', 'info'); return false; }
+    if (this.recruited.size < 5) { this.msg('Recruit at least five heroes to draft the gauntlet', 'bad'); return false; }
+    const member = ELITE_DRAFT.members[idx];
+    const seed = this.region.seed + idx * 211 + Math.round(this.playtime);
+    this.eliteDraft = {
+      memberIdx: idx,
+      memberName: member.name,
+      seed,
+      order: ['ban', 'ban', 'pick', 'pick', 'pick', 'pick', 'pick', 'pick', 'pick', 'pick', 'pick', 'pick'],
+      step: 0,
+      player: [],
+      enemy: [],
+      bans: [],
+      playerPool: [...this.recruited],
+      enemyPool: [...new Set(member.pool)]
+    };
+    this.advanceEliteDraftAi();
+    return true;
+  }
+
+  cancelEliteDraft(): void { this.eliteDraft = null; }
+
+  /** The current pick/ban turn: whose it is and whether it's a ban or a pick. */
+  eliteDraftTurn(): { side: 0 | 1; action: 'pick' | 'ban'; done: boolean } | null {
+    const s = this.eliteDraft;
+    if (!s) return null;
+    if (s.step >= s.order.length) return { side: 0, action: 'pick', done: true };
+    return { side: (s.step % 2) as 0 | 1, action: s.order[s.step], done: false };
+  }
+
+  /** The player commits the hero on their turn (a ban from the leader's pool, or a pick). */
+  eliteDraftChoose(heroId: string): boolean {
+    const s = this.eliteDraft;
+    if (!s) return false;
+    const turn = this.eliteDraftTurn();
+    if (!turn || turn.done || turn.side !== 0) return false;
+    if (s.bans.includes(heroId) || s.player.some((h) => h.heroId === heroId) || s.enemy.some((h) => h.heroId === heroId)) return false;
+    if (turn.action === 'ban') {
+      if (!REG.heroes.has(heroId)) return false;
+      s.bans.push(heroId);
+    } else {
+      if (!s.playerPool.includes(heroId)) return false;
+      s.player.push({ heroId, level: 30, items: ['black-king-bar', 'butterfly'] });
+    }
+    s.step++;
+    this.advanceEliteDraftAi();
+    return true;
+  }
+
+  /** Resolve every consecutive leader (side 1) step until it is the player's turn or the draft is done. */
+  private advanceEliteDraftAi(): void {
+    const s = this.eliteDraft;
+    if (!s) return;
+    let guard = 0;
+    while (s.step < s.order.length && (s.step % 2) === 1 && guard++ < 32) {
+      const action = s.order[s.step];
+      const stepSeed = s.seed + s.step * 97;
+      if (action === 'ban') {
+        // deny the player's strongest legal pick
+        const ban = chooseDraft({ pool: s.playerPool, team: s.player, banned: s.bans, seed: stepSeed });
+        if (ban) s.bans.push(ban);
+      } else {
+        const pick = chooseDraft({ pool: s.enemyPool, team: s.enemy, banned: s.bans, seed: stepSeed });
+        if (pick) s.enemy.push({ heroId: pick, level: 30, items: ['black-king-bar', 'heart-of-tarrasque'] });
+      }
+      s.step++;
+    }
+  }
+
+  /** Run the drafted match once both fives are picked. Clears the session. */
+  commitEliteDraft(): { won: boolean; winner: 0 | 1 | -1; defeated: number; member: string } | null {
+    const s = this.eliteDraft;
+    if (!s) return null;
+    const turn = this.eliteDraftTurn();
+    if (!turn?.done || s.player.length < 5 || s.enemy.length < 5) {
+      this.msg('Finish the draft — pick a full five first', 'bad');
+      return null;
+    }
+    const player = s.player.slice(0, 5);
+    const enemy = s.enemy.slice(0, 5);
+    this.eliteDraft = null;
+    return this.runEliteMatch({ seed: s.seed, playerTeam: player, enemyTeam: enemy });
   }
 
   /**
@@ -3225,7 +3640,7 @@ export class Game {
    * advances `eliteFive.defeated`; a loss leaves it untouched so the gauntlet restarts from
    * that same member (never a hard lockout, §3.10). `playerTeam` overrides the drafted picks.
    */
-  runEliteMatch(opts: { seed?: number; playerTeam?: MacroHeroSetup[] } = {}): { won: boolean; winner: 0 | 1 | -1; defeated: number; member: string } {
+  runEliteMatch(opts: { seed?: number; playerTeam?: MacroHeroSetup[]; enemyTeam?: MacroHeroSetup[] } = {}): { won: boolean; winner: 0 | 1 | -1; defeated: number; member: string } {
     const idx = this.eliteNextIndex();
     if (idx >= ELITE_DRAFT.members.length) {
       this.msg('The Elite Five are beaten — challenge the Champion.', 'info');
@@ -3238,6 +3653,7 @@ export class Game {
     const seed = opts.seed ?? (this.region.seed + idx * 101 + Math.round(this.playtime));
     const draft = this.eliteDraftFor(idx, seed);
     const player = opts.playerTeam ?? draft.player;
+    const enemy = opts.enemyTeam ?? draft.enemy;
     if (idx === 0 && this.eliteFive.defeated === 0) this.playCutscene('elite-gauntlet-open');
     const personaId = `elite-persona-${idx}`;
     if (this.journalSeen.has(`cinematic:${personaId}`)) {
@@ -3247,15 +3663,15 @@ export class Game {
       this.playCutscene(personaId);
     }
     if (this.queueAfterCinematic(ELITE_DRAFT.members[idx].name, () => {
-      this.resolveEliteMatch(idx, seed, player, draft.enemy);
+      this.resolveEliteMatch(idx, seed, player, enemy);
     })) {
       return { won: false, winner: -1, defeated: this.eliteFive.defeated, member: ELITE_DRAFT.members[idx].name };
     }
-    return this.resolveEliteMatch(idx, seed, player, draft.enemy);
+    return this.resolveEliteMatch(idx, seed, player, enemy);
   }
 
   private resolveEliteMatch(idx: number, seed: number, player: MacroHeroSetup[], enemy: MacroHeroSetup[]): { won: boolean; winner: 0 | 1 | -1; defeated: number; member: string } {
-    const result = runMacroBattle({ seed, teamA: player, teamB: enemy });
+    const result = runMacroBattle({ seed, teamA: player, teamB: enemy, formationA: defaultBoardFor(player), formationB: defaultBoardFor(enemy) });
     const member = ELITE_DRAFT.members[idx];
     const won = result.winner === 0;
     if (won) {
@@ -3301,7 +3717,7 @@ export class Game {
   }
 
   private resolveChampion(seed: number, player: MacroHeroSetup[], enemy: MacroHeroSetup[]): { won: boolean; winner: 0 | 1 | -1 } {
-    const result = runMacroBattle({ seed, teamA: player, teamB: enemy });
+    const result = runMacroBattle({ seed, teamA: player, teamB: enemy, formationA: defaultBoardFor(player), formationB: defaultBoardFor(enemy) });
     if (result.winner === 0) {
       this.eliteFive.championDown = true;
       this.msg('The Champion is dethroned. The ancients answer to you now.', 'good');
@@ -3549,6 +3965,7 @@ export class Game {
       if (gained > 0) {
         rec.abilityLevels = normalizeAbilityLevels(REG.hero(rec.heroId), rec.abilityLevels, rec.unit.level);
         rec.attributePoints = normalizeAttributePoints(rec.heroId, rec.unit.level, rec.abilityLevels, rec.talentPicks, rec.attributePoints);
+        rec.masteryRanks = normalizeRosterMasteryRanks(rec.heroId, rec.unit.level, rec.abilityLevels, rec.masteryRanks, rec.talentPicks, rec.attributePoints);
         rec.unit.refresh(this.sim.time);
       }
       rec.level = rec.unit.level;
@@ -3560,6 +3977,7 @@ export class Game {
         rec.level = newLevel;
         rec.abilityLevels = normalizeAbilityLevels(REG.hero(rec.heroId), rec.abilityLevels, rec.level);
         rec.attributePoints = normalizeAttributePoints(rec.heroId, rec.level, rec.abilityLevels, rec.talentPicks, rec.attributePoints);
+        rec.masteryRanks = normalizeRosterMasteryRanks(rec.heroId, rec.level, rec.abilityLevels, rec.masteryRanks, rec.talentPicks, rec.attributePoints);
       }
     }
   }
@@ -5401,6 +5819,7 @@ export class Game {
       if (gained > 0) {
         rec.abilityLevels = normalizeAbilityLevels(REG.hero(rec.heroId), rec.abilityLevels, rec.unit.level);
         rec.attributePoints = normalizeAttributePoints(rec.heroId, rec.unit.level, rec.abilityLevels, rec.talentPicks, rec.attributePoints);
+        rec.masteryRanks = normalizeRosterMasteryRanks(rec.heroId, rec.unit.level, rec.abilityLevels, rec.masteryRanks, rec.talentPicks, rec.attributePoints);
         rec.unit.refresh(this.sim.time);
       }
       rec.level = rec.unit.level;
@@ -5410,6 +5829,7 @@ export class Game {
       rec.level = Math.min(levelFromXp(rec.xp), cap);
       rec.abilityLevels = normalizeAbilityLevels(REG.hero(rec.heroId), rec.abilityLevels, rec.level);
       rec.attributePoints = normalizeAttributePoints(rec.heroId, rec.level, rec.abilityLevels, rec.talentPicks, rec.attributePoints);
+      rec.masteryRanks = normalizeRosterMasteryRanks(rec.heroId, rec.level, rec.abilityLevels, rec.masteryRanks, rec.talentPicks, rec.attributePoints);
     }
     this.msg(`Tome of Knowledge → ${REG.hero(rec.heroId).name} (+${res.xp} XP, -${res.tomesUsed} used)`, 'good');
     return true;
@@ -5440,6 +5860,7 @@ export class Game {
       rec.abilityLevels = REG.hero(rec.heroId).abilities.map(() => 0);
       rec.attributePoints = 0;
       rec.talentPicks = [null, null, null, null];
+        rec.masteryRanks = Array(16).fill(0);
       this.sim.removeUnit(rec.unit.uid);
       const u = this.spawnHeroFromRecord(rec, pos);
       rec.unit = u;
@@ -5451,6 +5872,7 @@ export class Game {
       rec.abilityLevels = REG.hero(rec.heroId).abilities.map(() => 0);
       rec.attributePoints = 0;
       rec.talentPicks = [null, null, null, null];
+      rec.masteryRanks = Array(16).fill(0);
     }
     this.msg(`${REG.hero(rec.heroId).name} respecced skills and talents (-${cost}g)`, 'good');
     return true;
@@ -5691,9 +6113,11 @@ export class Game {
   // ---------- hero spawn/serialize ----------
 
   private spawnHeroFromRecord(rec: RosterEntry, pos: Vec2): Unit {
-    const build = buildHero(REG.hero(rec.heroId), rec.talentPicks, rec.facetIdx, rec.echo, rec.augments);
+    rec.masteryRanks = normalizeRosterMasteryRanks(rec.heroId, rec.level, rec.abilityLevels, rec.masteryRanks, rec.talentPicks, rec.attributePoints);
+    const build = buildHero(REG.hero(rec.heroId), rec.talentPicks, rec.facetIdx, rec.echo, rec.augments, rec.masteryRanks);
     rec.abilityLevels = normalizeAbilityLevels(build.def, rec.abilityLevels, rec.level);
     rec.attributePoints = normalizeAttributePoints(rec.heroId, rec.level, rec.abilityLevels, rec.talentPicks, rec.attributePoints);
+    rec.masteryRanks = normalizeRosterMasteryRanks(rec.heroId, rec.level, rec.abilityLevels, rec.masteryRanks, rec.talentPicks, rec.attributePoints);
     const u = this.sim.spawnHero(build.def, {
       team: 0,
       pos: { ...pos },
@@ -5713,9 +6137,6 @@ export class Game {
     }
     for (const [k, v] of Object.entries(augmentMods(rec.augments))) {
       u.externalMods[k] = (u.externalMods[k] ?? 0) + v;
-    }
-    for (const key of ['str', 'agi', 'int']) {
-      u.externalMods[key] = (u.externalMods[key] ?? 0) + rec.attributePoints * 2;
     }
     rec.neutralMods = neutralPassiveMods(rec.neutralSlot);
     for (const [k, v] of Object.entries(rec.neutralMods)) {
@@ -5758,6 +6179,7 @@ export class Game {
     rec.level = u.level;
     rec.xp = u.xp;
     rec.abilityLevels = u.abilities.map((a) => a.level);
+    rec.masteryRanks = normalizeRosterMasteryRanks(rec.heroId, rec.level, rec.abilityLevels, rec.masteryRanks, rec.talentPicks, rec.attributePoints);
     rec.hpPct = u.alive ? u.hp / u.stats.maxHp : 0.5;
     rec.manaPct = u.stats.maxMana > 0 ? u.mana / u.stats.maxMana : 0;
     rec.items = u.items.map((it) => itemSaveOf(it, this.sim.time));
@@ -5827,6 +6249,40 @@ export class Game {
     return out;
   }
 
+  private tagBoonTouchesSetup(archetype: TagArchetype): boolean {
+    return archetype === 'Lockdown' || archetype === 'Gather' || archetype === 'Soak';
+  }
+
+  private tagEffectRadius(nodes: EffectNode[]): number {
+    let radius = 300;
+    const visit = (effect: EffectNode): void => {
+      const r = (effect as { radius?: ValueRef }).radius;
+      if (typeof r === 'number') radius = Math.max(radius, r);
+      if (effect.kind === 'zone') {
+        const zr = effect.zone.radius;
+        if (typeof zr === 'number') radius = Math.max(radius, zr);
+        effect.zone.tick?.effects.forEach(visit);
+        effect.zone.onEnter?.effects.forEach(visit);
+      } else if (effect.kind === 'projectile') {
+        effect.proj.onHit.forEach(visit);
+      } else if (effect.kind === 'repeat') {
+        effect.effects.forEach(visit);
+      }
+    };
+    nodes.forEach(visit);
+    return radius;
+  }
+
+  private stampTagSetupTargets(u: Unit, archetype: TagArchetype, element: ActiveElement | undefined, effects: EffectNode[], point: Vec2): void {
+    if (!this.tagBoonTouchesSetup(archetype)) return;
+    const radius = this.tagEffectRadius(effects);
+    for (const enemy of this.sim.unitsInRadius(point, radius, (o) => o.team !== u.team && o.kind !== 'npc' && !o.summary.untargetable)) {
+      enemy.lastTagSetupAt = this.sim.time;
+      enemy.lastTagSetupArchetype = archetype;
+      enemy.lastTagSetupElement = element;
+    }
+  }
+
   private fireTagBoon(rec: RosterEntry, u: Unit, when: 'tag-in' | 'tag-out', combatEligible: boolean, aimPoint?: Vec2): boolean {
     const boon = REG.hero(rec.heroId).tagBoon;
     if (!boon || (boon.fire !== when && boon.fire !== 'both')) return false;
@@ -5852,11 +6308,12 @@ export class Game {
       element: boon.element,
       vfx: tagBoonVfx(REG.hero(rec.heroId))
     }, scaleTagEffects(effects, amp), { point });
+    this.stampTagSetupTargets(u, boon.archetype, boon.element, effects, point);
 
     const reductionPct = Math.min(80, Math.max(0, u.stats.swapCdReductionPct) + Math.max(0, u.stats.tagGaugeReductionPct));
     rec.tagGaugeReadyAt = this.sim.time + boon.gaugeSec * (1 - reductionPct / 100);
     u.tagGaugeReadyAt = rec.tagGaugeReadyAt;   // mirror for the core 'tag-in-ready' gambit read
-    this.sim.events.emit({ t: 'tag-boon', uid: u.uid, heroId: rec.heroId, when, chain: chain.count, ampPct });
+    this.sim.events.emit({ t: 'tag-boon', uid: u.uid, heroId: rec.heroId, when, archetype: boon.archetype, chain: chain.count, ampPct });
     return true;
   }
 
@@ -6345,6 +6802,7 @@ export class Game {
         rec.unit.level = lvl;
         rec.abilityLevels = normalizeAbilityLevels(REG.hero(rec.heroId), rec.abilityLevels, lvl);
         rec.attributePoints = normalizeAttributePoints(rec.heroId, lvl, rec.abilityLevels, rec.talentPicks, rec.attributePoints);
+        rec.masteryRanks = normalizeRosterMasteryRanks(rec.heroId, lvl, rec.abilityLevels, rec.masteryRanks, rec.talentPicks, rec.attributePoints);
         rec.unit.setAbilityLevels(rec.abilityLevels);
         rec.unit.markStatsDirty();
         rec.unit.refresh(this.sim.time);
@@ -6352,6 +6810,7 @@ export class Game {
       rec.level = lvl;
       rec.abilityLevels = normalizeAbilityLevels(REG.hero(rec.heroId), rec.abilityLevels, lvl);
       rec.attributePoints = normalizeAttributePoints(rec.heroId, lvl, rec.abilityLevels, rec.talentPicks, rec.attributePoints);
+      rec.masteryRanks = normalizeRosterMasteryRanks(rec.heroId, lvl, rec.abilityLevels, rec.masteryRanks, rec.talentPicks, rec.attributePoints);
     }
   }
 
@@ -6487,6 +6946,7 @@ export class Game {
         abilityLevels: defaultAbilityLevels(heroId, 1),
         attributePoints: 0,
         talentPicks: [null, null, null, null],
+        masteryRanks: normalizeRosterMasteryRanks(heroId, 1, defaultAbilityLevels(heroId, 1), [], [null, null, null, null], 0),
         gambits: [],
         echo: freshEchoProgress(),
         facetIdx: 0,
@@ -6675,16 +7135,25 @@ export class Game {
     this.msg(`Sold ${def.name} (+${value}g)`, 'info');
   }
 
-  // ---------- talents ----------
+  // ---------- skills / masteries ----------
 
   pendingSkillPoints(rec: RosterEntry): number {
+    return this.pendingAbilityPoints(rec);
+  }
+
+  pendingAbilityPoints(rec: RosterEntry): number {
     const abilitySpend = rec.abilityLevels.reduce((sum, n) => sum + n, 0);
-    return Math.max(0, rec.level - abilitySpend - rec.attributePoints - pickedTalentCount(rec.talentPicks));
+    return Math.max(0, rec.level - abilitySpend);
+  }
+
+  pendingMasteryPoints(rec: RosterEntry): number {
+    rec.masteryRanks = normalizeRosterMasteryRanks(rec.heroId, rec.level, rec.abilityLevels, rec.masteryRanks, rec.talentPicks, rec.attributePoints);
+    return Math.max(0, masteryPointsForLevel(rec.level) - masterySpent(rec.masteryRanks));
   }
 
   canLevelAbility(recIdx: number, slot: number): boolean {
     const rec = this.party[recIdx];
-    if (!rec || this.pendingSkillPoints(rec) <= 0) return false;
+    if (!rec || this.pendingAbilityPoints(rec) <= 0) return false;
     const def = rec.unit?.abilities[slot]?.def ?? REG.hero(rec.heroId).abilities[slot];
     if (!def) return false;
     const current = rec.unit?.abilities[slot]?.level ?? rec.abilityLevels[slot] ?? 0;
@@ -6704,10 +7173,12 @@ export class Game {
     }
     rec.abilityLevels = normalizeAbilityLevels(REG.hero(rec.heroId), rec.abilityLevels, rec.level);
     rec.abilityLevels[slot] = (rec.abilityLevels[slot] ?? 0) + 1;
+    rec.masteryRanks = normalizeRosterMasteryRanks(rec.heroId, rec.level, rec.abilityLevels, rec.masteryRanks, rec.talentPicks, rec.attributePoints);
     if (rec.unit) {
       rec.unit.setAbilityLevels(rec.abilityLevels);
       rec.unit.refresh(this.sim.time);
       rec.abilityLevels = rec.unit.abilities.map((a) => a.level);
+      rec.masteryRanks = normalizeRosterMasteryRanks(rec.heroId, rec.level, rec.abilityLevels, rec.masteryRanks, rec.talentPicks, rec.attributePoints);
       this.playPresentationEventNow({ t: 'skill-spend', uid: rec.unit.uid, kind: 'ability' });
     }
     this.msg(`${REG.hero(rec.heroId).name}: ${def.name} rank ${rec.abilityLevels[slot]}`, 'good');
@@ -6716,51 +7187,71 @@ export class Game {
   }
 
   maxAttributePoints(rec: RosterEntry): number {
-    return Math.max(0, TUNING.levelCap - REG.hero(rec.heroId).abilities.reduce((sum, a) => sum + abilityMaxLevel(a), 0) - 4);
+    void rec;
+    return 0;
   }
 
   canSpendAttributePoint(recIdx: number): boolean {
-    const rec = this.party[recIdx];
-    return !!rec && this.pendingSkillPoints(rec) > 0 && rec.attributePoints < this.maxAttributePoints(rec);
+    void recIdx;
+    return false;
   }
 
   applyAttributePoint(recIdx: number): boolean {
-    const rec = this.party[recIdx];
-    if (!rec || !this.canSpendAttributePoint(recIdx)) return false;
-    rec.attributePoints++;
-    if (rec.unit) {
-      for (const key of ['str', 'agi', 'int']) {
-        rec.unit.externalMods[key] = (rec.unit.externalMods[key] ?? 0) + 2;
-      }
-      rec.unit.markStatsDirty();
-      rec.unit.refresh(this.sim.time);
-      this.playPresentationEventNow({ t: 'skill-spend', uid: rec.unit.uid, kind: 'attribute' });
-    }
-    this.msg(`${REG.hero(rec.heroId).name}: +2 all attributes`, 'good');
-    this.autosave('attributes');
-    return true;
+    void recIdx;
+    this.msg('Attribute points were replaced by Masteries', 'info');
+    return false;
   }
 
   pendingTalentTier(rec: RosterEntry): number {
-    const levels = [10, 15, 20, 25];
-    for (let i = 0; i < 4; i++) {
-      if (rec.level >= levels[i] && rec.talentPicks[i] === null) return i;
-    }
+    void rec;
     return -1;
   }
 
   applyTalent(recIdx: number, tier: number, pick: 0 | 1): void {
+    void tier;
+    void pick;
     const rec = this.party[recIdx];
-    if (!rec || rec.talentPicks[tier] !== null || this.pendingSkillPoints(rec) <= 0) return;
-    const talent = REG.hero(rec.heroId).talents[tier];
-    if (!talent || rec.level < talent.level) return;
-    rec.talentPicks[tier] = pick;
-    const def = REG.hero(rec.heroId);
-    this.msg(`${def.name}: ${def.talents[tier].options[pick].name}`, 'good');
+    this.msg(rec ? `${REG.hero(rec.heroId).name}: talents were replaced by Masteries` : 'Talents were replaced by Masteries', 'info');
+  }
+
+  canBuyMasteryNode(recIdx: number, nodeIdx: number): boolean {
+    const rec = this.party[recIdx];
+    if (!rec) return false;
+    return canBuyMasteryNode(REG.hero(rec.heroId), rec.level, rec.abilityLevels, rec.masteryRanks, nodeIdx);
+  }
+
+  buyMasteryNode(recIdx: number, nodeIdx: number): boolean {
+    const rec = this.party[recIdx];
+    if (!rec) return false;
+    rec.masteryRanks = normalizeRosterMasteryRanks(rec.heroId, rec.level, rec.abilityLevels, rec.masteryRanks, rec.talentPicks, rec.attributePoints);
+    if (!this.canBuyMasteryNode(recIdx, nodeIdx)) {
+      this.msg('Mastery node is locked', 'bad');
+      return false;
+    }
+    rec.masteryRanks[nodeIdx] = 1;
+    const branchIdx = Math.floor(nodeIdx / 4);
+    const tierIdx = nodeIdx % 4;
+    const node = deriveMasteryTrees(REG.hero(rec.heroId))[branchIdx]?.nodes[tierIdx];
+    this.msg(`${REG.hero(rec.heroId).name}: ${node?.name ?? 'Mastery'}`, 'good');
     this.rebuildHeroUnit(recIdx);
     const unit = this.party[recIdx]?.unit;
-    if (unit) this.playPresentationEventNow({ t: 'skill-spend', uid: unit.uid, kind: 'talent' });
-    this.autosave('talent');
+    if (unit) this.playPresentationEventNow({ t: 'skill-spend', uid: unit.uid, kind: 'mastery' });
+    this.autosave('mastery');
+    return true;
+  }
+
+  respecMasteries(recIdx: number): boolean {
+    const rec = this.party[recIdx];
+    if (!rec) return false;
+    if (this.inCombat()) {
+      this.msg('Mastery respec only outside combat', 'bad');
+      return false;
+    }
+    rec.masteryRanks = Array(16).fill(0);
+    this.rebuildHeroUnit(recIdx);
+    this.msg(`${REG.hero(rec.heroId).name} masteries refunded`, 'good');
+    this.autosave('mastery-respec');
+    return true;
   }
 
   setFacet(recIdx: number, facetIdx: number): boolean {
@@ -6920,6 +7411,7 @@ export class Game {
       questProgress: structuredClone(this.questProgress),
       quests: structuredClone(this.quests),
       defeatedGyms: [...this.defeatedGyms],
+      gymDrafts: this.serializeGymDrafts(),
       echoRespawn: this.echoRespawnMap(),
       campRespawn: this.campRespawnMap(),
       difficulty: structuredClone(this.difficulty),
@@ -7017,9 +7509,10 @@ export class Game {
   static migrateSave(s: unknown): GameSave | null {
     if (!s || typeof s !== 'object') return null;
     const v = s as Partial<GameSave>;
-    if (v.version === 2 || v.version === 3 || v.version === 4 || v.version === 5 || v.version === 6 || v.version === 7 || v.version === SAVE_VERSION) {
+    if (v.version === 2 || v.version === 3 || v.version === 4 || v.version === 5 || v.version === 6 || v.version === 7 || v.version === 8 || v.version === SAVE_VERSION) {
       // v2/v3 -> v3 shape, v4 audio/codex fields, v5 exploration, v6 Armory,
-      // v7 board quests, then v8 tag-gauge persistence.
+      // v7 board quests, v8 tag-gauge persistence, then v9 per-gym drafts
+      // (optional gymDrafts; absent => the walking party, identical to v8).
       const migrated = migrateTagGaugeSave(migratePhase3Save(v as unknown as { version: number; [k: string]: unknown }));
       return Game.validateSave(migrated) ? migrated : null;
     }
@@ -7183,6 +7676,7 @@ export class Game {
       if (r.abilityLevels !== undefined && (!Array.isArray(r.abilityLevels) || !r.abilityLevels.every((n) => typeof n === 'number' && n >= 0))) return false;
       if (r.attributePoints !== undefined && (typeof r.attributePoints !== 'number' || r.attributePoints < 0)) return false;
       if (!Array.isArray(r.talentPicks) || r.talentPicks.length !== 4) return false;
+      if (r.masteryRanks !== undefined && (!Array.isArray(r.masteryRanks) || r.masteryRanks.length !== 16 || !r.masteryRanks.every((n) => typeof n === 'number' && n >= 0))) return false;
       if (typeof r.tagGaugeReadyAt !== 'number' || r.tagGaugeReadyAt < 0) return false;
       if (r.echo !== undefined) {
         if (typeof r.echo.kills !== 'number' || r.echo.kills < 0) return false;
@@ -7289,6 +7783,7 @@ export class Game {
         if (gained > 0) {
           rec.abilityLevels = normalizeAbilityLevels(REG.hero(rec.heroId), rec.abilityLevels, rec.unit.level);
           rec.attributePoints = normalizeAttributePoints(rec.heroId, rec.unit.level, rec.abilityLevels, rec.talentPicks, rec.attributePoints);
+          rec.masteryRanks = normalizeRosterMasteryRanks(rec.heroId, rec.unit.level, rec.abilityLevels, rec.masteryRanks, rec.talentPicks, rec.attributePoints);
           rec.unit.refresh(this.sim.time);
           // level-up heals the gained stats portion
           rec.unit.hp = Math.min(rec.unit.stats.maxHp, rec.unit.hp + gained * 80);
@@ -7304,6 +7799,7 @@ export class Game {
           rec.level = newLevel;
           rec.abilityLevels = normalizeAbilityLevels(REG.hero(rec.heroId), rec.abilityLevels, rec.level);
           rec.attributePoints = normalizeAttributePoints(rec.heroId, rec.level, rec.abilityLevels, rec.talentPicks, rec.attributePoints);
+          rec.masteryRanks = normalizeRosterMasteryRanks(rec.heroId, rec.level, rec.abilityLevels, rec.masteryRanks, rec.talentPicks, rec.attributePoints);
           this.msg(`${REG.hero(rec.heroId).name} reached level ${newLevel}! Skill point available.`, 'good');
         }
       }
@@ -7428,6 +7924,7 @@ export class Game {
         if (gained > 0) {
           rec.abilityLevels = normalizeAbilityLevels(REG.hero(rec.heroId), rec.abilityLevels, rec.unit.level);
           rec.attributePoints = normalizeAttributePoints(rec.heroId, rec.unit.level, rec.abilityLevels, rec.talentPicks, rec.attributePoints);
+          rec.masteryRanks = normalizeRosterMasteryRanks(rec.heroId, rec.unit.level, rec.abilityLevels, rec.masteryRanks, rec.talentPicks, rec.attributePoints);
           rec.unit.refresh(this.sim.time);
         }
         rec.level = rec.unit.level;
@@ -7439,6 +7936,7 @@ export class Game {
           rec.level = newLevel;
           rec.abilityLevels = normalizeAbilityLevels(REG.hero(rec.heroId), rec.abilityLevels, rec.level);
           rec.attributePoints = normalizeAttributePoints(rec.heroId, rec.level, rec.abilityLevels, rec.talentPicks, rec.attributePoints);
+          rec.masteryRanks = normalizeRosterMasteryRanks(rec.heroId, rec.level, rec.abilityLevels, rec.masteryRanks, rec.talentPicks, rec.attributePoints);
         }
       }
     }

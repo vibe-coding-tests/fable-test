@@ -48,6 +48,7 @@ function teardown(): void {
   input = null;
   hud = null;
   unmountDebug = null;
+  if (testEnabled()) delete (window as unknown as { __hud?: Hud }).__hud;
 }
 
 function updateUiOnce(): void {
@@ -66,6 +67,7 @@ function startGameHeadless(save: GameSave, opts: { hud?: boolean } = {}): void {
   if (opts.hud) {
     input = new InputController(game, canvas);
     hud = new Hud(game, input, () => undefined);
+    if (testEnabled()) (window as unknown as { __hud: Hud }).__hud = hud;
     updateUiOnce();
   }
 }
@@ -123,6 +125,7 @@ function startGame(save: GameSave, opts: { headless?: boolean; hud?: boolean } =
       teardown();
       boot();
     });
+    if (testEnabled()) (window as unknown as { __hud: Hud }).__hud = hud;
     if (debugEnabled()) unmountDebug = mountDebugPanel(game);
 
     let last = performance.now();
@@ -162,6 +165,7 @@ window.addEventListener('ancients:load', (e) => {
 if (testEnabled()) {
   installTestApi({
     getGame: () => game,
+    getInput: () => input,
     start: (save, opts) => startGame(save, opts),
     load: (save) => window.dispatchEvent(new CustomEvent('ancients:load', { detail: save })),
     shutdown: teardown,

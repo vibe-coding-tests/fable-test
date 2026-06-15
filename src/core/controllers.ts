@@ -292,7 +292,50 @@ export function evalCondition(sim: Sim, u: Unit, cond: GambitCondition, focus: U
       return inFriendlyField(sim, u);
     case 'enemy-in-hostile-field':
       return enemyInHostileField(sim, u, focus);
+    case 'in-formation':
+      return inFormation(sim, u);
+    case 'backline-threatened':
+      return backlineThreatened(sim, u);
+    case 'enemy-clustered':
+      return enemyClustered(sim, u, cond.radius, cond.count);
+    case 'flank-open':
+      return sim.teamMind(u.team).flankTargetUid !== null;
+    case 'ally-channeling':
+      return sim.unitsArr.some((o) => o.alive && o.team === u.team && o !== u && isChanneling(sim, o));
+    case 'enemy-channeling':
+      return sim.unitsArr.some((o) => enemyCandidate(sim, u, o) && isChanneling(sim, o));
   }
+}
+
+// AUTOBATTLER_OVERHAUL §6.5 — formation reads, pure over sim/team-mind state.
+function isChanneling(sim: Sim, u: Unit): boolean {
+  return u.channel != null && u.channel.until > sim.time;
+}
+
+function inFormation(sim: Sim, u: Unit): boolean {
+  const home = u.ctrl.homePos;
+  if (!home) return false;
+  if (sim.teamMind(u.team).engaged) return false; // the line broke on commit
+  return dist2(u.pos, home) <= TUNING.ai.abilityArchetype.anchorReformRadius ** 2;
+}
+
+function backlineThreatened(sim: Sim, u: Unit): boolean {
+  const tm = sim.teamMind(u.team);
+  const radius = TUNING.ai.formation.peelRadius;
+  for (const uid of tm.backlineUids) {
+    const ally = sim.unit(uid);
+    if (!ally || !ally.alive) continue;
+    if (sim.unitsInRadius(ally.pos, radius, (o) => enemyCandidate(sim, u, o)).length > 0) return true;
+  }
+  return false;
+}
+
+function enemyClustered(sim: Sim, u: Unit, radius: number, count: number): boolean {
+  for (const e of sim.unitsArr) {
+    if (!enemyCandidate(sim, u, e)) continue;
+    if (sim.unitsInRadius(e.pos, radius, (o) => enemyCandidate(sim, u, o)).length >= count) return true;
+  }
+  return false;
 }
 
 // GAMBIT_AI_OVERHAUL §5/§6: field awareness keyed off aura radii. The widest
@@ -470,6 +513,13 @@ function applyAction(sim: Sim, u: Unit, action: GambitAction, focus: Unit | unde
       u.order = { kind: 'item', invSlot: slot, uid: tgt.unit?.uid, point: tgt.point };
       return true;
     }
+    case 'combo-route': {
+      if (!focus) return false;
+      const order = chooseUtilityOrder(sim, u, focus);
+      if (!order) return false;
+      u.order = order;
+      return true;
+    }
     case 'attack-focus': {
       if (!focus) return false;
       u.order = { kind: 'attack-unit', uid: focus.uid };
@@ -543,6 +593,11 @@ export function buildDefaultGambit(roles: string[]): GambitRule[] {
 
   // Universal: never sit in a telegraphed area effect.
   rules.push({ if: [{ k: 'standing-in-zone' }], then: { k: 'dodge-zones' } });
+  // SWAP_COMBAT_OVERHAUL §3.5/§8.7: shipped defaults exercise the tag/combo
+  // reads. The action delegates back to the combo-aware scorer, so these rules
+  // route a setup/payoff instead of hard-coding a fragile ability slot.
+  rules.push({ if: [{ k: 'tag-in-ready' }, { k: 'combo-setup-active' }], then: { k: 'combo-route' } });
+  rules.push({ if: [{ k: 'tag-in-ready' }, { k: 'combo-ready' }], then: { k: 'combo-route' } });
 
   switch (role) {
     case 'support':

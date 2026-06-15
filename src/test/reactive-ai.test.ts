@@ -1,7 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { registerAllContent } from '../data';
 import { setupMacroSim } from '../core/macro';
-import { thinkGambit, evalCondition } from '../core/controllers';
+import { thinkGambit, evalCondition, buildDefaultGambit } from '../core/controllers';
 import { enemyCastSeen, incomingDisable, chooseUtilityOrder } from '../core/utility';
 import type { GambitRule, MacroHeroSetup, StatusId } from '../core/types';
 import type { Unit } from '../core/unit';
@@ -137,6 +137,20 @@ describe('reactive reads', () => {
     expect(evalCondition(sim, hero, { k: 'combo-setup-active' }, focus)).toBe(false);
     focus.elementAuras.hydro = { gauge: 1, until: sim.time + 3, sourceUid: hero.uid };
     expect(evalCondition(sim, hero, { k: 'combo-setup-active' }, focus)).toBe(true);
+  });
+
+  it('default gambits ship tag/combo routing rules', () => {
+    const rules = buildDefaultGambit(['support', 'disabler']);
+    expect(rules.some((r) =>
+      r.then.k === 'combo-route' &&
+      r.if.some((c) => c.k === 'tag-in-ready') &&
+      r.if.some((c) => c.k === 'combo-setup-active')
+    )).toBe(true);
+    expect(rules.some((r) =>
+      r.then.k === 'combo-route' &&
+      r.if.some((c) => c.k === 'tag-in-ready') &&
+      r.if.some((c) => c.k === 'combo-ready')
+    )).toBe(true);
   });
 });
 

@@ -1,5 +1,6 @@
 import type { HeroDef } from '../../core/types';
 import { loopTurnLabel } from './loop-note';
+import { authoredMasteryTrees } from './mastery-authoring';
 
 export const EARTHSHAKER: HeroDef = {
   id: 'earthshaker',
@@ -208,6 +209,40 @@ export const EARTHSHAKER: HeroDef = {
       ]
     }
   },
+  masteryTrees: authoredMasteryTrees([
+    {
+      abilityId: 'es-fissure',
+      name: 'Faultline',
+      t1: { name: 'Deep Cut', description: 'Fissure gains a strength-scaling damage bump.', mods: { str: 2 }, override: { valueKey: 'damage' } },
+      t2: { name: 'Faultline', description: "Fissure's wall primes enemies for Aftershock.", mechanic: 'prime', override: { valueKey: 'damage' } },
+      t3: { name: 'Long Rift', description: "Fissure's growth node extends the length of the rift.", override: { valueKey: 'length' } },
+      t4: { name: 'Ringbreaker', description: 'Fissure can be cast as a self-centered ring for commit builds.', mechanic: 'persist' }
+    },
+    {
+      abilityId: 'es-enchant-totem',
+      name: 'Totem',
+      t1: { name: 'Heavy Totem', description: 'Enchant Totem gains a strength-scaling bonus-damage bump.', mods: { str: 2 }, override: { valueKey: 'bonusPct' } },
+      t2: { name: 'Shockline', description: "Enchant Totem's empowered hit sends a shock line through Fissure walls.", mechanic: 'chain', override: { valueKey: 'bonusPct' } },
+      t3: { name: 'Standing Stone', description: "Enchant Totem's growth node holds its charge longer.", override: { valueKey: 'duration' } },
+      t4: { name: 'Stonehoof Leap', description: 'Enchant Totem becomes a short leap that lands with Aftershock.', mechanic: 'recast' }
+    },
+    {
+      abilityId: 'es-aftershock',
+      name: 'Tremor',
+      t1: { name: 'Hard Ground', description: 'Aftershock gains a strength-scaling damage bump.', mods: { str: 2 }, override: { valueKey: 'damage' } },
+      t2: { name: 'Lingering Memory', description: 'Aftershock remembers the last spell that triggered it.', mechanic: 'store', override: { valueKey: 'damage' } },
+      t3: { name: 'Wide Quake', description: "Aftershock's growth node widens its radius.", override: { valueKey: 'radius' } },
+      t4: { name: 'Second Quake', description: 'Aftershock echoes again when an enemy is pinned by Fissure.', mechanic: 'echo' }
+    },
+    {
+      abilityId: 'es-echo-slam',
+      name: 'Cataclysm',
+      t1: { name: 'Rolling Echo', description: 'Echo Slam gains a strength-scaling echo-damage bump.', mods: { str: 2 }, override: { valueKey: 'echo' } },
+      t2: { name: 'Aftershock Feast', description: 'Echo Slam consumes Aftershock marks for extra echoes.', mechanic: 'consume', override: { valueKey: 'base' } },
+      t3: { name: 'Far Tremor', description: "Echo Slam's growth node widens the slam radius.", override: { valueKey: 'radius' } },
+      t4: { name: 'Delayed Echo', description: 'Echo Slam leaves a delayed after-echo at the cast point.', mechanic: 'echo' }
+    }
+  ]),
   silhouette: { build: 'brute', scale: 1.15, bodyShape: 'bulky', head: 'horned', weapon: 'totem', extras: ['shoulderpads'] },
   palette: ['#5b8cc8', '#a9743c', '#e8b15c'],
   barks: [

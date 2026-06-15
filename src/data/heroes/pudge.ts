@@ -1,5 +1,6 @@
 import type { HeroDef } from '../../core/types';
 import { loopTurnLabel } from './loop-note';
+import { authoredMasteryTrees } from './mastery-authoring';
 
 export const PUDGE: HeroDef = {
   id: 'pudge',
@@ -198,6 +199,40 @@ export const PUDGE: HeroDef = {
       ]
     }
   },
+  masteryTrees: authoredMasteryTrees([
+    {
+      abilityId: 'pudge-meat-hook',
+      name: 'Butchery',
+      t1: { name: 'Barbed Chain', description: 'Meat Hook gains a strength-scaling damage bump.', mods: { str: 2 }, override: { valueKey: 'damage' } },
+      t2: { name: 'Fresh Meat', description: 'Hooked enemies arrive marked as fresh meat for Rot and Dismember.', mechanic: 'mark', override: { valueKey: 'damage' } },
+      t3: { name: 'Long Reach', description: "Meat Hook's growth node extends the chain's range.", override: { valueKey: 'range' } },
+      t4: { name: 'Pinned', description: 'Meat Hook pins the victim beside Pudge instead of only repositioning them.', mechanic: 'persist' }
+    },
+    {
+      abilityId: 'pudge-rot',
+      name: 'Decay',
+      t1: { name: 'Putrid Cloud', description: 'Rot gains a strength-scaling damage-per-second bump.', mods: { str: 2 }, override: { valueKey: 'dps' } },
+      t2: { name: 'Glutton', description: 'Rot consumes fresh-meat marks to briefly heal Pudge.', mechanic: 'consume', override: { valueKey: 'dps' } },
+      t3: { name: 'Wider Stench', description: "Rot's growth node spreads the cloud over a larger area.", override: { valueKey: 'radius' } },
+      t4: { name: 'Rancid Burst', description: 'Rot can be pulsed into a burst that trades self-harm for crowd control.', mechanic: 'convert' }
+    },
+    {
+      abilityId: 'pudge-flesh-heap',
+      name: 'Heap',
+      t1: { name: 'Thick Hide', description: 'Flesh Heap stacks grant a strength-scaling bump per kill.', mods: { str: 2 }, override: { valueKey: 'stackStr' } },
+      t2: { name: 'Rendered Fat', description: "Flesh Heap stacks change Rot's self-harm into a build resource.", mechanic: 'convert', override: { valueKey: 'resist' } },
+      t3: { name: 'Hardened Gut', description: "Flesh Heap's growth node deepens its magic resistance.", override: { valueKey: 'resist' } },
+      t4: { name: 'Corpse Cache', description: 'Takedowns leave a corpse marker Pudge can Hook for healing or repositioning.', mechanic: 'summon' }
+    },
+    {
+      abilityId: 'pudge-dismember',
+      name: 'Feast',
+      t1: { name: 'Slow Grind', description: 'Dismember gains a strength-scaling damage-per-tick bump.', mods: { str: 2 }, override: { valueKey: 'dpsTick' } },
+      t2: { name: 'Devour', description: 'Dismember heals Pudge for the damage it deals.', mechanic: 'convert', override: { valueKey: 'dpsTick' } },
+      t3: { name: 'Lingering Chew', description: "Dismember's growth node extends the hold and damage window.", override: { valueKey: 'duration' } },
+      t4: { name: 'Double Helping', description: 'Dismember pulls a second nearby enemy into the chew, splitting the damage.', mechanic: 'split' }
+    }
+  ]),
   silhouette: { build: 'brute', scale: 1.25, bodyShape: 'bulky', head: 'bare', weapon: 'hook', extras: ['belt'] },
   palette: ['#7a9b3a', '#d8a39b', '#8a4b2f'],
   barks: [
