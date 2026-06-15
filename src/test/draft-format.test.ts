@@ -5,7 +5,9 @@ import { ALL_GYMS } from '../data/gyms';
 import { ELITE_DRAFT } from '../data/drafts';
 import {
   buildLegalTeam,
+  chooseDraft,
   counterDraft,
+  describeRule,
   formatSatisfiable,
   isLegalDraft,
   pickEnemyBans,
@@ -111,6 +113,63 @@ describe('AUTOBATTLER §5.1 — the constraint vocabulary validates per rule kin
     expect(v.ok).toBe(false);
     expect(v.statuses[0].detail).toBe('1/2');
     expect(v.statuses[0].label).toContain('Support');
+  });
+});
+
+describe('AUTOBATTLER §5.1 — describeRule labels every rule kind for the draft screen', () => {
+  it('renders a stable human label per kind', () => {
+    expect(describeRule({ kind: 'ban-role', roles: ['escape'] })).toBe('No escape');
+    expect(describeRule({ kind: 'require-role', role: 'support', min: 2 })).toBe('Support ≥ 2');
+    expect(describeRule({ kind: 'cap-role', role: 'durable', max: 1 })).toBe('Durable ≤ 1');
+    expect(describeRule({ kind: 'cap-attribute', attribute: 'str', max: 1 })).toBe('STR heroes ≤ 1');
+    expect(describeRule({ kind: 'unique-attribute' })).toBe('One per attribute');
+    expect(describeRule({ kind: 'level-cap', max: 20 })).toBe('Level ≤ 20');
+    expect(describeRule({ kind: 'item-tier-cap', max: 2 })).toBe('Item tier ≤ 2');
+    expect(describeRule({ kind: 'point-budget', total: 8 })).toBe('Point budget 8');
+  });
+
+  it('ban-hero resolves the banned ids to hero names', () => {
+    const label = describeRule({ kind: 'ban-hero', heroIds: ['juggernaut'] });
+    expect(label.startsWith('Banned: ')).toBe(true);
+    expect(label).toContain(REG.hero('juggernaut').name);
+  });
+});
+
+describe('AUTOBATTLER §4.2 — chooseDraft picks one deterministic legal hero', () => {
+  it('is deterministic for a seed and returns a legal, available hero', () => {
+    const pool = ALL_IDS();
+    const a = chooseDraft({ pool, team: [], banned: [], seed: 31337 });
+    const b = chooseDraft({ pool, team: [], banned: [], seed: 31337 });
+    expect(a).toBe(b);
+    expect(a).toBeTruthy();
+    expect(REG.heroes.has(a!)).toBe(true);
+  });
+
+  it('prefers a hero that fills an unmet require-role goal', () => {
+    const fmt: DraftFormat = { rules: [{ kind: 'require-role', role: 'support', min: 1 }] };
+    const pick = chooseDraft({ pool: ALL_IDS(), team: [], banned: [], format: fmt, seed: 7 });
+    expect(pick).toBeTruthy();
+    expect(REG.hero(pick!).roles.includes('support')).toBe(true);
+  });
+
+  it('never returns a banned hero or one already on the team', () => {
+    const onTeam = withRole('carry')[0];
+    const banned = withRole('carry')[1];
+    const pick = chooseDraft({
+      pool: ALL_IDS(),
+      team: team([onTeam]),
+      banned: [banned],
+      seed: 99
+    });
+    expect(pick).not.toBe(onTeam);
+    expect(pick).not.toBe(banned);
+  });
+
+  it('returns null when nothing legal remains', () => {
+    expect(chooseDraft({ pool: [], team: [], banned: [], seed: 1 })).toBeNull();
+    // a cap-role of 0 means no durable hero is ever a legal pick from a durable-only pool
+    const fmt: DraftFormat = { rules: [{ kind: 'cap-role', role: 'durable', max: 0 }] };
+    expect(chooseDraft({ pool: withRole('durable'), team: [], banned: [], format: fmt, seed: 2 })).toBeNull();
   });
 });
 
